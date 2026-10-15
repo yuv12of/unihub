@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -38,6 +39,9 @@ export async function UserBadge() {
   return (
     <form action="/auth/signout" method="post" className="flex items-center gap-3 text-sm">
       <button className="text-ink-soft">יציאה</button>
+      <Link href="/settings" className="text-ink-soft" aria-label="הגדרות">
+        הגדרות
+      </Link>
       <span
         className="grid size-8 place-items-center rounded-full bg-ink text-bg text-sm font-semibold"
         aria-label={user.email}

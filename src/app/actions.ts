@@ -152,3 +152,86 @@ export async function resetIngestToken() {
   if (error) throw new Error(error.message);
   refresh();
 }
+
+/** Returns the app's public push key, generating the key pair once if it doesn't exist yet. */
+export async function ensurePushKey(): Promise<string> {
+  const { supabase } = await requireUser();
+  const { data: existing } = await supabase.rpc("vapid_public");
+  if (existing) return existing as string;
+  const webpush = (await import("web-push")).default;
+  const keys = webpush.generateVAPIDKeys();
+  const { data, error } = await supabase.rpc("vapid_init", { p_public: keys.publicKey, p_private: keys.privateKey });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string }) {
+  const { supabase, userId } = await requireUser();
+  if (!/^https:\/\//.test(sub.endpoint)) throw new Error("Bad endpoint");
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .upsert({ user_id: userId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth }, { onConflict: "endpoint" });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+export async function removePushSubscription(endpoint: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("push_subscriptions").delete().match({ user_id: userId, endpoint });
+  refresh();
+}
+
+/** Sends a test notification to all of the user's devices. */
+export async function sendTestPush() {
+  const { supabase } = await requireUser();
+  const [{ data: subs }, { data: tok }, { data: pub }] = await Promise.all([
+    supabase.from("push_subscriptions").select("endpoint, p256dh, auth"),
+    supabase.from("ingest_tokens").select("token").maybeSingle(),
+    supabase.rpc("vapid_public"),
+  ]);
+  if (!tok?.token) throw new Error("חסר חיבור לסקריפט Gmail");
+  const { data: priv } = await supabase.rpc("vapid_private", { p_token: tok.token });
+  if (!pub || !priv) throw new Error("No push keys");
+  const webpush = (await import("web-push")).default;
+  webpush.setVapidDetails("https://unihub-beta.vercel.app", pub as string, priv as string);
+  let ok = 0;
+  for (const s of subs ?? []) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify({ title: "Unihub", body: "ההתראות עובדות. נתראה במפגש הלימוד הבא.", url: "/" }),
+      );
+      ok++;
+    } catch {
+      /* dead subscription, ignored */
+    }
+  }
+  return ok;
+}
+
+/** Spaced repetition (SM-2, simplified). grade: 0 again, 1 hard, 2 good, 3 easy. */
+export async function reviewCard(id: string, grade: 0 | 1 | 2 | 3) {
+  const { supabase, userId } = await requireUser();
+  const { data: c } = await supabase
+    .from("cards")
+    .select("interval_days, ease, reps, lapses")
+    .match({ id, user_id: userId })
+    .maybeSingle();
+  if (!c) throw new Error("Card not found");
+  let { interval_days: interval, ease, reps, lapses } = c;
+  if (grade === 0) {
+    lapses += 1;
+    reps = 0;
+    interval = 0;
+    ease = Math.max(1.3, ease - 0.2);
+  } else {
+    reps += 1;
+    ease = Math.max(1.3, ease + (grade === 1 ? -0.15 : grade === 3 ? 0.15 : 0));
+    interval = reps === 1 ? (grade === 3 ? 3 : 1) : reps === 2 ? (grade === 1 ? 3 : 6) : Math.round(interval * ease * (grade === 1 ? 0.8 : grade === 3 ? 1.3 : 1));
+  }
+  const due = new Date(Date.now() + (interval === 0 ? 10 * 60_000 : interval * 86_400_000));
+  await supabase
+    .from("cards")
+    .update({ interval_days: interval, ease, reps, lapses, due_at: due.toISOString() })
+    .match({ id, user_id: userId });
+}

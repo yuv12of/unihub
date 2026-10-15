@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { allowedEmails, supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar", "/api/ingest"];
+const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick"];
 
 /** Refreshes the Supabase session and keeps the app private to signed-in, allowed users. */
 export async function proxy(request: NextRequest) {
@@ -40,5 +40,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-touch-icon.png|icon-.*\\.png|manifest.webmanifest).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|apple-touch-icon.png|icon-.*\\.png|manifest.webmanifest).*)"],
 };

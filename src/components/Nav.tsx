@@ -7,8 +7,9 @@ const items = [
   { href: "/", label: "היום", icon: IconToday },
   { href: "/courses", label: "קורסים", icon: IconCourses },
   { href: "/semester", label: "לוח שנה", icon: IconSemester },
+  { href: "/study", label: "תרגול", icon: IconStudy },
   { href: "/mail", label: "דואר", icon: IconMail },
-  { href: "/settings", label: "הגדרות", icon: IconSettings },
+  { href: "/settings", label: "הגדרות", icon: IconSettings, desktopOnly: true },
 ];
 
 function useActive() {
@@ -50,7 +51,7 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 z-20 border-t border-rule bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
-        {items.map(({ href, label, icon: Icon }) => {
+        {items.filter((i) => !i.desktopOnly).map(({ href, label, icon: Icon }) => {
           const active = isActive(href);
           return (
             <li key={href}>
@@ -126,6 +127,16 @@ function IconMail() {
     <svg {...iconProps}>
       <rect x="3" y="5" width="18" height="14" rx="2.5" />
       <path d="m4 7 8 6 8-6" />
+    </svg>
+  );
+}
+
+function IconStudy() {
+  return (
+    <svg {...iconProps}>
+      <rect x="4" y="6" width="13" height="14" rx="2" />
+      <path d="M8 3.5h10a2 2 0 0 1 2 2V16" />
+      <path d="M8 11.5h5M8 15h3" />
     </svg>
   );
 }

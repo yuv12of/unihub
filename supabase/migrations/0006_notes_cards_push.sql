@@ -1,0 +1,5 @@
+-- Applied via Supabase MCP on 2026-10-15 (migrations "notes_cards_push_digest" and "vapid_keys"):
+-- tables notes, cards, push_subscriptions, push_sent, app_keys;
+-- functions _feed_for (private), calendar_feed, private_feed, push_mark, ingest_note,
+-- vapid_public, vapid_init (authenticated), vapid_private (token-gated).
+-- See `list_migrations` in Supabase for the exact SQL.

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { resetFeed, resetIngestToken, saveExams, savePrefs } from "@/app/actions";
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
+import { PushSetup } from "@/components/PushSetup";
 import { getExams, getFeedToken, getIngestToken, getPrefs } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { courseTheme, semester } from "@/lib/semester";
@@ -179,13 +180,24 @@ async function Settings() {
         </section>
       </div>
 
-      <section id="mail" className="panel scroll-mt-24 p-5 sm:p-6 xl:col-span-2" aria-labelledby="mail-title">
-        <h2 id="mail-title" className="text-lg font-semibold">
-          דואר מהאוניברסיטה
+      <section className="panel p-5 sm:p-6 xl:col-span-2" aria-labelledby="push-title">
+        <h2 id="push-title" className="text-lg font-semibold">
+          התראות לטלפון
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-          סקריפט קטן בחשבון Google שלך שולח ל־Unihub רק הודעות מ־openu.ac.il, כל 10 דקות. ההודעות מופיעות בעמוד הדואר,
-          ומשם גם מועדי הבחינות נקלטים אוטומטית.
+          תזכורת כרבע שעה לפני מפגש לימוד או מפגש הנחיה, ותזכורת ב־20:00 על הגשה של מחר. ההתראות נשלחות דרך הסקריפט
+          שלמטה, אז צריך שהוא יהיה מחובר.
+        </p>
+        <PushSetup />
+      </section>
+
+      <section id="mail" className="panel scroll-mt-24 p-5 sm:p-6 xl:col-span-2" aria-labelledby="mail-title">
+        <h2 id="mail-title" className="text-lg font-semibold">
+          חיבור ל־Google: דואר, מייל בוקר, תזכורות ו־Notability
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+          סקריפט אחד בחשבון Google שלך: שולח ל־Unihub רק הודעות מ־openu.ac.il (כל 10 דקות, ומהן נקלטים גם מועדי הבחינות),
+          מפעיל תזכורות לטלפון, שולח לך כל בוקר ב־07:00 מייל עם התוכנית, ומעביר סיכומים חדשים מתיקיית Notability ב־Drive.
         </p>
         {ingest ? (
           <div className="mt-4 space-y-4">
@@ -198,12 +210,22 @@ async function Settings() {
                 בחרו בפונקציה <b dir="ltr">setup</b> מהרשימה למעלה ולחצו <b>הפעלה</b>. Google יבקש אישור גישה ל־Gmail. בשלב
                 &quot;האפליקציה לא אומתה&quot; לחצו <b>מתקדם</b> ← <b>מעבר ל־Unihub</b>. זה בטוח: הקוד רץ רק אצלכם.
               </li>
-              <li>זהו. ההודעות מהשנה האחרונה ייכנסו תוך כמה דקות, ומכאן הלאה כל 10 דקות.</li>
+              <li>
+                לזיהוי טקסט בסיכומים: בעורך, ליד <b>Services</b> לחצו <b>+</b>, בחרו <b dir="ltr">Drive API</b> ולחצו <b>Add</b>. אחר כך
+                הריצו שוב את <b dir="ltr">setup</b>.
+              </li>
+              <li>
+                ב־Notability: <b>הגדרות</b> ← <b>גיבוי אוטומטי</b> ← <b>Google Drive</b>, פורמט <b>PDF</b>. כדאי שהנושאים
+                ב־Notability ייקראו כמו הקורסים (אינפי, לינארית, מבני נתונים) כדי שכל סיכום ישויך לקורס הנכון.
+              </li>
             </ol>
+            <p className="text-sm text-ink-soft">
+              כבר הדבקתם גרסה קודמת? החליפו את כל הקוד בגרסה הזו והריצו <b dir="ltr">setup</b> שוב. שום דבר לא ייכפל.
+            </p>
             <details>
               <summary className="cursor-pointer text-sm font-medium">הקוד להדבקה</summary>
               <div className="mt-2">
-                <CopyField value={mailScript(`${origin}/api/ingest/mail`, ingest)} multiline />
+                <CopyField value={mailScript(origin, ingest)} multiline />
               </div>
             </details>
             <form action={resetIngestToken}>

@@ -4,6 +4,7 @@ import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
 import { getProgress, progressKey, standing } from "@/lib/progress";
 import { supabaseEnabled } from "@/lib/supabase/config";
+import { getNotes } from "@/lib/userdata";
 import { courseTheme, formatHebrewDate, semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
 export default function CoursesPage() {
@@ -23,7 +24,7 @@ const linkClass = "underline underline-offset-4 decoration-rule hover:text-ink";
 async function Courses() {
   await connection();
   const today = todayInIsrael();
-  const progress = await getProgress();
+  const [progress, notes] = await Promise.all([getProgress(), getNotes()]);
 
   return (
     <div className="mt-8 grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-3">
@@ -62,6 +63,8 @@ async function Courses() {
               />
             </div>
 
+            <CourseNotes notes={notes.filter((n) => n.course_code === c.code)} />
+
             <div className="border-t border-rule bg-bg/50 px-5 py-4 text-sm text-ink-soft">
               {c.rules && (
                 <details className="mb-3">
@@ -96,6 +99,34 @@ async function Courses() {
           </article>
         );
       })}
+    </div>
+  );
+}
+
+function CourseNotes({ notes }: { notes: Awaited<ReturnType<typeof getNotes>> }) {
+  return (
+    <div className="border-t border-rule px-5 py-4">
+      <h3 className="text-sm font-semibold">סיכומים מ־Notability</h3>
+      {notes.length === 0 ? (
+        <p className="mt-1 text-sm text-ink-soft">עוד אין. סיכומים יגיעו לכאן אחרי הגיבוי הבא ל־Google Drive.</p>
+      ) : (
+        <ul className="mt-2 space-y-2 text-sm">
+          {notes.slice(0, 8).map((n) => (
+            <li key={n.id}>
+              <a href={n.url ?? "#"} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-4 decoration-rule hover:decoration-current">
+                {n.name.replace(/\.pdf$/i, "")}
+              </a>
+              {n.modified_at && (
+                <span className="text-xs text-ink-soft">
+                  {" "}
+                  {new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", timeZone: "Asia/Jerusalem" }).format(new Date(n.modified_at))}
+                </span>
+              )}
+              {n.summary && <p className="mt-0.5 text-ink-soft">{n.summary}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

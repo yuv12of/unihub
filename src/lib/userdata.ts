@@ -126,3 +126,61 @@ export async function getMails(limit = 200): Promise<Mail[]> {
     .limit(limit);
   return (data ?? []) as Mail[];
 }
+
+export interface Card {
+  id: string;
+  course_code: string;
+  topic: string | null;
+  kind: "mcq" | "flash";
+  front: string;
+  back: string | null;
+  options: string[] | null;
+  answer_index: number | null;
+  explanation: string | null;
+  due_at: string;
+  reps: number;
+}
+
+export async function getCardStats(): Promise<{ due: Card[]; total: number; byCourse: Record<string, { total: number; due: number }> }> {
+  if (!supabaseEnabled) return { due: [], total: 0, byCourse: {} };
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const [{ data: due }, { data: all }] = await Promise.all([
+    supabase
+      .from("cards")
+      .select("id, course_code, topic, kind, front, back, options, answer_index, explanation, due_at, reps")
+      .lte("due_at", now)
+      .order("due_at")
+      .limit(60),
+    supabase.from("cards").select("course_code, due_at"),
+  ]);
+  const byCourse: Record<string, { total: number; due: number }> = {};
+  for (const c of all ?? []) {
+    byCourse[c.course_code] ??= { total: 0, due: 0 };
+    byCourse[c.course_code].total++;
+    if (c.due_at <= now) byCourse[c.course_code].due++;
+  }
+  return { due: (due ?? []) as Card[], total: all?.length ?? 0, byCourse };
+}
+
+export interface Note {
+  id: string;
+  name: string;
+  folder: string | null;
+  course_code: string | null;
+  url: string | null;
+  modified_at: string | null;
+  summary: string | null;
+  has_text: boolean;
+}
+
+export async function getNotes(): Promise<Note[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notes")
+    .select("id, name, folder, course_code, url, modified_at, summary, text_content")
+    .order("modified_at", { ascending: false })
+    .limit(300);
+  return (data ?? []).map(({ text_content, ...n }) => ({ ...n, has_text: !!text_content?.trim() })) as Note[];
+}
