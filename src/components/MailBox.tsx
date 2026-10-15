@@ -122,9 +122,9 @@ export function MailBox({ mails, editable }: { mails: Mail[]; editable: boolean 
               ) : (
                 <p className="mt-1 text-sm text-ink-soft">הסיכום יתווסף בסבב העיבוד הבא (כל כמה שעות).</p>
               )}
-              {open.action_items && open.action_items.length > 0 && (
+              {open.action_items && open.action_items.some((a) => a.text) && (
                 <ul className="mt-2 list-disc space-y-0.5 ps-5 text-sm">
-                  {open.action_items.map((a, i) => (
+                  {open.action_items.filter((a) => a.text).map((a, i) => (
                     <li key={i}>
                       {a.text}
                       {a.date ? <span className="text-ink-soft"> ({a.date})</span> : null}
