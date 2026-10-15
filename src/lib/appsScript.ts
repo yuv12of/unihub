@@ -76,9 +76,10 @@ function syncNotes() {
     if (Date.now() - started > 4 * 60 * 1000) return false;
     const updated = file.getLastUpdated().getTime();
     if (updated <= since || file.getMimeType() !== MimeType.PDF) return true;
+    const r = ocr_(file);
     post_('/api/ingest/note', {
       id: file.getId(), name: file.getName(), folder: path, url: file.getUrl(),
-      modified: file.getLastUpdated().toISOString(), text: ocr_(file),
+      modified: file.getLastUpdated().toISOString(), text: r.text, ocrError: r.error,
     });
     newest = Math.max(newest, updated);
     return true;
@@ -98,15 +99,29 @@ function walk_(folder, path, fn) {
 }
 
 function ocr_(file) {
-  if (typeof Drive === 'undefined') return '';
+  if (typeof Drive === 'undefined') return { text: '', error: 'Drive API service not added' };
+  let copyId = null;
   try {
-    const copy = Drive.Files.copy({ name: 'unihub-ocr-temp', mimeType: MimeType.GOOGLE_DOCS }, file.getId(), { ocrLanguage: 'he' });
-    const text = DocumentApp.openById(copy.id).getBody().getText();
-    DriveApp.getFileById(copy.id).setTrashed(true);
-    return text;
+    try {
+      // Drive API v3 (default for new scripts)
+      copyId = Drive.Files.copy({ name: 'unihub-ocr-temp', mimeType: MimeType.GOOGLE_DOCS }, file.getId(), { ocrLanguage: 'he' }).id;
+    } catch (v3err) {
+      // Drive API v2
+      copyId = Drive.Files.copy({ title: 'unihub-ocr-temp', mimeType: MimeType.GOOGLE_DOCS }, file.getId(), { ocr: true, ocrLanguage: 'he' }).id;
+    }
+    const text = DocumentApp.openById(copyId).getBody().getText();
+    return { text: text, error: text.trim() ? '' : 'no text recognised' };
   } catch (e) {
-    return '';
+    return { text: '', error: String(e).slice(0, 400) };
+  } finally {
+    if (copyId) { try { DriveApp.getFileById(copyId).setTrashed(true); } catch (e) {} }
   }
+}
+
+// Run this once if you want all notes re-sent (for example after enabling the Drive API).
+function resyncAllNotes() {
+  PropertiesService.getScriptProperties().deleteProperty('notesSince');
+  syncNotes();
 }
 
 // ---------- shared ----------
