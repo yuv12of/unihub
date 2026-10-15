@@ -39,8 +39,8 @@ export function Timeline({ today }: { today: string }) {
     <figure className="mt-2" aria-label="מפת המטלות של הסמסטר לפי שבועות">
       <div className="overflow-x-auto pb-2 -mx-4 px-4">
         <div
-          className="grid gap-y-2 min-w-[340px]"
-          style={{ gridTemplateColumns: `4.75rem repeat(${weeks.length}, minmax(0, 1fr))` }}
+          className="grid gap-y-2 min-w-[300px]"
+          style={{ gridTemplateColumns: `4.25rem repeat(${weeks.length}, minmax(0, 1fr))` }}
         >
           {/* month labels */}
           <div />

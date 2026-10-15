@@ -1,0 +1,101 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { AssignmentChecklist } from "@/components/AssignmentChecklist";
+import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
+import { getProgress, progressKey, standing } from "@/lib/progress";
+import { supabaseEnabled } from "@/lib/supabase/config";
+import { courseTheme, formatHebrewDate, semester, todayInIsrael, typeLabel } from "@/lib/semester";
+
+export default function CoursesPage() {
+  return (
+    <>
+      <h1 className="font-display text-4xl">הקורסים</h1>
+      <p className="mt-2 text-ink-soft">סמנו מטלה כשהיא מוגשת, והוסיפו את הציון כשהוא מגיע.</p>
+      <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
+        <Courses />
+      </Suspense>
+    </>
+  );
+}
+
+const linkClass = "underline underline-offset-4 decoration-rule hover:text-ink";
+
+async function Courses() {
+  await connection();
+  const today = todayInIsrael();
+  const progress = await getProgress();
+
+  return (
+    <div className="mt-8 grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      {semester.courses.map((c) => {
+        const theme = courseTheme[c.code];
+        const st = standing(c, progress, today);
+        return (
+          <article
+            key={c.code}
+            id={`c${c.code}`}
+            className="panel scroll-mt-24 overflow-hidden"
+            style={{ borderTop: `4px solid ${theme.color}` }}
+          >
+            <div className="px-5 pt-5">
+              <h2 className="text-xl font-semibold leading-snug">{c.name}</h2>
+              <p className="mt-0.5 text-sm text-ink-soft">
+                {c.code}, מרכז ההוראה {c.coordinator}
+              </p>
+              <WeightBar course={c} st={st} color={theme.color} />
+              <StandingText st={st} min={c.assignmentWeight.min} max={c.assignmentWeight.max} />
+            </div>
+
+            <div className="px-5">
+              <AssignmentChecklist
+                code={c.code}
+                color={theme.color}
+                editable={supabaseEnabled}
+                items={c.assignments.map((a) => ({
+                  n: a.n,
+                  label: `${typeLabel[a.type]} ${a.n}`,
+                  due: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }),
+                  weight: a.weight,
+                  past: a.due < today,
+                  progress: progress[progressKey(c.code, a.n)] ?? { status: "todo", grade: null },
+                }))}
+              />
+            </div>
+
+            <div className="border-t border-rule bg-bg/50 px-5 py-4 text-sm text-ink-soft">
+              {c.rules && (
+                <details className="mb-3">
+                  <summary className="cursor-pointer text-ink">כללים מיוחדים בקורס</summary>
+                  <ul className="mt-2 list-disc space-y-1 ps-5">
+                    {c.rules.map((r) => (
+                      <li key={r}>{ruleHe[r] ?? r}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              <p className="mb-2">הערכה מסכמת: {c.finalAssessment}</p>
+              <div className="flex gap-4">
+                <a
+                  className={linkClass}
+                  href={`https://opal.openu.ac.il/course/view.php?id=${c.opalId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  אתר הקורס
+                </a>
+                <a
+                  className={linkClass}
+                  href={`https://academic.openu.ac.il/course-requirements/course/${c.code}/semester/${encodeURIComponent(semester.semester)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  דרישות הקורס
+                </a>
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}

@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
 /*
-  Unihub visual system: a math notebook.
-  Graph-paper page, blue-black ink, and one highlighter yellow that only
-  ever marks things that need attention soon.
+  Unihub visual system.
+  Calm blue-grey page, white working surfaces, navy ink.
+  One highlighter yellow, used only for things that need attention soon.
+  Each course keeps its own colour everywhere it appears.
 */
 :root {
   --font-heebo: "Heebo Variable";
   --font-secular: "Secular One";
-  --paper: #f8fafd;
-  --grid: #e3e9f3;
-  --ink: #17233d;
-  --ink-soft: #5b6782;
-  --rule: #cfd8e6;
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #16213a;
+  --ink-soft: #5d6880;
+  --rule: #e2e7ef;
   --highlight: #ffe14d;
-  --highlight-ink: #17233d;
+  --highlight-ink: #16213a;
   --c-algebra: #2f5bd3;
   --c-calculus: #12855a;
   --c-ds: #8a3fc7;
@@ -22,13 +23,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #0f1626;
-    --grid: #1a2438;
+    --bg: #0c1322;
+    --surface: #131c2f;
     --ink: #e6ebf5;
-    --ink-soft: #9aa6bf;
-    --rule: #2a3650;
+    --ink-soft: #95a1ba;
+    --rule: #232e46;
     --highlight: #ffd92e;
-    --highlight-ink: #17233d;
+    --highlight-ink: #16213a;
     --c-algebra: #7b9cf5;
     --c-calculus: #43c995;
     --c-ds: #c08cf0;
@@ -36,7 +37,8 @@
 }
 
 @theme inline {
-  --color-paper: var(--paper);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-rule: var(--rule);
@@ -46,18 +48,14 @@
 }
 
 html {
-  background: var(--paper);
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   color: var(--ink);
+  background: var(--bg);
   font-family: var(--font-heebo), system-ui, sans-serif;
-  background-color: var(--paper);
-  background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-position: -1px -1px;
 }
 
 /* Highlighter stroke: slightly uneven, like a real marker pass. */
@@ -76,21 +74,13 @@ body {
   -webkit-box-decoration-break: clone;
 }
 
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+}
+
 :focus-visible {
   outline: 2px solid var(--c-algebra);
   outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .draw-in {
-    animation: draw 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
-  @keyframes draw {
-    from {
-      clip-path: inset(0 0 0 100%);
-    }
-    to {
-      clip-path: inset(0 0 0 0);
-    }
-  }
 }

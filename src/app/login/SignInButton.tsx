@@ -27,7 +27,7 @@ export function SignInButton() {
     <button
       onClick={signIn}
       disabled={pending}
-      className="mt-8 rounded-lg bg-ink px-5 py-3 text-paper font-medium disabled:opacity-60"
+      className="mt-8 rounded-lg bg-ink px-5 py-3 text-bg font-medium disabled:opacity-60"
     >
       {pending ? "מעביר ל־Google…" : "התחברות עם Google"}
     </button>

@@ -39,7 +39,7 @@ export function AssignmentChecklist({
   }
 
   return (
-    <ul className="mt-3 divide-y divide-rule/70 border-y border-rule/70">
+    <ul className="mt-4 divide-y divide-rule border-t border-rule">
       {optimistic.map((it) => {
         const done = it.progress.status === "submitted";
         const skipped = it.progress.status === "skipped";
