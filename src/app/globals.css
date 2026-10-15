@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
+/*
+  Unihub visual system: a math notebook.
+  Graph-paper page, blue-black ink, and one highlighter yellow that only
+  ever marks things that need attention soon.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-heebo: "Heebo Variable";
+  --font-secular: "Secular One";
+  --paper: #f8fafd;
+  --grid: #e3e9f3;
+  --ink: #17233d;
+  --ink-soft: #5b6782;
+  --rule: #cfd8e6;
+  --highlight: #ffe14d;
+  --highlight-ink: #17233d;
+  --c-algebra: #2f5bd3;
+  --c-calculus: #12855a;
+  --c-ds: #8a3fc7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #0f1626;
+    --grid: #1a2438;
+    --ink: #e6ebf5;
+    --ink-soft: #9aa6bf;
+    --rule: #2a3650;
+    --highlight: #ffd92e;
+    --highlight-ink: #17233d;
+    --c-algebra: #7b9cf5;
+    --c-calculus: #43c995;
+    --c-ds: #c08cf0;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-highlight: var(--highlight);
+  --font-sans: var(--font-heebo), system-ui, sans-serif;
+  --font-display: var(--font-secular), var(--font-heebo), sans-serif;
+}
+
+html {
+  background: var(--paper);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  font-family: var(--font-heebo), system-ui, sans-serif;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* Highlighter stroke: slightly uneven, like a real marker pass. */
+.hl {
+  background: linear-gradient(
+    100deg,
+    transparent 0.2em,
+    var(--highlight) 0.35em,
+    var(--highlight) calc(100% - 0.3em),
+    transparent calc(100% - 0.1em)
+  );
+  color: var(--highlight-ink);
+  border-radius: 0.2em 0.5em 0.3em 0.6em;
+  padding: 0 0.35em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-algebra);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .draw-in {
+    animation: draw 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes draw {
+    from {
+      clip-path: inset(0 0 0 100%);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
 }

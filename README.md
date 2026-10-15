@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Unihub
 
-## Getting Started
+Personal study assistant for the Open University of Israel: schedule, deadlines, progress and (soon) course-book Q&A. Hebrew, right-to-left, installable on phone and iPad.
 
-First, run the development server:
+The full product plan is in [`docs/PLAN.md`](docs/PLAN.md).
 
+## Stack
+- **Next.js 16** (App Router, Cache Components) + Tailwind 4, deployed on **Vercel**
+- **Supabase** for database, Google sign-in and file storage
+- Semester data lives in `src/data/semester-2027a.json` (also seeded into Supabase by `supabase/migrations/0002_seed_2027a.sql`)
+
+## Run locally
 ```bash
+npm install
+cp .env.example .env.local   # fill in values (optional: without them the app runs without sign-in)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## One-time setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Supabase
+1. Create a project at supabase.com (region: closest to Israel, e.g. Frankfurt).
+2. **SQL Editor** → paste and run `supabase/migrations/0001_init.sql`, then `0002_seed_2027a.sql`.
+3. **Project Settings → API Keys**: copy the Project URL and the publishable key into the env vars below.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Google sign-in
+1. In Google Cloud Console create a project → **APIs & Services → OAuth consent screen** (External, add your Gmail as a test user).
+2. **Credentials → Create OAuth client ID** (Web application). Authorized redirect URI:
+   `https://<your-project>.supabase.co/auth/v1/callback`
+3. In Supabase: **Authentication → Sign In / Providers → Google**: enable, paste the client ID and secret.
+4. In Supabase: **Authentication → URL Configuration**: Site URL = your Vercel URL; add redirect URLs
+   `https://<your-app>.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`.
 
-## Learn More
+### 3. Vercel
+Import the GitHub repo, then add the environment variables:
 
-To learn more about Next.js, take a look at the following resources:
+| Name | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
+| `ALLOWED_EMAILS` | your Gmail address (only this account can open the app) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Once the Supabase variables are set, every page requires sign-in.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Install on phone / iPad
+Open the site in Safari → Share → **Add to Home Screen**.

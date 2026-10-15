@@ -1,0 +1,55 @@
+{
+  "semester": "2027א",
+  "source": "Opal + academic.openu.ac.il/course-requirements (fetched 2026-10-15)",
+  "notes": "Course sites open ~1 week before semester start. Opal offline 17.10.2026 21:00 - 18.10.2026 16:00 for upgrades. Exam dates not yet published.",
+  "courses": [
+    {
+      "code": "20109", "name": "אלגברה לינארית 1", "nameEn": "Linear Algebra 1",
+      "opalId": 55366, "coordinator": "נתנאל רגב", "finalAssessment": "בחינת כיתה",
+      "books": ["כרך א", "כרך ב", "כרך ג", "פרקי הכנה"],
+      "assignmentWeight": {"min": 11, "max": 20},
+      "assignments": [
+        {"n": "01", "type": "file", "weight": 3, "due": "2026-11-19"},
+        {"n": "02", "type": "file", "weight": 3, "due": "2026-12-10"},
+        {"n": "03", "type": "online", "weight": 1, "due": "2026-12-17"},
+        {"n": "04", "type": "file", "weight": 4, "due": "2026-12-31"},
+        {"n": "05", "type": "online", "weight": 1, "due": "2027-01-07"},
+        {"n": "06", "type": "file", "weight": 4, "due": "2027-01-21"},
+        {"n": "07", "type": "file", "weight": 3, "due": "2027-02-04"},
+        {"n": "08", "type": "online", "weight": 1, "due": "2027-02-06"}
+      ]
+    },
+    {
+      "code": "20474", "name": "חשבון אינפיניטסימלי 1", "nameEn": "Calculus 1",
+      "opalId": 55315, "coordinator": "יונתן כהן", "finalAssessment": "בחינת כיתה",
+      "assignmentWeight": {"min": 10, "max": 20},
+      "assignments": [
+        {"n": "01", "type": "file", "weight": 2, "due": "2026-11-12"},
+        {"n": "02", "type": "online", "weight": 1, "due": "2026-11-19"},
+        {"n": "03", "type": "file", "weight": 2, "due": "2026-11-26"},
+        {"n": "04", "type": "file", "weight": 2, "due": "2026-12-10"},
+        {"n": "05", "type": "online", "weight": 1, "due": "2026-12-17"},
+        {"n": "06", "type": "file", "weight": 2, "due": "2026-12-27"},
+        {"n": "07", "type": "online", "weight": 1, "due": "2027-01-03"},
+        {"n": "08", "type": "file", "weight": 3, "due": "2027-01-10"},
+        {"n": "09", "type": "online", "weight": 1, "due": "2027-01-17"},
+        {"n": "10", "type": "file", "weight": 2, "due": "2027-01-24"},
+        {"n": "11", "type": "file", "weight": 3, "due": "2027-02-07"}
+      ]
+    },
+    {
+      "code": "20407", "name": "מבני נתונים ומבוא לאלגוריתמים", "nameEn": "Data Structures & Intro to Algorithms",
+      "opalId": 52645, "coordinator": "יצחק בייז", "finalAssessment": "בחינת כיתה",
+      "assignmentWeight": {"min": 15, "max": 25},
+      "rules": ["Must submit at least 3 of 01-05", "Zero grades on 01-05 count toward the final grade", "06 requires attending the minimum number of tutorials", "Assignments may be submitted in pairs"],
+      "assignments": [
+        {"n": "01", "type": "file", "weight": 5, "due": "2026-11-12"},
+        {"n": "02", "type": "file", "weight": 5, "due": "2026-11-26"},
+        {"n": "03", "type": "file", "weight": 5, "due": "2026-12-10"},
+        {"n": "04", "type": "file", "weight": 5, "due": "2026-12-31"},
+        {"n": "05", "type": "file", "weight": 5, "due": "2027-01-21"},
+        {"n": "06", "type": "participation", "weight": 5, "due": "2027-02-07"}
+      ]
+    }
+  ]
+}
