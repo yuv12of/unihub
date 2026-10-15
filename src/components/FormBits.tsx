@@ -32,8 +32,33 @@ export function SaveButton({ children = "שמירה", done = "נשמר" }: { chi
   );
 }
 
-export function CopyField({ value }: { value: string }) {
+export function CopyField({ value, multiline = false }: { value: string; multiline?: boolean }) {
   const [copied, setCopied] = useState(false);
+  if (multiline)
+    return (
+      <div className="space-y-2">
+        <textarea
+          readOnly
+          value={value}
+          dir="ltr"
+          rows={14}
+          onFocus={(e) => e.target.select()}
+          className="w-full rounded-lg border border-rule bg-bg px-3 py-2 font-mono text-xs leading-relaxed"
+          aria-label="קוד הסקריפט"
+        />
+        <button
+          type="button"
+          onClick={async () => {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="rounded-lg border border-rule px-4 py-2 text-sm hover:border-ink"
+        >
+          {copied ? "הועתק" : "העתקת הקוד"}
+        </button>
+      </div>
+    );
   return (
     <div className="flex gap-2">
       <input

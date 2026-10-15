@@ -98,3 +98,57 @@ export async function resetFeed() {
   if (error) throw new Error(error.message);
   refresh();
 }
+
+export async function setSessionStatus(key: string, status: "done" | "skipped" | null) {
+  const { supabase, userId } = await requireUser();
+  if (key.length > 300) throw new Error("Bad key");
+  if (status === null) {
+    await supabase.from("session_status").delete().match({ user_id: userId, session_key: key });
+  } else {
+    const { error } = await supabase
+      .from("session_status")
+      .upsert({ user_id: userId, session_key: key, status, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+  }
+  refresh();
+}
+
+export async function addEvent(input: { date: string; start: string; end: string; title: string }) {
+  const { supabase, userId } = await requireUser();
+  const title = input.title.trim();
+  if (!DATE.test(input.date) || !TIME.test(input.start) || !TIME.test(input.end) || input.end <= input.start)
+    throw new Error("Bad time");
+  if (!title || title.length > 200) throw new Error("Bad title");
+  const { error } = await supabase.from("user_events").insert({
+    user_id: userId,
+    date: input.date,
+    start_time: input.start,
+    end_time: input.end,
+    title,
+    kind: "custom",
+    source: "manual",
+  });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+export async function deleteEvent(id: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("user_events").delete().match({ id, user_id: userId, source: "manual" });
+  refresh();
+}
+
+export async function markMailRead(id: string, read = true) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("mails").update({ is_read: read }).match({ id, user_id: userId });
+  refresh();
+}
+
+/** Creates (or replaces) the token the Gmail Apps Script uses to deliver university mail. */
+export async function resetIngestToken() {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("ingest_tokens").delete().eq("user_id", userId);
+  const { error } = await supabase.from("ingest_tokens").insert({ user_id: userId });
+  if (error) throw new Error(error.message);
+  refresh();
+}

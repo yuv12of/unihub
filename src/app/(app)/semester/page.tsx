@@ -4,6 +4,9 @@ import { connection } from "next/server";
 import { SemesterCalendar, type CalItem } from "@/components/SemesterCalendar";
 import { progressKey } from "@/lib/progress";
 import { getUserPlan } from "@/lib/userdata";
+import { sessionKey } from "@/lib/planner";
+import { academicByDay } from "@/lib/academic";
+import { supabaseEnabled } from "@/lib/supabase/config";
 import { courseTheme, semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
 export default function SemesterPage() {
@@ -11,7 +14,7 @@ export default function SemesterPage() {
     <>
       <h1 className="font-display text-4xl">לוח שנה</h1>
       <p className="mt-2 text-ink-soft">
-        הגשות, בחינות ומפגשי הלימוד המתוכננים בסמסטר {semester.semester}. לחצו על יום כדי לראות את הפירוט.
+        הגשות, בחינות, הלוח האקדמי ומפגשי הלימוד שלך. לחצו על יום כדי לסמן מפגש כבוצע או להוסיף אירוע.
       </p>
       <Suspense fallback={<div className="mt-8 h-[36rem] animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Semester />
@@ -23,7 +26,7 @@ export default function SemesterPage() {
 async function Semester() {
   await connection();
   const today = todayInIsrael();
-  const { progress, exams, plan } = await getUserPlan(today);
+  const { progress, exams, plan, events, status } = await getUserPlan(today);
 
   const items: CalItem[] = [];
   for (const c of semester.courses) {
@@ -46,34 +49,46 @@ async function Semester() {
       kind: "exam",
       color: theme.color,
       label: `בחינה ב${theme.short}, מועד ${e.moed}`,
-      time: e.start_time ?? undefined,
+      start: e.start_time ?? undefined,
+      end: e.start_time ? `${String(Math.min(23, Number(e.start_time.slice(0, 2)) + 3)).padStart(2, "0")}${e.start_time.slice(2)}` : undefined,
     });
   }
   for (const s of plan.sessions) {
+    const key = sessionKey(s);
     items.push({
       date: s.date,
       kind: "study",
       color: courseTheme[s.courseCode].color,
       label: s.title,
-      time: `${s.start}–${s.end}`,
+      start: s.start,
+      end: s.end,
       minutes: s.minutes,
+      sessionKey: key,
+      status: status[key],
     });
   }
-
-  const lastDate = items.map((i) => i.date).sort().at(-1) ?? today;
-  const months: string[] = [];
-  for (let m = today.slice(0, 7); m <= lastDate.slice(0, 7); ) {
-    months.push(m);
-    const [y, mo] = m.split("-").map(Number);
-    m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+  for (const ev of events) {
+    items.push({
+      date: ev.date,
+      kind: ev.kind === "tutorial" ? "tutorial" : "event",
+      color: ev.course_code ? courseTheme[ev.course_code]?.color ?? "var(--ink-soft)" : "var(--ink-soft)",
+      label: ev.location ? `${ev.title} (${ev.location})` : ev.title,
+      start: ev.start_time ?? undefined,
+      end: ev.end_time ?? undefined,
+      eventId: ev.id,
+      deletable: ev.source === "manual",
+    });
+  }
+  for (const a of academicByDay()) {
+    items.push({ date: a.date, kind: "academic", color: "var(--ink-soft)", label: a.title, holiday: a.holiday });
   }
 
   return (
     <div className="mt-8">
       <SemesterCalendar
         items={items}
-        months={months}
         today={today}
+        editable={supabaseEnabled}
         legend={semester.courses.map((c) => ({ color: courseTheme[c.code].color, label: c.name }))}
       />
       {exams.length === 0 && (

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { allowedEmails, supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar"];
+const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar", "/api/ingest"];
 
 /** Refreshes the Supabase session and keeps the app private to signed-in, allowed users. */
 export async function proxy(request: NextRequest) {

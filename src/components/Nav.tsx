@@ -7,6 +7,7 @@ const items = [
   { href: "/", label: "היום", icon: IconToday },
   { href: "/courses", label: "קורסים", icon: IconCourses },
   { href: "/semester", label: "לוח שנה", icon: IconSemester },
+  { href: "/mail", label: "דואר", icon: IconMail },
   { href: "/settings", label: "הגדרות", icon: IconSettings },
 ];
 
@@ -48,7 +49,7 @@ export function TabBar() {
       aria-label="ניווט ראשי"
       className="fixed inset-x-0 bottom-0 z-20 border-t border-rule bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      <ul className="mx-auto grid max-w-md grid-cols-4">
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
         {items.map(({ href, label, icon: Icon }) => {
           const active = isActive(href);
           return (
@@ -116,6 +117,15 @@ function IconSettings() {
       <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
       <circle cx="16" cy="7" r="2" />
       <circle cx="10" cy="17" r="2" />
+    </svg>
+  );
+}
+
+function IconMail() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+      <path d="m4 7 8 6 8-6" />
     </svg>
   );
 }

@@ -5,7 +5,9 @@ import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
 import { getUserPlan } from "@/lib/userdata";
-import { minutesLabel, nextExams, type Session } from "@/lib/planner";
+import { minutesLabel, nextExams, sessionKey, type Session } from "@/lib/planner";
+import { academicEvents, academicOn } from "@/lib/academic";
+import { SessionToggle } from "@/components/SessionToggle";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import {
   addDays,
@@ -58,7 +60,9 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const { progress, exams, plan } = await getUserPlan(today);
+  const { progress, exams, plan, status } = await getUserPlan(today);
+  const academicToday = academicOn(today);
+  const nextAcademic = academicEvents.find((e) => e.date > today);
   const todaySessions = plan.sessions.filter((x) => x.date === today);
   const week = groupByDay(plan.sessions.filter((x) => x.date > today && x.date <= addDays(today, 6)));
   const upcomingExams = nextExams(exams, today);
@@ -78,6 +82,14 @@ async function Today() {
         <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">
           {formatHebrewDate(today, { day: "numeric", month: "long" })}
         </h1>
+        {(academicToday.length > 0 || nextAcademic) && (
+          <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
+            <span aria-hidden>🎓</span>
+            {academicToday.length > 0
+              ? academicToday.map((a) => a.title).join(", ")
+              : `${nextAcademic!.title} ${relativeDays(daysBetween(today, nextAcademic!.date))} (${formatHebrewDate(nextAcademic!.date, { day: "numeric", month: "numeric" })})`}
+          </p>
+        )}
         {next && (
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-soft">
             ההגשה הבאה היא{" "}
@@ -98,7 +110,7 @@ async function Today() {
           <h2 className="mb-3 text-lg font-semibold">התוכנית להיום</h2>
           <div className="panel overflow-hidden">
             {todaySessions.length ? (
-              <SessionList sessions={todaySessions} />
+              <SessionList sessions={todaySessions} status={status} />
             ) : (
               <p className="px-5 py-5 text-ink-soft">
                 {week.length
@@ -222,7 +234,7 @@ function groupByDay(sessions: Session[]): [string, Session[]][] {
   return [...m];
 }
 
-function SessionList({ sessions }: { sessions: Session[] }) {
+function SessionList({ sessions, status }: { sessions: Session[]; status: Record<string, "done" | "skipped"> }) {
   return (
     <ol className="divide-y divide-rule">
       {sessions.map((x) => (
@@ -238,6 +250,7 @@ function SessionList({ sessions }: { sessions: Session[] }) {
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
             </div>
           </div>
+          {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} />}
         </li>
       ))}
     </ol>

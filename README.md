@@ -47,6 +47,12 @@ Settings → **סנכרון ליומן Google** creates a private iCal link (`/a
 Add it in Google Calendar → Settings → Add calendar → From URL. It contains deadlines, exams and the study plan,
 and Google refreshes it every few hours. Resetting the link invalidates the old one.
 
+## University mailbox
+Settings → **דואר מהאוניברסיטה** generates a Google Apps Script (with a personal token) that forwards only
+`openu.ac.il` mail to `/api/ingest/mail` every 10 minutes. Mail is stored in `mails` / `mail_attachments`.
+A scheduled Claude task (runs on the user's Claude subscription, via the Supabase connector) fills in
+`summary`, `category`, `action_items` and reads exam dates from the exam-notice PDFs into `exams` (source `mail`).
+
 ## Study planner
 `src/lib/planner.ts` is a pure function: availability + deadlines + exam dates → dated sessions.
 Assignment prep happens in the 14 days before a deadline, exam revision in the 21 days before an exam,

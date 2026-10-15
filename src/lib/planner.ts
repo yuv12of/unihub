@@ -108,17 +108,30 @@ export function nextExams(exams: Exam[], today: string): Exam[] {
   return [...byCourse.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface Busy {
+  date: string;
+  start: string;
+  end: string;
+}
+
+/** Stable identity for a planned session, used to remember done / skipped. */
+export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title">) {
+  return `${s.date}|${s.kind}|${s.courseCode}|${s.title}`;
+}
+
 export function buildPlan({
   today,
   prefs,
   progress,
   exams,
+  busy = [],
   courses = semester.courses,
 }: {
   today: string;
   prefs: StudyPrefs;
   progress: ProgressMap;
   exams: Exam[];
+  busy?: Busy[];
   courses?: Course[];
 }): Plan {
   const tasks: Task[] = [];
@@ -164,22 +177,35 @@ export function buildPlan({
   for (let day = today; day <= horizon; day = addDays(day, 1)) {
     const slot = prefs.availability[String(weekday(day))];
     if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day)) continue;
-    let cursor = toMin(slot.start);
-    let capacity = slot.minutes;
+    // Free time = the study window minus anything already booked that day (tutorials, own blocks).
+    const winStart = toMin(slot.start);
+    let segments: [number, number][] = [[winStart, winStart + slot.minutes]];
+    for (const b of busy.filter((x) => x.date === day)) {
+      const bs = toMin(b.start) - BREAK_MINUTES;
+      const be = toMin(b.end) + BREAK_MINUTES;
+      segments = segments.flatMap(([a, z]): [number, number][] =>
+        be <= a || bs >= z ? [[a, z]] : ([[a, Math.min(bs, z)], [Math.max(be, a), z]] as [number, number][]).filter(([x, y]) => y - x >= MIN_CHUNK),
+      );
+    }
+    const freeNow = () => segments.reduce((m, [a, z]) => Math.max(m, z - a), 0);
+    let capacity = freeNow();
     const usedToday = new Set<Task>();
 
     const place = (minutes: number, courseCode: string, kind: SessionKind, title: string) => {
+      const seg = segments.find(([a, z]) => z - a >= Math.min(minutes, MIN_CHUNK))!;
+      const len = Math.min(minutes, seg[1] - seg[0]);
       sessions.push({
         date: day,
-        start: toHHMM(cursor),
-        end: toHHMM(cursor + minutes),
-        minutes,
+        start: toHHMM(seg[0]),
+        end: toHHMM(seg[0] + len),
+        minutes: len,
         courseCode,
         kind,
         title,
       });
-      cursor += minutes + BREAK_MINUTES;
-      capacity -= minutes + BREAK_MINUTES;
+      seg[0] += len + BREAK_MINUTES;
+      capacity = freeNow();
+      return len;
     };
 
     // 1 + 2: deadline-driven work, earliest deadline first, one session per task per day
@@ -193,8 +219,7 @@ export function buildPlan({
         if (capacity < MIN_CHUNK) break;
         const chunk = Math.min(prefs.session_minutes, t.remaining, capacity);
         if (chunk < MIN_CHUNK && chunk < t.remaining) continue;
-        place(chunk, t.courseCode, t.kind, t.kind === "exam" ? `חזרה ל${t.title}` : `הכנה ל${t.title}`);
-        t.remaining -= chunk;
+        t.remaining -= place(chunk, t.courseCode, t.kind, t.kind === "exam" ? `חזרה ל${t.title}` : `הכנה ל${t.title}`);
         usedToday.add(t);
       }
     }
@@ -203,9 +228,8 @@ export function buildPlan({
     if (prefs.fill_routine && capacity >= MIN_CHUNK) {
       const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
       if (code) {
-        const chunk = Math.min(prefs.session_minutes, capacity);
-        place(chunk, code, "routine", `לימוד שוטף ב${courseTheme[code].short}`);
-        routineLoad.set(code, (routineLoad.get(code) ?? 0) + chunk);
+        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${courseTheme[code].short}`);
+        routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
       }
     }
   }

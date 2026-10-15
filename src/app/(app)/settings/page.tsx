@@ -1,9 +1,10 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { headers } from "next/headers";
-import { resetFeed, saveExams, savePrefs } from "@/app/actions";
+import { resetFeed, resetIngestToken, saveExams, savePrefs } from "@/app/actions";
+import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
-import { getExams, getFeedToken, getPrefs } from "@/lib/userdata";
+import { getExams, getFeedToken, getIngestToken, getPrefs } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { courseTheme, semester } from "@/lib/semester";
 
@@ -28,7 +29,7 @@ const field = "rounded-lg border border-rule bg-surface px-3 py-2";
 async function Settings() {
   await connection();
   if (!supabaseEnabled) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
-  const [prefs, exams, token] = await Promise.all([getPrefs(), getExams(), getFeedToken()]);
+  const [prefs, exams, token, ingest] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken()]);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
@@ -177,6 +178,46 @@ async function Settings() {
           )}
         </section>
       </div>
+
+      <section id="mail" className="panel scroll-mt-24 p-5 sm:p-6 xl:col-span-2" aria-labelledby="mail-title">
+        <h2 id="mail-title" className="text-lg font-semibold">
+          דואר מהאוניברסיטה
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+          סקריפט קטן בחשבון Google שלך שולח ל־Unihub רק הודעות מ־openu.ac.il, כל 10 דקות. ההודעות מופיעות בעמוד הדואר,
+          ומשם גם מועדי הבחינות נקלטים אוטומטית.
+        </p>
+        {ingest ? (
+          <div className="mt-4 space-y-4">
+            <ol className="list-decimal space-y-1.5 ps-5 text-sm leading-relaxed">
+              <li>
+                פתחו את <b dir="ltr">script.google.com</b> (מחובר לחשבון ה־Gmail שלכם) ← <b>פרויקט חדש</b>.
+              </li>
+              <li>מחקו את מה שכתוב שם והדביקו את הקוד שלמטה. שמרו (Ctrl+S) ותנו לפרויקט שם, למשל Unihub.</li>
+              <li>
+                בחרו בפונקציה <b dir="ltr">setup</b> מהרשימה למעלה ולחצו <b>הפעלה</b>. Google יבקש אישור גישה ל־Gmail. בשלב
+                &quot;האפליקציה לא אומתה&quot; לחצו <b>מתקדם</b> ← <b>מעבר ל־Unihub</b>. זה בטוח: הקוד רץ רק אצלכם.
+              </li>
+              <li>זהו. ההודעות מהשנה האחרונה ייכנסו תוך כמה דקות, ומכאן הלאה כל 10 דקות.</li>
+            </ol>
+            <details>
+              <summary className="cursor-pointer text-sm font-medium">הקוד להדבקה</summary>
+              <div className="mt-2">
+                <CopyField value={mailScript(`${origin}/api/ingest/mail`, ingest)} multiline />
+              </div>
+            </details>
+            <form action={resetIngestToken}>
+              <button className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
+                יצירת מפתח חדש (הסקריפט הקיים יפסיק לעבוד עד שתדביקו קוד חדש)
+              </button>
+            </form>
+          </div>
+        ) : (
+          <form action={resetIngestToken} className="mt-4">
+            <SaveButton done="מוכן">התחלת חיבור הדואר</SaveButton>
+          </form>
+        )}
+      </section>
     </div>
   );
 }
