@@ -3,11 +3,15 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
-import { getProgress, progressKey, standing } from "@/lib/progress";
+import { progressKey, standing } from "@/lib/progress";
+import { getUserPlan } from "@/lib/userdata";
+import { minutesLabel, nextExams, type Session } from "@/lib/planner";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import {
+  addDays,
   allDeadlines,
   courseTheme,
+  daysBetween,
   formatHebrewDate,
   relativeDays,
   semester,
@@ -54,7 +58,10 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const progress = await getProgress();
+  const { progress, exams, plan } = await getUserPlan(today);
+  const todaySessions = plan.sessions.filter((x) => x.date === today);
+  const week = groupByDay(plan.sessions.filter((x) => x.date > today && x.date <= addDays(today, 6)));
+  const upcomingExams = nextExams(exams, today);
   const open = allDeadlines(today).filter((d) => {
     const s = progress[progressKey(d.course.code, d.n)]?.status;
     return d.daysLeft >= 0 && s !== "submitted" && s !== "skipped";
@@ -86,7 +93,59 @@ async function Today() {
         )}
       </header>
 
-      <section aria-labelledby="soon-title" className="min-w-0 lg:col-start-1">
+      <section aria-labelledby="soon-title" className="min-w-0 space-y-8 lg:col-start-1">
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">התוכנית להיום</h2>
+          <div className="panel overflow-hidden">
+            {todaySessions.length ? (
+              <SessionList sessions={todaySessions} />
+            ) : (
+              <p className="px-5 py-5 text-ink-soft">
+                {week.length
+                  ? `היום פנוי. המפגש הבא: ${formatHebrewDate(week[0][0], { weekday: "long" })}.`
+                  : "אין לימוד מתוכנן היום."}
+              </p>
+            )}
+            {week.length > 0 && (
+              <details className="border-t border-rule">
+                <summary className="cursor-pointer px-5 py-3 text-sm text-ink-soft hover:text-ink">
+                  שאר השבוע ({week.reduce((n, [, l]) => n + l.length, 0)} מפגשים)
+                </summary>
+                <ul className="divide-y divide-rule border-t border-rule">
+                  {week.map(([day, list]) => (
+                    <li key={day} className="flex gap-4 px-5 py-3">
+                      <span className="w-14 shrink-0 text-sm text-ink-soft">
+                        {formatHebrewDate(day, { weekday: "short" })} {formatHebrewDate(day, { day: "numeric", month: "numeric" })}
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+                        {list.map((x) => (
+                          <span key={x.start} className="flex items-center gap-2">
+                            <span className="size-2 shrink-0 rounded-full" style={{ background: courseTheme[x.courseCode].color }} />
+                            <span className="truncate">{x.title}</span>
+                            <span className="ms-auto shrink-0 tabular-nums text-ink-soft">{x.start}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+          {plan.warnings.length > 0 && (
+            <p className="mt-3 text-sm leading-relaxed">
+              <span className="hl">
+                אין מספיק זמן לימוד לפני{" "}
+                {plan.warnings.map((w) => `${w.title} (חסרות ${minutesLabel(w.missingMinutes)})`).join(", ")}.
+              </span>{" "}
+              <Link href="/settings" className="text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
+                הוספת זמני לימוד
+              </Link>
+            </p>
+          )}
+        </div>
+
+        <div>
         <h2 id="soon-title" className="mb-3 text-lg font-semibold">
           בשבועיים הקרובים
         </h2>
@@ -103,10 +162,11 @@ async function Today() {
             }
           />
         </div>
-
+        </div>
       </section>
 
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
+        <ExamCountdown today={today} upcoming={upcomingExams} />
         <h2 id="courses-title" className="mb-3 text-lg font-semibold">
           מצב בקורסים
         </h2>
@@ -149,6 +209,80 @@ async function Today() {
             </Link>
         </section>
       )}
+    </div>
+  );
+}
+
+function groupByDay(sessions: Session[]): [string, Session[]][] {
+  const m = new Map<string, Session[]>();
+  for (const x of sessions) {
+    if (!m.has(x.date)) m.set(x.date, []);
+    m.get(x.date)!.push(x);
+  }
+  return [...m];
+}
+
+function SessionList({ sessions }: { sessions: Session[] }) {
+  return (
+    <ol className="divide-y divide-rule">
+      {sessions.map((x) => (
+        <li key={x.start} className="flex items-center gap-4 px-4 py-3 sm:px-5">
+          <div className="w-11 shrink-0 text-center tabular-nums leading-tight">
+            <div className="text-[17px] font-semibold">{x.start}</div>
+            <div className="text-[11px] text-ink-soft">{minutesLabel(x.minutes)}</div>
+          </div>
+          <span className="h-9 w-1 shrink-0 rounded-full" style={{ background: courseTheme[x.courseCode].color }} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-medium">{x.title}</div>
+            <div className="text-xs text-ink-soft">
+              {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const REVISION_DAYS = 21;
+
+function ExamCountdown({ today, upcoming }: { today: string; upcoming: ReturnType<typeof nextExams> }) {
+  if (upcoming.length === 0)
+    return (
+      <Link href="/settings" className="panel mb-6 block px-4 py-4 text-sm text-ink-soft hover:border-ink-soft">
+        <span className="block font-medium text-ink">ספירה לאחור לבחינות</span>
+        מועדי הבחינות עוד לא הוזנו. כשיתפרסמו, הוסיפו אותם בהגדרות.
+      </Link>
+    );
+  return (
+    <div className="mb-6">
+      <h2 className="mb-3 text-lg font-semibold">בחינות</h2>
+      <ul className="panel divide-y divide-rule overflow-hidden">
+        {upcoming.map((e) => {
+          const days = daysBetween(today, e.date);
+          const course = semester.courses.find((c) => c.code === e.course_code);
+          const revising = days <= REVISION_DAYS;
+          return (
+            <li key={e.course_code} className="flex items-center gap-4 px-4 py-3">
+              <div className="w-14 shrink-0 text-center leading-none">
+                <div className="font-display text-3xl tabular-nums">{days}</div>
+                <div className="mt-1 text-[11px] text-ink-soft">{days === 1 ? "יום" : "ימים"}</div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 font-medium">
+                  <span className="size-2 rounded-full" style={{ background: courseTheme[e.course_code].color }} />
+                  <span className="truncate">{course?.name}</span>
+                </div>
+                <div className="text-xs text-ink-soft">
+                  מועד {e.moed}, {formatHebrewDate(e.date, { day: "numeric", month: "long" })}
+                  {e.start_time ? ` ב־${e.start_time}` : ""}
+                </div>
+                {revising && <div className="mt-1 text-xs"><span className="hl">תקופת חזרות</span></div>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

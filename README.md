@@ -20,7 +20,7 @@ npm run dev
 
 ### 1. Supabase
 1. Create a project at supabase.com (region: closest to Israel, e.g. Frankfurt).
-2. **SQL Editor** → paste and run `supabase/migrations/0001_init.sql`, then `0002_seed_2027a.sql`.
+2. **SQL Editor** → run the files in `supabase/migrations/` in order (0001, 0002, 0003…).
 3. **Project Settings → API Keys**: copy the Project URL and the publishable key into the env vars below.
 
 ### 2. Google sign-in
@@ -41,6 +41,16 @@ Import the GitHub repo, then add the environment variables:
 | `ALLOWED_EMAILS` | your Gmail address (only this account can open the app) |
 
 Once the Supabase variables are set, every page requires sign-in.
+
+## Calendar sync
+Settings → **סנכרון ליומן Google** creates a private iCal link (`/api/calendar/<token>`).
+Add it in Google Calendar → Settings → Add calendar → From URL. It contains deadlines, exams and the study plan,
+and Google refreshes it every few hours. Resetting the link invalidates the old one.
+
+## Study planner
+`src/lib/planner.ts` is a pure function: availability + deadlines + exam dates → dated sessions.
+Assignment prep happens in the 14 days before a deadline, exam revision in the 21 days before an exam,
+and leftover time is optional routine study rotating between courses.
 
 ## Install on phone / iPad
 Open the site in Safari → Share → **Add to Home Screen**.
