@@ -12,6 +12,7 @@ function syncUniversityMail() {
 }
 
 // Run once: imports the last year of university mail and turns on the 10-minute sync.
+// Running it again is safe: existing messages are not duplicated (their formatting is filled in).
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('syncUniversityMail').timeBased().everyMinutes(10).create();
@@ -41,7 +42,7 @@ function sendMatching_(query, limit) {
           payload: JSON.stringify({
             id: msg.getId(), threadId: thread.getId(), sender: msg.getFrom(),
             subject: msg.getSubject(), date: msg.getDate().toISOString(),
-            body: msg.getPlainBody(), attachments: attachments,
+            body: msg.getPlainBody(), html: msg.getBody(), attachments: attachments,
           }),
         });
       }

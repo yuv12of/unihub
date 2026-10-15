@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { markMailRead } from "@/app/actions";
 import type { Mail } from "@/lib/userdata";
 
@@ -152,14 +152,107 @@ export function MailBox({ mails, editable }: { mails: Mail[]; editable: boolean 
               </ul>
             )}
 
-            <div className="mt-5 whitespace-pre-wrap border-t border-rule pt-4 text-[15px] leading-relaxed" dir="auto">
-              {clean(open.body_text) || <span className="text-ink-soft">אין טקסט בהודעה. התוכן נמצא בקבצים המצורפים.</span>}
-            </div>
+            <MailBody key={open.id} mail={open} />
           </article>
         ) : (
           <div className="panel grid min-h-60 place-items-center p-6 text-ink-soft">בחרו הודעה מהרשימה.</div>
         )}
       </div>
     </div>
+  );
+}
+
+/** Shows the original formatted email (images, links) safely; falls back to readable text. */
+function MailBody({ mail }: { mail: Mail }) {
+  const [mode, setMode] = useState<"html" | "text">(mail.body_html ? "html" : "text");
+  const text = clean(mail.body_text);
+  return (
+    <div className="mt-5 border-t border-rule pt-4">
+      {mail.body_html && (
+        <div className="mb-3 flex justify-end">
+          <div className="flex rounded-lg border border-rule p-0.5 text-xs" role="tablist" aria-label="תצוגת ההודעה">
+            {(["html", "text"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => setMode(m)}
+                className={`rounded-md px-2.5 py-1 ${mode === m ? "bg-ink text-bg" : "text-ink-soft"}`}
+              >
+                {m === "html" ? "מעוצב" : "טקסט"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {mode === "html" && mail.body_html ? (
+        <HtmlFrame html={mail.body_html} />
+      ) : text ? (
+        <div className="whitespace-pre-wrap text-[15px] leading-relaxed" dir="auto">
+          <Linkified text={text} />
+        </div>
+      ) : (
+        <span className="text-ink-soft">אין טקסט בהודעה. התוכן נמצא בקבצים המצורפים.</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders email HTML in a sandboxed frame: scripts never run, links open in a new tab,
+ * and the frame grows to fit its content.
+ */
+function HtmlFrame({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(400);
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><base target="_blank">
+<meta name="referrer" content="no-referrer">
+<style>body{margin:0;padding:12px;font-family:Arial,sans-serif;direction:rtl;background:#fff;color:#111;word-wrap:break-word}
+img{max-width:100%!important;height:auto!important}table{max-width:100%!important}a{color:#1a56c4}</style></head>
+<body>${html}</body></html>`;
+  useEffect(() => {
+    const frame = ref.current;
+    if (!frame) return;
+    const measure = () => {
+      const h = frame.contentDocument?.documentElement.scrollHeight;
+      if (h) setHeight(Math.min(h + 8, 6000));
+    };
+    frame.addEventListener("load", measure);
+    const t = setInterval(measure, 500); // images load after the document
+    const stop = setTimeout(() => clearInterval(t), 6000);
+    return () => {
+      frame.removeEventListener("load", measure);
+      clearInterval(t);
+      clearTimeout(stop);
+    };
+  }, [html]);
+  return (
+    <iframe
+      ref={ref}
+      title="תוכן ההודעה"
+      srcDoc={doc}
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      className="w-full rounded-lg border border-rule bg-white"
+      style={{ height }}
+    />
+  );
+}
+
+/** Turns bare URLs in plain text into links. */
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"״׳])/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p) ? (
+          <a key={i} href={p} target="_blank" rel="noreferrer" className="break-all text-[color:var(--c-algebra)] underline underline-offset-2" dir="ltr">
+            {p}
+          </a>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
   );
 }

@@ -64,9 +64,10 @@ export async function getSessionStatus(): Promise<Record<string, "done" | "skipp
   return Object.fromEntries((data ?? []).map((r) => [r.session_key, r.status]));
 }
 
-export function busyFromEvents(events: Pick<UserEvent, "date" | "start_time" | "end_time">[]): Busy[] {
+export function busyFromEvents(events: Pick<UserEvent, "date" | "start_time" | "end_time" | "kind">[]): Busy[] {
+  // Optional things (phone tutoring hours, registration dates) don't block study time.
   return events
-    .filter((e) => e.start_time && e.end_time)
+    .filter((e) => e.start_time && e.end_time && e.kind !== "other")
     .map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! }));
 }
 
@@ -105,6 +106,7 @@ export interface Mail {
   subject: string | null;
   received_at: string;
   body_text: string | null;
+  body_html: string | null;
   summary: string | null;
   category: string | null;
   action_items: { text: string; date?: string }[] | null;
@@ -118,7 +120,7 @@ export async function getMails(limit = 200): Promise<Mail[]> {
   const { data } = await supabase
     .from("mails")
     .select(
-      "id, sender, subject, received_at, body_text, summary, category, action_items, is_read, attachments:mail_attachments(id, filename, size_bytes)",
+      "id, sender, subject, received_at, body_text, body_html, summary, category, action_items, is_read, attachments:mail_attachments(id, filename, size_bytes)",
     )
     .order("received_at", { ascending: false })
     .limit(limit);

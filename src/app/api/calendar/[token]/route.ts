@@ -11,7 +11,7 @@ interface FeedData {
   prefs: StudyPrefs | null;
   progress: { course_code: string; semester: string; n: string; status: Status }[];
   exams: (Exam & { semester: string })[];
-  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; location: string | null }[];
+  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null }[];
   session_status?: Record<string, "done" | "skipped">;
 }
 
@@ -35,7 +35,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   const today = todayInIsrael();
   const userEvents = feed.events ?? [];
   const busy = userEvents
-    .filter((e) => e.start_time && e.end_time)
+    .filter((e) => e.start_time && e.end_time && e.kind !== "other")
     .map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! }));
   const plan = buildPlan({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, busy });
   const status = feed.session_status ?? {};
@@ -72,6 +72,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
     }
   }
   for (const e of userEvents) {
+    if (e.kind === "other" && e.start_time) continue; // phone tutoring hours stay in the app, not the calendar
     events.push(
       e.start_time && e.end_time
         ? {
