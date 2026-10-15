@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { Timeline } from "@/components/Timeline";
 import { UserBadge } from "@/components/UserBadge";
+import { AssignmentChecklist } from "@/components/AssignmentChecklist";
+import { getProgress, progressKey, standing, type CourseStanding } from "@/lib/progress";
+import { supabaseEnabled } from "@/lib/supabase/config";
 import {
   allDeadlines,
   courseTheme,
@@ -36,8 +39,13 @@ function TodaySkeleton() {
 async function Today() {
   await connection(); // "today" must be computed per request, not at build time
   const today = todayInIsrael();
+  const progress = await getProgress();
+  const statusOf = (code: string, n: string) => progress[progressKey(code, n)]?.status ?? "todo";
   const deadlines = allDeadlines(today);
-  const upcoming = deadlines.filter((d) => d.daysLeft >= 0);
+  // Submitted or skipped assignments drop out of "what's next".
+  const upcoming = deadlines.filter(
+    (d) => d.daysLeft >= 0 && !["submitted", "skipped"].includes(statusOf(d.course.code, d.n)),
+  );
   const next = upcoming[0];
   const nextGroup = next ? upcoming.filter((d) => d.due === next.due) : [];
   const soonList = upcoming.slice(0, 8);
@@ -89,19 +97,17 @@ async function Today() {
         <div className="mt-3 space-y-6">
           {semester.courses.map((c) => {
             const theme = courseTheme[c.code];
-            const total = c.assignments.reduce((s, a) => s + a.weight, 0);
-            const remaining = c.assignments.filter((a) => a.due >= today).length;
+            const st = standing(c, progress, today);
             return (
               <article key={c.code} className="border-s-4 ps-4" style={{ borderColor: theme.color }}>
                 <h3 className="text-lg font-semibold leading-snug">
                   {c.name} <span className="text-ink-soft font-normal text-sm">{c.code}</span>
                 </h3>
-                <p className="text-sm text-ink-soft">מרכז ההוראה: {c.coordinator}</p>
-                <p className="mt-2 text-[15px] leading-relaxed">
-                  צריך לצבור לפחות {c.assignmentWeight.min} נקודות משקל במטלות (אפשר עד{" "}
-                  {c.assignmentWeight.max}). בסך הכול {c.assignments.length} מטלות שוות {total} נקודות,{" "}
-                  {remaining} מהן עוד לפני הדדליין. ההערכה המסכמת: {c.finalAssessment}.
+                <p className="text-sm text-ink-soft">
+                  מרכז ההוראה: {c.coordinator}. הערכה מסכמת: {c.finalAssessment}.
                 </p>
+                <WeightBar course={c} st={st} color={theme.color} />
+                <StandingText st={st} min={c.assignmentWeight.min} max={c.assignmentWeight.max} />
                 {c.rules && (
                   <ul className="mt-2 list-disc ps-5 text-sm text-ink-soft space-y-0.5">
                     {c.rules.map((r) => (
@@ -111,6 +117,19 @@ async function Today() {
                     ))}
                   </ul>
                 )}
+                <AssignmentChecklist
+                  code={c.code}
+                  color={theme.color}
+                  editable={supabaseEnabled}
+                  items={c.assignments.map((a) => ({
+                    n: a.n,
+                    label: `${typeLabel[a.type]} ${a.n}`,
+                    due: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }),
+                    weight: a.weight,
+                    past: a.due < today,
+                    progress: progress[progressKey(c.code, a.n)] ?? { status: "todo", grade: null },
+                  }))}
+                />
                 <p className="mt-2 flex gap-4 text-sm">
                   <a
                     className="underline underline-offset-4 decoration-rule hover:decoration-current"
@@ -139,6 +158,63 @@ async function Today() {
         הנתונים נאספו מאופל ומדפי דרישות הקורס ב־15.10.2026. מועדי הבחינות עוד לא פורסמו.
       </footer>
     </>
+  );
+}
+
+function WeightBar({
+  course,
+  st,
+  color,
+}: {
+  course: (typeof semester.courses)[number];
+  st: CourseStanding;
+  color: string;
+}) {
+  const scale = course.assignmentWeight.max;
+  const pct = (v: number) => `${Math.min(100, (v / scale) * 100)}%`;
+  return (
+    <div
+      className="relative mt-3 h-3 rounded-full bg-rule/50"
+      role="img"
+      aria-label={`נצברו ${st.earned} מתוך מינימום ${course.assignmentWeight.min} נקודות משקל`}
+    >
+      <div className="absolute inset-y-0 start-0 rounded-full" style={{ width: pct(st.earned), background: color }} />
+      <div
+        className="absolute -inset-y-1 w-0.5 bg-ink"
+        style={{ insetInlineStart: pct(course.assignmentWeight.min) }}
+        title={`מינימום: ${course.assignmentWeight.min}`}
+      />
+    </div>
+  );
+}
+
+function StandingText({ st, min, max }: { st: CourseStanding; min: number; max: number }) {
+  let line: React.ReactNode;
+  if (st.needed === 0) {
+    line = (
+      <>
+        עברת את המינימום ({st.earned} מתוך {min}). כל מטלה נוספת עד {max} נקודות יכולה רק להעלות את הציון.
+      </>
+    );
+  } else if (st.atRisk) {
+    line = (
+      <span className="hl">
+        חסרות {st.needed} נקודות, אבל נשארו רק {st.open} פתוחות. כדאי לבדוק עם מרכז ההוראה.
+      </span>
+    );
+  } else {
+    line = (
+      <>
+        צברת {st.earned} מתוך {min} נקודות חובה. נשארו {st.open} נקודות פתוחות
+        {st.slack > 0 ? `, כך שאפשר לוותר על עד ${st.slack} מהן.` : ", וצריך את כולן."}
+      </>
+    );
+  }
+  return (
+    <p className="mt-2 text-[15px] leading-relaxed">
+      {line}
+      {st.average != null && <> ממוצע הציונים במטלות: {st.average}.</>}
+    </p>
   );
 }
 
