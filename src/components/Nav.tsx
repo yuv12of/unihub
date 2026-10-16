@@ -3,26 +3,50 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const items = [
+import { useEffect, useState } from "react";
+
+export interface Badges {
+  friends?: number;
+  admin?: number | null;
+}
+
+type Item = { href: string; label: string; icon: () => React.ReactElement; badge?: keyof Badges; adminOnly?: boolean };
+
+const items: Item[] = [
   { href: "/", label: "היום", icon: IconToday },
-  { href: "/courses", label: "קורסים", icon: IconCourses },
   { href: "/semester", label: "לוח שנה", icon: IconSemester },
+  { href: "/routines", label: "שגרה", icon: IconRoutine },
+  { href: "/friends", label: "חברים", icon: IconFriends, badge: "friends" },
+  { href: "/courses", label: "קורסים", icon: IconCourses },
   { href: "/study", label: "תרגול", icon: IconStudy },
   { href: "/mail", label: "דואר", icon: IconMail },
-  { href: "/settings", label: "הגדרות", icon: IconSettings, desktopOnly: true },
+  { href: "/settings", label: "הגדרות", icon: IconSettings },
+  { href: "/admin", label: "חשבונות", icon: IconAdmin, badge: "admin", adminOnly: true },
 ];
+const PHONE_MAIN = 4; // the rest live under "more"
 
 function useActive() {
   const path = usePathname();
   return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 }
 
+const visible = (badges: Badges) => items.filter((i) => !i.adminOnly || badges.admin != null);
+
+function Dot({ n }: { n?: number | null }) {
+  if (!n) return null;
+  return (
+    <span className="grid min-w-5 place-items-center rounded-full bg-highlight px-1.5 text-[11px] font-semibold leading-5 text-ink" aria-label={`${n} חדשים`}>
+      {n}
+    </span>
+  );
+}
+
 /** Vertical navigation in the PC sidebar. */
-export function SideNav() {
+export function SideNav({ badges = {} }: { badges?: Badges }) {
   const isActive = useActive();
   return (
     <nav aria-label="ניווט ראשי" className="mt-8 flex flex-col gap-1">
-      {items.map(({ href, label, icon: Icon }) => {
+      {visible(badges).map(({ href, label, icon: Icon, badge }) => {
         const active = isActive(href);
         return (
           <Link
@@ -34,7 +58,8 @@ export function SideNav() {
             }`}
           >
             <Icon />
-            {label}
+            <span className="flex-1">{label}</span>
+            {badge && <Dot n={badges[badge]} />}
           </Link>
         );
       })}
@@ -42,34 +67,77 @@ export function SideNav() {
   );
 }
 
-/** Bottom tab bar on phones. */
-export function TabBar() {
+/** Bottom tab bar on phones: four main places + "more". */
+export function TabBar({ badges = {} }: { badges?: Badges }) {
   const isActive = useActive();
+  const path = usePathname();
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [path]);
+  const all = visible(badges);
+  const main = all.slice(0, PHONE_MAIN);
+  const more = all.slice(PHONE_MAIN);
+  const moreActive = more.some((i) => isActive(i.href));
+  const moreBadge = more.reduce((n, i) => n + ((i.badge && badges[i.badge]) || 0), 0);
+  const tab = "relative flex flex-col items-center gap-1 pt-3 pb-1.5 text-[12px]";
+
   return (
-    <nav
-      aria-label="ניווט ראשי"
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-rule bg-surface/95 backdrop-blur pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden"
-    >
-      <ul className="mx-auto grid max-w-lg grid-cols-5">
-        {items.filter((i) => !i.desktopOnly).map(({ href, label, icon: Icon }) => {
-          const active = isActive(href);
-          return (
-            <li key={href}>
-              <Link
-                href={href}
-                aria-current={active ? "page" : undefined}
-                className={`flex flex-col items-center gap-1 pt-3 pb-1.5 text-[12px] ${
-                  active ? "text-ink font-semibold" : "text-ink-soft"
-                }`}
-              >
-                <Icon />
-                {label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <>
+      {open && (
+        <div className="fixed inset-0 z-30 bg-black/25 lg:hidden" onClick={() => setOpen(false)} aria-hidden />
+      )}
+      <nav
+        aria-label="ניווט ראשי"
+        className="relative z-40 shrink-0 border-t border-rule bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden"
+      >
+        {open && (
+          <ul className="absolute inset-x-0 bottom-full grid grid-cols-3 gap-2 border-t border-rule bg-surface px-4 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+            {more.map(({ href, label, icon: Icon, badge }) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  aria-current={isActive(href) ? "page" : undefined}
+                  className={`flex flex-col items-center gap-1 rounded-xl py-3 text-sm ${isActive(href) ? "bg-ink text-bg" : "bg-bg text-ink"}`}
+                >
+                  <Icon />
+                  <span className="flex items-center gap-1">
+                    {label}
+                    {badge && <Dot n={badges[badge]} />}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <ul className="mx-auto grid max-w-lg grid-cols-5">
+          {main.map(({ href, label, icon: Icon, badge }) => {
+            const active = isActive(href);
+            return (
+              <li key={href}>
+                <Link href={href} aria-current={active ? "page" : undefined} className={`${tab} ${active ? "text-ink font-semibold" : "text-ink-soft"}`}>
+                  <Icon />
+                  {label}
+                  {badge && badges[badge] ? (
+                    <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-surface" aria-label="חדש" />
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+          <li>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className={`${tab} w-full ${moreActive || open ? "text-ink font-semibold" : "text-ink-soft"}`}
+            >
+              <IconMore />
+              עוד
+              {moreBadge > 0 && <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-surface" />}
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </>
   );
 }
 
@@ -137,6 +205,46 @@ function IconStudy() {
       <rect x="4" y="6" width="13" height="14" rx="2" />
       <path d="M8 3.5h10a2 2 0 0 1 2 2V16" />
       <path d="M8 11.5h5M8 15h3" />
+    </svg>
+  );
+}
+
+function IconRoutine() {
+  return (
+    <svg {...iconProps}>
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v4h-4" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
+function IconFriends() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3 19.5c.7-3.3 3.1-5 6-5s5.3 1.7 6 5" />
+      <circle cx="17" cy="9.5" r="2.4" />
+      <path d="M16.5 14.6c2.3.2 3.9 1.6 4.5 4.4" />
+    </svg>
+  );
+}
+
+function IconMore() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="5.5" cy="12" r="1.3" />
+      <circle cx="12" cy="12" r="1.3" />
+      <circle cx="18.5" cy="12" r="1.3" />
+    </svg>
+  );
+}
+
+function IconAdmin() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 3.5 19 6v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }

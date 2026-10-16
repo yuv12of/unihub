@@ -1,5 +1,5 @@
 /** Minimal iCalendar reader for Opal's (Moodle) calendar export. */
-import { semester } from "@/lib/semester";
+import type { Course } from "@/lib/semester";
 
 export interface IcsEvent {
   uid: string;
@@ -64,13 +64,13 @@ export function parseIcs(text: string): IcsEvent[] {
 }
 
 /** Opal events → Unihub events. Meetings count as tutorials (they block study time); the rest are notes on the day. */
-export function opalToEvents(events: IcsEvent[], today: string) {
+export function opalToEvents(events: IcsEvent[], today: string, courses: Course[] = []) {
   const from = new Date(Date.parse(today) - 30 * 86_400_000).toISOString().slice(0, 10);
   return events
     .filter((e) => e.start.date >= from && e.summary.trim())
     .map((e) => {
       const code = e.categories.match(/\b(\d{5})\b/)?.[1] ?? e.summary.match(/\b(\d{5})\b/)?.[1] ?? null;
-      const course = semester.courses.find((c) => c.code === code)?.code ?? null;
+      const course = code && (courses.length === 0 || courses.some((c) => c.code === code)) ? code : null;
       const timed = e.start.time && e.end?.time && e.end.date === e.start.date && e.end.time > e.start.time;
       const meeting = /מפגש|הנחיה|תרגול|הרצאה|וובינר|zoom|זום/i.test(e.summary);
       return {

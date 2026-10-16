@@ -5,13 +5,11 @@ import { nextExams, minutesLabel } from "@/lib/planner";
 import { progressKey } from "@/lib/progress";
 import {
   allDeadlines,
-  courseTheme,
   daysBetween,
   formatHebrewDate,
   relativeDays,
   semester,
-  typeLabel,
-} from "@/lib/semester";
+  typeLabel, themeOf } from "@/lib/semester";
 
 import { APP, COLORS, esc, row, section, table } from "@/lib/emailHtml";
 
@@ -42,14 +40,14 @@ export async function POST(req: Request) {
     ...events.map((e) => ({
       t: e.start_time ?? "",
       html: row(
-        e.course_code ? COLORS[e.course_code] ?? "#5d6880" : "#5d6880",
+        e.course_code ? themeOf(courses, e.course_code).hex : "#5d6880",
         (e.cancelled ? "<s>" : "") + esc(e.title) + (e.cancelled ? "</s> (בוטל)" : ""),
         e.start_time ? `${e.start_time}–${e.end_time ?? ""}${e.location ? ` · ${esc(e.location)}` : ""}` : "כל היום",
       ),
     })),
     ...todays.map((s) => ({
       t: s.start,
-      html: row(COLORS[s.courseCode] ?? "#5d6880", esc(s.title), `${s.start}–${s.end} · ${minutesLabel(s.minutes)}`),
+      html: row(themeOf(courses, s.courseCode).hex, esc(s.title), `${s.start}–${s.end} · ${minutesLabel(s.minutes)}`),
     })),
   ].sort((a, b) => a.t.localeCompare(b.t));
   parts.push(section("היום", timeline.length ? table(timeline.map((x) => x.html)) : `<p style="color:#5d6880">אין לימוד או מפגשים מתוכננים להיום.</p>`));
@@ -61,8 +59,8 @@ export async function POST(req: Request) {
         table(
           deadlines.map((d) =>
             row(
-              COLORS[d.course.code],
-              `${typeLabel[d.type]} ${d.n} ב${courseTheme[d.course.code].short}`,
+              themeOf(courses, d.course.code).hex,
+              `${typeLabel[d.type]} ${d.n} ב${themeOf(courses, d.course.code).short}`,
               `${formatHebrewDate(d.due, { weekday: "long", day: "numeric", month: "numeric" })} · ${relativeDays(d.daysLeft)} · משקל ${d.weight}`,
             ),
           ),
@@ -71,7 +69,7 @@ export async function POST(req: Request) {
     );
 
   if (exam) {
-    const name = semester.courses.find((c) => c.code === exam.course_code)?.name ?? exam.course_code;
+    const name = courses.find((c) => c.code === exam.course_code)?.name ?? exam.course_code;
     parts.push(
       section(
         "בחינה קרובה",

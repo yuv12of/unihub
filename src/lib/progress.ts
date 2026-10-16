@@ -69,7 +69,7 @@ export function standing(course: Course, progress: ProgressMap, today: string): 
 }
 
 /** The semester's courses with this user's deadline extensions applied. */
-export function coursesFor(progress: ProgressMap, courses: Course[] = semester.courses): Course[] {
+export function coursesFor(progress: ProgressMap, courses: Course[]): Course[] {
   return courses.map((c) => ({
     ...c,
     assignments: c.assignments.map((a) => {

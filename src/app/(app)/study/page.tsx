@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { StudySession } from "@/components/StudySession";
-import { getCardStats } from "@/lib/userdata";
-import { courseTheme, semester } from "@/lib/semester";
+import { getCardStats, getCourses } from "@/lib/userdata";
 
 export default function StudyPage() {
   return (
@@ -18,8 +17,8 @@ export default function StudyPage() {
 
 async function Study() {
   await connection();
-  const { due, total, byCourse } = await getCardStats();
-  const courses = semester.courses.map((c) => ({ code: c.code, name: courseTheme[c.code].short, color: courseTheme[c.code].color }));
+  const [{ due, total, byCourse }, mine] = await Promise.all([getCardStats(), getCourses()]);
+  const courses = mine.map((c) => ({ code: c.code, name: c.short, color: c.color }));
   return (
     <>
       <p className="mt-4 text-sm text-ink-soft">

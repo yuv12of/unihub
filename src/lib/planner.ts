@@ -10,7 +10,7 @@
  * simply stays in the remaining work, so missed sessions roll forward on their own.
  * A session marked skipped keeps its slot empty and its work moves to another day.
  */
-import { addDays, daysBetween, semester, typeLabel, courseTheme, type Course } from "@/lib/semester";
+import { addDays, daysBetween, typeLabel, themeOf, type Course } from "@/lib/semester";
 import { progressKey, type ProgressMap } from "@/lib/progress";
 
 export interface DaySlot {
@@ -129,7 +129,7 @@ export function buildPlan({
   progress,
   exams,
   busy = [],
-  courses = semester.courses,
+  courses,
   doneMinutes = {},
   skipped = new Set<string>(),
 }: {
@@ -138,7 +138,7 @@ export function buildPlan({
   progress: ProgressMap;
   exams: Exam[];
   busy?: Busy[];
-  courses?: Course[];
+  courses: Course[];
   /** session key -> minutes, for sessions marked done */
   doneMinutes?: Record<string, number>;
   /** keys of sessions marked skipped */
@@ -162,7 +162,7 @@ export function buildPlan({
       const need = prepMinutes(a.type, a.weight);
       if (!need) continue;
       const until = addDays(a.due, -1) < today ? today : addDays(a.due, -1);
-      const title = `${typeLabel[a.type]} ${a.n} ב${courseTheme[c.code].short}`;
+      const title = `${typeLabel[a.type]} ${a.n} ב${c.short}`;
       const sessionTitle = `הכנה ל${title}`;
       const remaining = need - creditFor("assignment", c.code, sessionTitle);
       if (remaining < MIN_CHUNK) continue;
@@ -180,7 +180,7 @@ export function buildPlan({
   }
 
   for (const e of nextExams(exams, today)) {
-    const title = `בחינה ב${courseTheme[e.course_code]?.short ?? e.course_code}`;
+    const title = `בחינה ב${themeOf(courses, e.course_code).short}`;
     const sessionTitle = `חזרה ל${title}`;
     const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, sessionTitle);
     if (remaining < MIN_CHUNK) continue;
@@ -251,7 +251,7 @@ export function buildPlan({
     if (prefs.fill_routine && capacity >= MIN_CHUNK) {
       const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
       if (code) {
-        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${courseTheme[code].short}`);
+        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`);
         routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
       }
     }

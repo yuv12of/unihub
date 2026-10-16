@@ -1,0 +1,6 @@
+-- Applied through the Supabase connector as migrations "multi_user_social_routines" and "my_badges" (2026-10-16).
+-- profiles (pending/approved/blocked, admin, share settings) + trigger on new users; per-user courses
+-- (user_courses) over the shared catalog (courses/assignments, catalog_add_course); follows with
+-- follow_request/follow_answer/people; event_invites with invite_to_event/answer_invite; routines,
+-- routine_members, routine_logs with share_routine/answer_routine; friend_view (respects share settings);
+-- _feed_for now includes courses, accepted invitations, routines and routine logs; my_badges.

@@ -1,5 +1,7 @@
 import { buildPlan, type Busy, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { coursesFor, type ProgressMap } from "@/lib/progress";
+import { addDays, type Course } from "@/lib/semester";
+import { expandRoutines, routineBusy, type Occurrence, type Routine, type RoutineLog } from "@/lib/routines";
 
 interface EventLike {
   date: string;
@@ -24,7 +26,13 @@ export function planFor({
   exams,
   events,
   rows,
+  courses,
+  routines = [],
 }: {
+  /** Life routines: timed fixed ones that block study are planned around. */
+  routines?: Routine[];
+  /** The user's courses (without deadline extensions; they're applied here). */
+  courses: Course[];
   today: string;
   prefs: StudyPrefs;
   progress: ProgressMap;
@@ -37,9 +45,34 @@ export function planFor({
     prefs,
     progress,
     exams,
-    busy: busyFromEvents(events),
-    courses: coursesFor(progress),
+    busy: [...busyFromEvents(events), ...routineBusy(routines, today, addDays(today, 240))],
+    courses: coursesFor(progress, courses),
     doneMinutes: Object.fromEntries(rows.filter((r) => r.status === "done" && r.minutes).map((r) => [r.session_key, r.minutes!])),
     skipped: new Set(rows.filter((r) => r.status === "skipped").map((r) => r.session_key)),
   });
+}
+
+/** Routine occurrences for a date range, placed around events and the study plan. */
+export function occurrencesFor({
+  routines,
+  logs,
+  events,
+  plan,
+  today,
+  from,
+  to,
+}: {
+  routines: Routine[];
+  logs: RoutineLog[];
+  events: EventLike[];
+  plan: Plan;
+  today: string;
+  from: string;
+  to: string;
+}): Occurrence[] {
+  const taken = [
+    ...events.filter((e) => e.start_time && e.end_time && !e.cancelled).map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! })),
+    ...plan.sessions.map((s) => ({ date: s.date, start: s.start, end: s.end })),
+  ];
+  return expandRoutines({ routines, logs, from, to, today, taken });
 }

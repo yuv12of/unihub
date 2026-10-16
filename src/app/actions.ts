@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { allowedEmails, supabaseEnabled } from "@/lib/supabase/config";
+import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { semester } from "@/lib/semester";
 import type { Status } from "@/lib/progress";
@@ -16,8 +16,13 @@ export async function saveProgress(input: {
 }) {
   const { supabase, userId } = await requireUser();
 
-  const course = semester.courses.find((c) => c.code === input.code);
-  if (!course || !course.assignments.some((a) => a.n === input.n)) throw new Error("Unknown assignment");
+  const { data: known } = await supabase
+    .from("user_courses")
+    .select("course_code, course:courses(assignments(n))")
+    .match({ course_code: input.code, semester: semester.semester })
+    .maybeSingle();
+  const ns = ((known?.course as unknown as { assignments: { n: string }[] } | null)?.assignments ?? []).map((a) => a.n);
+  if (!ns.includes(input.n)) throw new Error("Unknown assignment");
   if (!STATUSES.includes(input.status)) throw new Error("Bad status");
   const grade =
     input.grade == null || Number.isNaN(input.grade) ? null : Math.max(0, Math.min(100, Math.round(input.grade)));
@@ -42,8 +47,9 @@ async function requireUser() {
   const userId = data?.claims?.sub;
   const email = (data?.claims?.email as string | undefined)?.toLowerCase();
   if (!userId || !email) throw new Error("Not signed in");
-  if (allowedEmails.length && !allowedEmails.includes(email)) throw new Error("Not allowed");
-  return { supabase, userId };
+  const { data: profile } = await supabase.from("profiles").select("status, is_admin").maybeSingle();
+  if (profile?.status !== "approved") throw new Error("החשבון עוד לא אושר");
+  return { supabase, userId, isAdmin: !!profile.is_admin };
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -73,7 +79,8 @@ export async function savePrefs(formData: FormData) {
 
 export async function saveExams(formData: FormData) {
   const { supabase, userId } = await requireUser();
-  for (const c of semester.courses) {
+  const { getCourses } = await import("@/lib/userdata");
+  for (const c of await getCourses()) {
     for (const moed of ["א", "ב"]) {
       const date = String(formData.get(`date-${c.code}-${moed}`) ?? "");
       const time = String(formData.get(`time-${c.code}-${moed}`) ?? "");
@@ -115,22 +122,27 @@ export async function setSessionStatus(key: string, status: "done" | "skipped" |
   refresh();
 }
 
-export async function addEvent(input: { date: string; start: string; end: string; title: string }) {
+export async function addEvent(input: { date: string; start: string; end: string; title: string; invite?: string[] }) {
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
   if (!DATE.test(input.date) || !TIME.test(input.start) || !TIME.test(input.end) || input.end <= input.start)
     throw new Error("Bad time");
   if (!title || title.length > 200) throw new Error("Bad title");
-  const { error } = await supabase.from("user_events").insert({
-    user_id: userId,
-    date: input.date,
-    start_time: input.start,
-    end_time: input.end,
-    title,
-    kind: "custom",
-    source: "manual",
-  });
+  const { data, error } = await supabase
+    .from("user_events")
+    .insert({
+      user_id: userId,
+      date: input.date,
+      start_time: input.start,
+      end_time: input.end,
+      title,
+      kind: "custom",
+      source: "manual",
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  if (input.invite?.length) await supabase.rpc("invite_to_event", { p_event: data.id, p_users: input.invite });
   refresh();
 }
 
@@ -283,4 +295,231 @@ export async function syncOpalNow() {
   const res = await fetch(`${origin}/api/sync`, { method: "POST", headers: { Authorization: `Bearer ${tok.token}` } });
   refresh();
   return (await res.json()) as { opal: string; events?: number; message?: string };
+}
+
+// ---------- Accounts (admin) ----------
+
+export async function setAccountStatus(userId: string, status: "approved" | "blocked" | "pending") {
+  const { supabase, isAdmin } = await requireUser();
+  if (!isAdmin) throw new Error("Not allowed");
+  const { error } = await supabase.rpc("admin_set_status", { p_user: userId, p_status: status });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+// ---------- Courses ----------
+
+/** Adds a course by its number: reads the official requirements page and stores it for this user. */
+export async function addCourse(codeInput: string) {
+  const { supabase, userId } = await requireUser();
+  const code = codeInput.trim();
+  if (!/^\d{5}$/.test(code)) throw new Error("מספר קורס הוא 5 ספרות");
+  const { fetchRequirements } = await import("@/lib/courseCatalog");
+  let course = null;
+  try {
+    course = await fetchRequirements(code, semester.semester);
+  } catch {
+    /* handled below */
+  }
+  if (!course) throw new Error(`לא מצאתי את קורס ${code} בסמסטר ${semester.semester}`);
+  const { error } = await supabase.rpc("catalog_add_course", { p: course });
+  if (error) throw new Error(error.message);
+  const { PALETTE_KEYS, defaultShort } = await import("@/lib/semester");
+  const { data: mine } = await supabase.from("user_courses").select("color").eq("semester", semester.semester);
+  const used = new Set((mine ?? []).map((r) => r.color));
+  const color = PALETTE_KEYS.find((k) => !used.has(k)) ?? PALETTE_KEYS[(mine?.length ?? 0) % PALETTE_KEYS.length];
+  const { error: e2 } = await supabase
+    .from("user_courses")
+    .upsert({ user_id: userId, course_code: code, semester: semester.semester, color, short: defaultShort(course.name) }, { ignoreDuplicates: true });
+  if (e2) throw new Error(e2.message);
+  refresh();
+  return course.name;
+}
+
+export async function removeCourse(code: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("user_courses").delete().match({ user_id: userId, course_code: code, semester: semester.semester });
+  refresh();
+}
+
+export async function updateCourseLook(code: string, look: { color?: string; short?: string }) {
+  const { supabase, userId } = await requireUser();
+  const { PALETTE } = await import("@/lib/semester");
+  const patch: Record<string, string> = {};
+  if (look.color && PALETTE[look.color]) patch.color = look.color;
+  if (look.short !== undefined) {
+    const s = look.short.trim();
+    if (!s || s.length > 24) throw new Error("שם קצר: עד 24 תווים");
+    patch.short = s;
+  }
+  await supabase.from("user_courses").update(patch).match({ user_id: userId, course_code: code, semester: semester.semester });
+  refresh();
+}
+
+// ---------- Routines ----------
+
+export interface RoutineInput {
+  id?: string;
+  title: string;
+  emoji?: string | null;
+  category: string;
+  mode: "fixed" | "flexible";
+  days: number[];
+  start_time: string | null;
+  minutes: number;
+  per_week: number | null;
+  time_window: string;
+  blocks_study: boolean;
+  share_with?: string[];
+}
+
+const CATEGORIES = ["sleep", "meal", "sport", "health", "habit", "chore", "hobby", "social", "other"];
+const WINDOW_KEYS = ["morning", "noon", "afternoon", "evening", "any"];
+
+export async function saveRoutine(input: RoutineInput) {
+  const { supabase, userId } = await requireUser();
+  const title = input.title.trim();
+  if (!title || title.length > 120) throw new Error("חסר שם");
+  if (!CATEGORIES.includes(input.category) || !WINDOW_KEYS.includes(input.time_window)) throw new Error("Bad routine");
+  const minutes = Math.max(0, Math.min(900, Math.round(input.minutes || 0)));
+  const days = [...new Set(input.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+  if (input.mode === "fixed" && days.length === 0) throw new Error("בחרו לפחות יום אחד");
+  if (input.start_time && !TIME.test(input.start_time)) throw new Error("שעה לא תקינה");
+  const row = {
+    user_id: userId,
+    title,
+    emoji: input.emoji?.trim().slice(0, 8) || null,
+    category: input.category,
+    mode: input.mode,
+    days: input.mode === "fixed" ? days : [],
+    start_time: input.mode === "fixed" && minutes > 0 ? input.start_time || null : null,
+    minutes,
+    per_week: input.mode === "flexible" ? Math.max(1, Math.min(14, Math.round(input.per_week ?? 1))) : null,
+    time_window: input.time_window,
+    blocks_study: input.blocks_study,
+    active: true,
+  };
+  let id = input.id;
+  if (id) {
+    const { error } = await supabase.from("routines").update(row).match({ id, user_id: userId });
+    if (error) throw new Error(error.message);
+  } else {
+    const { data, error } = await supabase.from("routines").insert(row).select("id").single();
+    if (error) throw new Error(error.message);
+    id = data.id as string;
+  }
+  if (input.share_with?.length) await supabase.rpc("share_routine", { p_routine: id, p_users: input.share_with });
+  refresh();
+}
+
+export async function deleteRoutine(id: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("routines").delete().match({ id, user_id: userId });
+  refresh();
+}
+
+/** Ticks (or unticks) a routine for a day. */
+export async function toggleRoutine(id: string, date: string, done: boolean) {
+  const { supabase, userId } = await requireUser();
+  if (!DATE.test(date)) throw new Error("Bad date");
+  if (done) {
+    const { error } = await supabase.from("routine_logs").upsert({ routine_id: id, user_id: userId, date }, { ignoreDuplicates: true });
+    if (error) throw new Error(error.message);
+  } else {
+    await supabase.from("routine_logs").delete().match({ routine_id: id, user_id: userId, date });
+  }
+  refresh();
+}
+
+export async function shareRoutine(id: string, users: string[]) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("share_routine", { p_routine: id, p_users: users });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Join (or decline) a routine someone shared with me; declining after joining = leaving. */
+export async function answerRoutine(id: string, accept: boolean) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("answer_routine", { p_routine: id, p_accept: accept });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+// ---------- Event invitations ----------
+
+export async function answerInvite(eventId: string, status: "accepted" | "declined") {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("answer_invite", { p_event: eventId, p_status: status });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+export async function inviteToEvent(eventId: string, users: string[]) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("invite_to_event", { p_event: eventId, p_users: users });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+// ---------- Friends ----------
+
+export async function searchPeople(query: string) {
+  const { supabase } = await requireUser();
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const { data } = await supabase.rpc("people", { p_query: q });
+  return (data ?? []) as { id: string; name: string; avatar_url: string | null; i_follow: string | null; follows_me: string | null }[];
+}
+
+export async function followUser(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("follow_request", { p_user: id });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+export async function answerFollow(followerId: string, accept: boolean) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("follow_answer", { p_follower: followerId, p_accept: accept });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Stop following someone (or cancel a pending request). */
+export async function unfollow(id: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("follows").delete().match({ follower: userId, followee: id });
+  refresh();
+}
+
+/** Remove someone who follows me. */
+export async function removeFollower(id: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("follows").delete().match({ follower: id, followee: userId });
+  refresh();
+}
+
+export interface ShareSettings {
+  courses: boolean;
+  progress: boolean;
+  grades: boolean;
+  study: boolean;
+  schedule: "none" | "busy" | "details";
+  routines: boolean;
+}
+
+export async function saveShare(share: ShareSettings) {
+  const { supabase, userId } = await requireUser();
+  const clean: ShareSettings = {
+    courses: !!share.courses,
+    progress: !!share.progress && !!share.courses,
+    grades: !!share.grades && !!share.progress && !!share.courses,
+    study: !!share.study,
+    schedule: ["none", "busy", "details"].includes(share.schedule) ? share.schedule : "busy",
+    routines: !!share.routines,
+  };
+  const { error } = await supabase.from("profiles").update({ share: clean }).eq("id", userId);
+  if (error) throw new Error(error.message);
+  refresh();
 }

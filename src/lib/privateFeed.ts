@@ -3,9 +3,15 @@ import { supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 import { defaultPrefs, sessionKey, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
 import { planFor } from "@/lib/planfor";
-import { semester, todayInIsrael } from "@/lib/semester";
+import { courseFromRow, semester, todayInIsrael, type CourseRow } from "@/lib/semester";
+
+import type { Routine, RoutineLog } from "@/lib/routines";
 
 export interface PrivateFeed {
+  routines: Routine[];
+  routine_logs: RoutineLog[];
+  courses: CourseRow[];
+  accounts_pending: number;
   prefs: StudyPrefs | null;
   progress: { course_code: string; semester: string; n: string; status: Status; grade: number | null; due_override: string | null }[];
   exams: (Exam & { semester: string })[];
@@ -42,9 +48,12 @@ export async function loadPrivate(token: string) {
     status,
     minutes: feed.session_minutes?.[session_key] ?? null,
   }));
-  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows });
+  const base = (feed.courses ?? []).map(courseFromRow);
+  const routines = feed.routines ?? [];
+  const logs = feed.routine_logs ?? [];
+  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows, courses: base, routines });
   const live = plan.sessions.filter((s) => feed.session_status[sessionKey(s)] !== "skipped");
-  return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress) };
+  return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress, base), routines, logs };
 }
 
 /** Current Israel time as { date: YYYY-MM-DD, minutes since midnight }. */

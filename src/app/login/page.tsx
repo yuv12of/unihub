@@ -17,6 +17,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
         <ErrorMessage searchParams={searchParams} />
       </Suspense>
       <SignInButton />
+      <p className="mt-4 text-sm text-ink-soft">חדשים כאן? התחברו, והבקשה תגיע לאישור.</p>
     </main>
   );
 }

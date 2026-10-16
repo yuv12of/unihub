@@ -4,12 +4,16 @@ import { supabaseKey, supabaseUrl, supabaseEnabled } from "@/lib/supabase/config
 import { defaultPrefs, sessionKey, type Exam, type StudyPrefs } from "@/lib/planner";
 import { academicEvents } from "@/lib/academic";
 import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
-import { planFor } from "@/lib/planfor";
+import { occurrencesFor, planFor } from "@/lib/planfor";
+import type { Routine, RoutineLog } from "@/lib/routines";
 import { renderCalendar, type CalEvent } from "@/lib/ical";
-import { courseTheme, semester, todayInIsrael, typeLabel, addDays } from "@/lib/semester";
+import { courseFromRow, semester, todayInIsrael, typeLabel, addDays, themeOf, type CourseRow } from "@/lib/semester";
 
 interface FeedData {
+  routines?: Routine[];
+  routine_logs?: RoutineLog[];
   prefs: StudyPrefs | null;
+  courses?: CourseRow[];
   progress: { course_code: string; semester: string; n: string; status: Status; due_override?: string | null }[];
   exams: (Exam & { semester: string })[];
   events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null; cancelled?: boolean; external_id?: string | null }[];
@@ -38,24 +42,27 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   const userEvents = feed.events ?? [];
   const status = feed.session_status ?? {};
   const rows = Object.entries(status).map(([session_key, st]) => ({ session_key, status: st, minutes: feed.session_minutes?.[session_key] ?? null }));
-  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows });
+  const base = (feed.courses ?? []).map(courseFromRow);
+  const courses = coursesFor(progress, base);
+  const routines = feed.routines ?? [];
+  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows, courses: base, routines });
 
   const events: CalEvent[] = [];
-  for (const c of coursesFor(progress)) {
+  for (const c of courses) {
     for (const a of c.assignments) {
       if (a.due < addDays(today, -60)) continue;
       const status = progress[progressKey(c.code, a.n)]?.status;
       const mark = status === "submitted" ? "✓ " : status === "skipped" ? "✗ " : "";
       events.push({
         uid: `due-${c.code}-${semester.semester}-${a.n}@unihub`,
-        title: `${mark}הגשה: ${typeLabel[a.type]} ${a.n} ב${courseTheme[c.code].short}`,
+        title: `${mark}הגשה: ${typeLabel[a.type]} ${a.n} ב${themeOf(courses, c.code).short}`,
         description: `${c.name}, משקל ${a.weight}${a.originalDue ? ` (הוארך, במקור ${a.originalDue.split("-").reverse().join("/")})` : ""}`,
         date: a.due,
       });
     }
   }
   for (const e of exams) {
-    const name = semester.courses.find((c) => c.code === e.course_code)?.name ?? e.course_code;
+    const name = courses.find((c) => c.code === e.course_code)?.name ?? e.course_code;
     const title = `בחינה: ${name}, מועד ${e.moed}`;
     if (e.start_time) {
       const [h, m] = e.start_time.split(":").map(Number);
@@ -106,6 +113,17 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
       start: { date: s.date, time: s.start },
       end: { date: s.date, time: s.end },
       reminderMinutes: 15,
+    });
+  }
+
+  // Routines with a time (sleep and meals stay in the app), two weeks back to three weeks ahead.
+  for (const o of occurrencesFor({ routines, logs: feed.routine_logs ?? [], events: userEvents, plan, today, from: addDays(today, -14), to: addDays(today, 21) })) {
+    if (!o.start || !o.end || o.category === "sleep" || o.category === "meal") continue;
+    events.push({
+      uid: `routine-${o.routineId}-${o.date}@unihub`,
+      title: `${o.done ? "✓ " : ""}${o.emoji} ${o.title}`,
+      start: { date: o.date, time: o.start },
+      end: { date: o.end < o.start ? addDays(o.date, 1) : o.date, time: o.end },
     });
   }
 

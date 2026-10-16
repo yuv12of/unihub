@@ -5,10 +5,10 @@ import { resetFeed, resetIngestToken, saveExams, savePrefs } from "@/app/actions
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getExams, getFeedToken, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { getCourses, getExams, getFeedToken, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
 import { OpalSync } from "@/components/OpalSync";
 import { supabaseEnabled } from "@/lib/supabase/config";
-import { courseTheme, semester } from "@/lib/semester";
+import { semester, themeOf } from "@/lib/semester";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const DURATIONS = [30, 60, 90, 120, 150, 180, 240, 300, 360];
@@ -31,7 +31,7 @@ const field = "rounded-lg border border-rule bg-surface px-3 py-2";
 async function Settings() {
   await connection();
   if (!supabaseEnabled) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
-  const [prefs, exams, token, ingest, opal] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken(), getOpalFeed()]);
+  const [prefs, exams, token, ingest, opal, courses] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken(), getOpalFeed(), getCourses()]);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
@@ -109,10 +109,10 @@ async function Settings() {
             חזרות שלושה שבועות לפני כל בחינה.
           </p>
           <form action={saveExams} className="mt-5 space-y-5">
-            {semester.courses.map((c) => (
+            {courses.map((c) => (
               <fieldset key={c.code}>
                 <legend className="flex items-center gap-2 font-medium">
-                  <span className="size-2.5 rounded-full" style={{ background: courseTheme[c.code].color }} />
+                  <span className="size-2.5 rounded-full" style={{ background: themeOf(courses, c.code).color }} />
                   {c.name}
                 </legend>
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">

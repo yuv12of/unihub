@@ -9,7 +9,7 @@
  * automatically when the rule is sure, or wait for one tap when it isn't.
  * Official notices arrive as scanned PDFs; their text comes from Drive OCR in the user's Apps Script.
  */
-import { courseTheme, semester, typeLabel, addDays } from "@/lib/semester";
+import { semester, themeOf, typeLabel, addDays, type Course } from "@/lib/semester";
 
 export interface MailInput {
   subject: string;
@@ -49,11 +49,11 @@ const clean = (s: string) => s.replace(/\s+/g, " ").trim();
 const short = (s: string, n = 160) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
 /** Course of a mail: an explicit course code, or a course name. Only courses of the current semester. */
-export function detectCourse(text: string): string | null {
+export function detectCourse(text: string, courses: Course[]): string | null {
   for (const m of text.matchAll(/\b(\d{5})\b/g)) {
-    if (semester.courses.some((c) => c.code === m[1])) return m[1];
+    if (courses.some((c) => c.code === m[1])) return m[1];
   }
-  for (const c of semester.courses) if (text.includes(c.name)) return c.code;
+  for (const c of courses) if (text.includes(c.name)) return c.code;
   return null;
 }
 
@@ -98,8 +98,8 @@ const he = (iso: string) => iso.slice(8, 10).replace(/^0/, "") + "/" + iso.slice
  * The university numbers file assignments (ממ"ן) 11, 12, … and online ones (ממ"ח) 01, 02, …,
  * while Unihub lists all of a course's assignments in order. Maps the mail's number to ours.
  */
-function assignmentOf(code: string, n: string, word = "") {
-  const course = semester.courses.find((c) => c.code === code);
+function assignmentOf(courses: Course[], code: string, n: string, word = "") {
+  const course = courses.find((c) => c.code === code);
   if (!course) return null;
   const num = Number(n);
   if (/ח/.test(word)) return course.assignments.filter((a) => a.type === "online")[num - 1] ?? null;
@@ -108,7 +108,7 @@ function assignmentOf(code: string, n: string, word = "") {
 }
 
 /** Routine mail: category + summary, without AI. null category = leave it for the AI task. */
-function classify(subject: string, sender: string, body: string): Pick<RuleResult, "category" | "summary" | "actions"> {
+function classify(subject: string, sender: string, body: string, courses: Course[]): Pick<RuleResult, "category" | "summary" | "actions"> {
   const s = clean(subject);
   const none = { category: null, summary: null, actions: [] };
 
@@ -131,10 +131,10 @@ function classify(subject: string, sender: string, body: string): Pick<RuleResul
 
   const notebook = s.match(/^מחברת מפגש\s*(\d+)/);
   if (notebook) {
-    const code = detectCourse(body);
+    const code = detectCourse(body, courses);
     return {
       category: "קורס",
-      summary: `המנחה שלח את מחברת מפגש ${notebook[1]}${code ? ` ב${courseTheme[code]?.short ?? code}` : ""} (קובץ מצורף).`,
+      summary: `המנחה שלח את מחברת מפגש ${notebook[1]}${code ? ` ב${themeOf(courses, code).short}` : ""} (קובץ מצורף).`,
       actions: [],
     };
   }
@@ -150,7 +150,7 @@ function classify(subject: string, sender: string, body: string): Pick<RuleResul
     return { category: "שיווק", summary: short(s) + ".", actions: [] };
   if (
     /^\s*הזמנה|קונצרט|ערב עיון|הרצא|סדנ|מפגש זרקור|מפגש היכרות|תערוכה|מועדון|יום הדאטה|שבוע מודעות|מפגשי חשיפה|התמודדות במצבי לחץ/.test(s) &&
-    !detectCourse(s)
+    !detectCourse(s, courses)
   )
     return { category: "אירועים", summary: short(s) + ".", actions: [] };
 
@@ -161,25 +161,25 @@ function classify(subject: string, sender: string, body: string): Pick<RuleResul
  * Runs all rules on one mail. `tutorials` are the user's known tutorial meetings, used to tell
  * which date in a cancellation notice is the cancelled meeting.
  */
-export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: string): RuleResult {
+export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: string, courses: Course[]): RuleResult {
   const subject = clean(mail.subject ?? "");
   const pdfText = mail.attachments.map((a) => a.text ?? "").join("\n");
   const all = `${subject}\n${mail.body ?? ""}\n${pdfText}`;
-  const base = classify(subject, mail.sender, mail.body ?? "");
+  const base = classify(subject, mail.sender, mail.body ?? "", courses);
   const result: RuleResult = { ...base, updates: [] };
 
   // Only fresh mail about this semester changes the schedule (old mail is just kept for reading).
   const fresh = mail.date.slice(0, 10) >= addDays(today, -14);
   if (!fresh || otherSemester(all)) return result;
-  const code = detectCourse(all);
+  const code = detectCourse(all, courses);
 
   // 1. Deadline extension: "מועד הגשת מטלה 13 נדחה ל- 29.12", "ממ"ן 12 יוגש עד 10.12".
   const ext = all.match(/(מטלה|ממ["״']?[נןח])\s*(\d{1,2})[^\n]{0,40}?(?:נדח[הית]+|הוארך|יוארך|מוארך|יוגש עד)[^\d\n]{0,15}(\d{1,2}[./]\d{1,2}(?:[./]\d{2,4})?)/);
   if (ext && code) {
-    const a = assignmentOf(code, ext[2], ext[1]);
+    const a = assignmentOf(courses, code, ext[2], ext[1]);
     const due = parseDates(ext[3], mail.date)[0]?.iso;
     if (a && due && due !== a.due) {
-      const label = `${typeLabel[a.type]} ${a.n} ב${courseTheme[code].short}`;
+      const label = `${typeLabel[a.type]} ${a.n} ב${themeOf(courses, code).short}`;
       result.updates.push({
         kind: "deadline",
         title: `${label} נדחה ל־${he(due)}`,
@@ -201,7 +201,7 @@ export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: 
     const cancelled = dates.find((d) => known(d.iso));
     const timeAfter = (d: { index: number }) => source.slice(d.index, d.index + 80).match(TIME_RANGE);
     const replacement = dates.find((d) => d.iso !== cancelled?.iso && !known(d.iso) && timeAfter(d));
-    const name = code ? ` ב${courseTheme[code].short}` : "";
+    const name = code ? ` ב${themeOf(courses, code).short}` : "";
     if (cancelled) {
       const t = known(cancelled.iso)!;
       result.updates.push({
@@ -247,9 +247,9 @@ export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: 
   if (/סיום בדיקת מטלה|בדיקת המטלה הסתיימה/.test(subject)) {
     const nm = pdfText.match(/(מטלה|ממ["״']?[נןח])\s*(?:מס['׳]?\s*)?(\d{1,2})/);
     const grade = pdfText.match(/ציון[^\d\n]{0,12}(\d{1,3})(?!\d)/)?.[1];
-    const a = code && nm ? assignmentOf(code, nm[2], nm[1]) : null;
+    const a = code && nm ? assignmentOf(courses, code, nm[2], nm[1]) : null;
     if (a && grade && Number(grade) <= 100) {
-      const label = `${typeLabel[a.type]} ${a.n} ב${courseTheme[code!].short}`;
+      const label = `${typeLabel[a.type]} ${a.n} ב${themeOf(courses, code).short}`;
       result.updates.push({
         kind: "grade",
         title: `ציון ${grade} ב${label}`,

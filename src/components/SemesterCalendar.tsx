@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { addEvent, deleteEvent, setSessionStatus } from "@/app/actions";
 
-export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic";
+export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
 
 export interface CalItem {
   date: string; // YYYY-MM-DD
@@ -19,6 +19,8 @@ export interface CalItem {
   eventId?: string;
   deletable?: boolean;
   holiday?: boolean;
+  /** e.g. "with Dana", "invited by Noa" */
+  note?: string;
 }
 
 const WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
@@ -41,7 +43,7 @@ function daysOfMonth(ym: string): (string | null)[] {
   return cells;
 }
 
-const rank: Record<CalKind, number> = { academic: 0, exam: 1, due: 2, tutorial: 3, event: 4, study: 5 };
+const rank: Record<CalKind, number> = { academic: 0, exam: 1, due: 2, tutorial: 3, event: 4, study: 5, routine: 6 };
 const order = (a: CalItem, b: CalItem) => rank[a.kind] - rank[b.kind] || (a.start ?? "").localeCompare(b.start ?? "");
 
 export function SemesterCalendar({
@@ -49,21 +51,26 @@ export function SemesterCalendar({
   today,
   legend,
   editable,
+  people = [],
 }: {
   items: CalItem[];
   today: string;
   legend: { color: string; label: string }[];
   editable: boolean;
+  /** friends who can be invited to an event */
+  people?: { id: string; name: string }[];
 }) {
+  const [showRoutines, setShowRoutines] = useState(true);
   const byDate = useMemo(() => {
     const m = new Map<string, CalItem[]>();
     for (const it of items) {
+      if (!showRoutines && it.kind === "routine") continue;
       if (!m.has(it.date)) m.set(it.date, []);
       m.get(it.date)!.push(it);
     }
     for (const l of m.values()) l.sort(order);
     return m;
-  }, [items]);
+  }, [items, showRoutines]);
 
   const [view, setView] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState(today); // any day inside the shown week / month
@@ -115,7 +122,15 @@ export function SemesterCalendar({
           >
             היום
           </button>
-          <div className="ms-auto flex rounded-lg border border-rule p-0.5 text-sm" role="tablist" aria-label="תצוגה">
+          <button
+            type="button"
+            aria-pressed={showRoutines}
+            onClick={() => setShowRoutines((v) => !v)}
+            className={`ms-auto rounded-full border px-3 py-1 text-sm ${showRoutines ? "border-ink text-ink" : "border-rule text-ink-soft"}`}
+          >
+            {showRoutines ? "✓ " : ""}שגרה
+          </button>
+          <div className="flex rounded-lg border border-rule p-0.5 text-sm" role="tablist" aria-label="תצוגה">
             {(["week", "month"] as const).map((v) => (
               <button
                 key={v}
@@ -151,7 +166,7 @@ export function SemesterCalendar({
         </div>
       </div>
 
-      <DayPanel date={selected} items={byDate.get(selected) ?? []} editable={editable} />
+      <DayPanel date={selected} items={byDate.get(selected) ?? []} editable={editable} people={people} />
     </div>
   );
 }
@@ -387,15 +402,15 @@ function WeekGrid({
                         top,
                         height,
                         background:
-                          it.kind === "study"
-                            ? `color-mix(in srgb, ${it.color} 16%, var(--surface))`
+                          it.kind === "study" || it.kind === "routine"
+                            ? `color-mix(in srgb, ${it.color} ${it.kind === "routine" ? 10 : 16}%, var(--surface))`
                             : `color-mix(in srgb, ${it.color} 85%, black)`,
-                        color: it.kind === "study" ? "var(--ink)" : "white",
+                        color: it.kind === "study" || it.kind === "routine" ? "var(--ink)" : "white",
                         borderInlineStart: `3px solid ${it.color}`,
                       }}
                     >
-                      <span className={`block font-medium ${faded ? "line-through" : ""}`}>
-                        {it.status === "done" ? "✓ " : ""}
+                      <span className={`block font-medium ${faded || (it.kind === "routine" && it.done) ? "line-through" : ""}`}>
+                        {it.status === "done" || (it.kind === "routine" && it.done) ? "✓ " : ""}
                         {it.label}
                       </span>
                       <span className="block opacity-75 tabular-nums">
@@ -415,7 +430,7 @@ function WeekGrid({
 
 /* ---------- Day panel (details + planner actions) ---------- */
 
-function DayPanel({ date, items, editable }: { date: string; items: CalItem[]; editable: boolean }) {
+function DayPanel({ date, items, editable, people }: { date: string; items: CalItem[]; editable: boolean; people: { id: string; name: string }[] }) {
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -450,10 +465,11 @@ function DayPanel({ date, items, editable }: { date: string; items: CalItem[]; e
                   {it.status === "done" ? "✓ " : ""}
                   {it.label}
                 </div>
-                {it.start && (
+                {(it.start || it.note) && (
                   <div className="text-xs text-ink-soft tabular-nums">
                     {it.start}
                     {it.end ? `–${it.end}` : ""}
+                    {it.note ? `${it.start ? " · " : ""}${it.note}` : ""}
                   </div>
                 )}
                 {editable && it.kind === "study" && it.sessionKey && (
@@ -515,6 +531,7 @@ function DayPanel({ date, items, editable }: { date: string; items: CalItem[]; e
                     title: String(f.get("title") ?? ""),
                     start: String(f.get("start") ?? ""),
                     end: String(f.get("end") ?? ""),
+                    invite: f.getAll("invite").map(String),
                   });
                   setAdding(false);
                 });
@@ -533,6 +550,19 @@ function DayPanel({ date, items, editable }: { date: string; items: CalItem[]; e
                 <span className="text-ink-soft">עד</span>
                 <input name="end" type="time" required defaultValue="19:00" dir="ltr" className="rounded-lg border border-rule bg-surface px-2 py-1.5" aria-label="שעת סיום" />
               </div>
+              {people.length > 0 && (
+                <fieldset className="text-sm">
+                  <legend className="text-ink-soft">להזמין</legend>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {people.map((p) => (
+                      <label key={p.id} className="flex items-center gap-1.5">
+                        <input type="checkbox" name="invite" value={p.id} className="size-4" />
+                        {p.name.split(" ")[0]}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
               <div className="flex gap-2">
                 <button className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-bg">הוספה</button>
                 <button type="button" onClick={() => setAdding(false)} className="px-3 py-2 text-sm text-ink-soft">

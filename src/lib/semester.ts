@@ -13,31 +13,86 @@ export interface Assignment {
 export interface Course {
   code: string;
   name: string;
-  nameEn: string;
-  opalId: number;
-  coordinator: string;
-  finalAssessment: string;
+  nameEn: string | null;
+  opalId: number | null;
+  coordinator: string | null;
+  finalAssessment: string | null;
   assignmentWeight: { min: number; max: number };
   rules?: string[];
-  books?: string[];
   assignments: Assignment[];
+  /** The user's own colour (CSS value), hex for emails, and short name for this course. */
+  color: string;
+  hex: string;
+  short: string;
 }
 
 export interface Semester {
   semester: string;
   source: string;
   notes: string;
-  courses: Course[];
 }
 
-export const semester = data as Semester;
+/** The current semester (all users share it). Courses are per user, from the database. */
+export const semester = { semester: (data as Semester).semester } as Pick<Semester, "semester">;
 
-/** Stable visual identity per course. */
-export const courseTheme: Record<string, { color: string; short: string }> = {
-  "20109": { color: "var(--c-algebra)", short: "לינארית" },
-  "20474": { color: "var(--c-calculus)", short: "אינפי" },
-  "20407": { color: "var(--c-ds)", short: "מבני נתונים" },
+/** Course colours a user can pick. Each has a light and dark variant in globals.css. */
+export const PALETTE: Record<string, { css: string; hex: string; label: string }> = {
+  blue: { css: "var(--c-blue)", hex: "#2f5bd3", label: "כחול" },
+  green: { css: "var(--c-green)", hex: "#12855a", label: "ירוק" },
+  purple: { css: "var(--c-purple)", hex: "#8a3fc7", label: "סגול" },
+  orange: { css: "var(--c-orange)", hex: "#c8641a", label: "כתום" },
+  rose: { css: "var(--c-rose)", hex: "#c23a5c", label: "ורוד" },
+  teal: { css: "var(--c-teal)", hex: "#0f7f8c", label: "טורקיז" },
+  amber: { css: "var(--c-amber)", hex: "#a07800", label: "חרדל" },
+  slate: { css: "var(--c-slate)", hex: "#55617a", label: "אפור" },
 };
+export const PALETTE_KEYS = Object.keys(PALETTE);
+
+export interface CourseRow {
+  code: string;
+  name: string;
+  name_en?: string | null;
+  opal_id?: number | null;
+  coordinator?: string | null;
+  final_assessment?: string | null;
+  min_weight: number | null;
+  max_weight: number | null;
+  rules?: string[] | null;
+  color?: string | null;
+  short?: string | null;
+  assignments: { n: string; type: AssignmentType; weight: number; due: string }[];
+}
+
+/** Default short name: the course name without a trailing number, shortened. */
+export function defaultShort(name: string) {
+  const s = name.replace(/\s+\d+$/, "").trim();
+  return s.length > 16 ? s.slice(0, 15) + "…" : s;
+}
+
+export function courseFromRow(r: CourseRow): Course {
+  const pal = PALETTE[r.color ?? ""] ?? PALETTE.slate;
+  return {
+    code: r.code,
+    name: r.name,
+    nameEn: r.name_en ?? null,
+    opalId: r.opal_id ?? null,
+    coordinator: r.coordinator ?? null,
+    finalAssessment: r.final_assessment ?? null,
+    assignmentWeight: { min: r.min_weight ?? 0, max: r.max_weight ?? r.min_weight ?? 0 },
+    rules: r.rules?.length ? r.rules : undefined,
+    assignments: [...r.assignments].sort((a, b) => a.n.localeCompare(b.n)),
+    color: pal.css,
+    hex: pal.hex,
+    short: r.short?.trim() || defaultShort(r.name),
+  };
+}
+
+const GREY = { color: "var(--ink-soft)", hex: "#5d6880", short: "" };
+/** Colour and short name of a course code among the user's courses (grey when unknown). */
+export function themeOf(courses: Course[], code: string | null | undefined) {
+  const c = code ? courses.find((x) => x.code === code) : undefined;
+  return c ? { color: c.color, hex: c.hex, short: c.short } : { ...GREY, short: code ?? "" };
+}
 
 export const typeLabel: Record<AssignmentType, string> = {
   file: "ממ״ן",
@@ -75,7 +130,7 @@ export interface DeadlineItem extends Assignment {
   daysLeft: number;
 }
 
-export function allDeadlines(today: string, courses: Course[] = semester.courses): DeadlineItem[] {
+export function allDeadlines(today: string, courses: Course[]): DeadlineItem[] {
   return courses
     .flatMap((course) =>
       course.assignments.map((a) => ({ ...a, course, daysLeft: daysBetween(today, a.due) })),

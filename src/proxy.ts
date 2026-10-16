@@ -1,10 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { allowedEmails, supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
+import { supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 
 const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly"];
 
-/** Refreshes the Supabase session and keeps the app private to signed-in, allowed users. */
+/**
+ * Refreshes the Supabase session and keeps the app private: anyone can sign in with Google,
+ * but only accounts the admin approved get past the "waiting for approval" page.
+ */
 export async function proxy(request: NextRequest) {
   if (!supabaseEnabled) return NextResponse.next();
 
@@ -30,11 +33,20 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-  if (!isPublic && email && allowedEmails.length && !allowedEmails.includes(email)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("error", "not-allowed");
-    return NextResponse.redirect(url);
+  if (!isPublic && email) {
+    const { data: profile } = await supabase.from("profiles").select("status").maybeSingle();
+    const approved = profile?.status === "approved";
+    if (!approved && path !== "/pending") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/pending";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    if (approved && path === "/pending") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
   }
   return response;
 }

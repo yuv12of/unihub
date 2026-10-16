@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { bearer, loadPrivate } from "@/lib/privateFeed";
 import { minutesLabel, nextExams } from "@/lib/planner";
 import { progressKey, standing } from "@/lib/progress";
-import { addDays, allDeadlines, courseTheme, daysBetween, formatHebrewDate, relativeDays, semester, typeLabel } from "@/lib/semester";
+import { addDays, allDeadlines, daysBetween, formatHebrewDate, relativeDays, semester, typeLabel, themeOf } from "@/lib/semester";
 import { APP, COLORS, GREY, button, esc, muted, page, row, section, table } from "@/lib/emailHtml";
 
 /** Friday email: how the week went and what next week looks like. Sent by the user's Apps Script. */
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         ? `<p style="margin:0">למדת <b>${minutesLabel(doneMin)}</b> ב־${doneCount} מפגשים${skippedCount ? `, ודילגת על ${skippedCount}` : ""}.</p>` +
             table(
               [...doneByCourse.entries()].map(([code, m]) =>
-                row(COLORS[code] ?? GREY, esc(semester.courses.find((c) => c.code === code)?.name ?? code), minutesLabel(m)),
+                row(themeOf(courses, code).hex, esc(courses.find((c) => c.code === code)?.name ?? code), minutesLabel(m)),
               ),
             )
         : muted("לא סומנו מפגשי לימוד השבוע. מה שלא נעשה עבר אוטומטית לשבוע הבא."),
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
               : st.atRisk
                 ? `<b style="color:#b3261e">חסרות ${st.needed} נקודות ונשארו רק ${st.open}</b>`
                 : `${st.earned}/${c.assignmentWeight.min} נקודות חובה, נשארו ${st.open} פתוחות`;
-          return row(COLORS[c.code] ?? GREY, esc(c.name), `${sub}${st.average != null ? ` · ממוצע ${st.average}` : ""}`);
+          return row(themeOf(courses, c.code).hex, esc(c.name), `${sub}${st.average != null ? ` · ממוצע ${st.average}` : ""}`);
         }),
       ),
     ),
@@ -85,21 +85,21 @@ export async function POST(req: Request) {
       "השבוע הבא",
       (plannedMin
         ? `<p style="margin:0 0 6px">מתוכננות <b>${minutesLabel(plannedMin)}</b> לימוד: ${[...plannedByCourse.entries()]
-            .map(([code, m]) => `${courseTheme[code]?.short ?? code} ${minutesLabel(m)}`)
+            .map(([code, m]) => `${themeOf(courses, code).short} ${minutesLabel(m)}`)
             .join(", ")}.</p>`
         : muted("אין לימוד מתוכנן.")) +
         (deadlines.length || tutorials.length
           ? table([
               ...deadlines.map((d) =>
                 row(
-                  COLORS[d.course.code],
-                  `הגשה: ${typeLabel[d.type]} ${d.n} ב${courseTheme[d.course.code].short}`,
+                  themeOf(courses, d.course.code).hex,
+                  `הגשה: ${typeLabel[d.type]} ${d.n} ב${themeOf(courses, d.course.code).short}`,
                   `${formatHebrewDate(d.due, { weekday: "long", day: "numeric", month: "numeric" })} · משקל ${d.weight}`,
                 ),
               ),
               ...tutorials.map((e) =>
                 row(
-                  e.course_code ? COLORS[e.course_code] ?? GREY : GREY,
+                  e.course_code ? themeOf(courses, e.course_code).hex : GREY,
                   (e.cancelled ? "<s>" : "") + esc(e.title) + (e.cancelled ? "</s> (בוטל)" : ""),
                   `${formatHebrewDate(e.date, { weekday: "long", day: "numeric", month: "numeric" })}${e.start_time ? ` · ${e.start_time}–${e.end_time ?? ""}` : ""}`,
                 ),
@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     );
 
   if (exam) {
-    const name = semester.courses.find((c) => c.code === exam.course_code)?.name ?? exam.course_code;
+    const name = courses.find((c) => c.code === exam.course_code)?.name ?? exam.course_code;
     parts.push(section("הבחינה הקרובה", `<p style="margin:0">${esc(name)}, מועד ${exam.moed}: <b>${relativeDays(daysBetween(today, exam.date))}</b></p>`));
   }
   if (feed.updates_pending > 0)

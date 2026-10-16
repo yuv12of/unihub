@@ -1,9 +1,68 @@
+import { cache } from "react";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { semester, type Course } from "@/lib/semester";
+import { courseFromRow, semester, type Course, type CourseRow } from "@/lib/semester";
 import { defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { planFor } from "@/lib/planfor";
+import type { Routine, RoutineLog } from "@/lib/routines";
 import { coursesFor, getProgress, type ProgressMap } from "@/lib/progress";
+
+/** The signed-in user's id (null when signed out). */
+export const getUserId = cache(async (): Promise<string | null> => {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  return (data?.claims?.sub as string | undefined) ?? null;
+});
+
+export interface RoutineWithMembers extends Routine {
+  /** "owner", "accepted" (shared with me and I joined) or "pending" (invited) */
+  role: "owner" | "accepted" | "pending";
+  members: { user_id: string; status: "pending" | "accepted" }[];
+}
+
+/** Routines I own or share. Pending invitations are included with role "pending". */
+export const getRoutines = cache(async (): Promise<RoutineWithMembers[]> => {
+  if (!supabaseEnabled) return [];
+  const me = await getUserId();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("routines")
+    .select("*, members:routine_members(user_id, status)")
+    .order("created_at");
+  return ((data ?? []) as (Routine & { members: RoutineWithMembers["members"] })[]).map((r) => ({
+    ...r,
+    role: r.user_id === me ? "owner" : (r.members.find((m) => m.user_id === me)?.status ?? "pending"),
+  }));
+});
+
+/** Check-offs of the last 10 weeks: mine, and those of people I share routines with. */
+export const getRoutineLogs = cache(async (): Promise<RoutineLog[]> => {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const since = new Date(Date.now() - 70 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await supabase.from("routine_logs").select("routine_id, user_id, date").gte("date", since);
+  return (data ?? []) as RoutineLog[];
+});
+
+/** The signed-in user's courses this semester (catalog data + their own colour and short name). */
+export const getCourses = cache(async (): Promise<Course[]> => {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("user_courses")
+    .select(
+      "color, short, added_at, course:courses(code, name, name_en, opal_id, coordinator, final_assessment, min_weight, max_weight, rules, assignments(n, type, weight, due))",
+    )
+    .eq("semester", semester.semester)
+    .order("added_at");
+  return (data ?? [])
+    .filter((r) => r.course)
+    .map((r) => {
+      const c = r.course as unknown as Omit<CourseRow, "color" | "short">;
+      return courseFromRow({ ...c, color: r.color, short: r.short });
+    });
+});
 
 /** Signed-in user's exam dates for the current semester. */
 export async function getExams(): Promise<Exam[]> {
@@ -47,16 +106,48 @@ export interface UserEvent {
   location: string | null;
   source: string;
   cancelled: boolean;
+  user_id?: string;
+  /** set when this is someone else's event I was invited to */
+  invited_by?: string;
+  /** people I invited to my event */
+  guests?: { invitee: string; status: "pending" | "accepted" | "declined" }[];
 }
 
-export async function getEvents(): Promise<UserEvent[]> {
+const EVENT_COLS = "id, user_id, date, start_time, end_time, title, kind, course_code, location, source, cancelled";
+
+/** My own events (with who I invited) plus events I accepted an invitation to. */
+export const getEvents = cache(async (): Promise<UserEvent[]> => {
   if (!supabaseEnabled) return [];
+  const me = await getUserId();
+  const supabase = await createClient();
+  const [{ data: own }, { data: invited }] = await Promise.all([
+    supabase.from("user_events").select(`${EVENT_COLS}, guests:event_invites(invitee, status)`).eq("user_id", me ?? "").order("date"),
+    supabase.from("event_invites").select(`status, inviter, event:user_events(${EVENT_COLS})`).eq("invitee", me ?? "").eq("status", "accepted"),
+  ]);
+  const mine = (own ?? []) as unknown as UserEvent[];
+  const theirs = (invited ?? [])
+    .filter((i) => i.event)
+    .map((i) => ({ ...(i.event as unknown as UserEvent), invited_by: i.inviter as string, guests: [] }));
+  return [...mine, ...theirs].sort((a, b) => a.date.localeCompare(b.date));
+});
+
+export interface Invite {
+  status: "pending" | "accepted" | "declined";
+  inviter: string;
+  event: UserEvent;
+}
+
+/** Invitations waiting for my answer. */
+export async function getPendingInvites(): Promise<Invite[]> {
+  if (!supabaseEnabled) return [];
+  const me = await getUserId();
   const supabase = await createClient();
   const { data } = await supabase
-    .from("user_events")
-    .select("id, date, start_time, end_time, title, kind, course_code, location, source, cancelled")
-    .order("date");
-  return (data ?? []) as UserEvent[];
+    .from("event_invites")
+    .select(`status, inviter, event:user_events(${EVENT_COLS})`)
+    .eq("invitee", me ?? "")
+    .eq("status", "pending");
+  return ((data ?? []) as unknown as Invite[]).filter((i) => i.event && i.event.date >= new Date().toISOString().slice(0, 10));
 }
 
 export async function getSessionRows(): Promise<{ session_key: string; status: "done" | "skipped"; minutes: number | null }[]> {
@@ -76,21 +167,33 @@ export interface UserPlan {
   plan: Plan;
   /** Courses with this user's deadline extensions applied. */
   courses: Course[];
+  routines: RoutineWithMembers[];
+  /** my own routine check-offs */
+  logs: RoutineLog[];
+  /** check-offs including people I share routines with */
+  allLogs: RoutineLog[];
+  me: string | null;
 }
 
 
 /** Everything needed to show the plan, loaded in parallel. */
 export async function getUserPlan(today: string): Promise<UserPlan> {
-  const [progress, exams, prefs, events, rows] = await Promise.all([
+  const [progress, exams, prefs, events, rows, base, allRoutines, allLogs, me] = await Promise.all([
     getProgress(),
     getExams(),
     getPrefs(),
     getEvents(),
     getSessionRows(),
+    getCourses(),
+    getRoutines(),
+    getRoutineLogs(),
+    getUserId(),
   ]);
   const status = Object.fromEntries(rows.map((r) => [r.session_key, r.status]));
-  const plan = planFor({ today, prefs, progress, exams, events, rows });
-  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress) };
+  const routines = allRoutines.filter((r) => r.role !== "pending" && r.active);
+  const logs = allLogs.filter((l) => l.user_id === me);
+  const plan = planFor({ today, prefs, progress, exams, events, rows, courses: base, routines });
+  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress, base), routines, logs, allLogs, me };
 }
 
 export async function getIngestToken(): Promise<string | null> {
@@ -223,3 +326,58 @@ export async function getOpalFeed(): Promise<OpalFeed | null> {
   // The page only needs to show that a link is saved; the key part never goes to the browser.
   return data ? { ...data, url: data.url.replace(/authtoken=[^&]+/, "authtoken=••••") } : null;
 }
+
+export interface Person {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+  i_follow?: "pending" | "accepted" | null;
+  follows_me?: "pending" | "accepted" | null;
+}
+
+/** People I'm connected with (either direction), or a search among approved users. */
+export async function getPeople(query = ""): Promise<Person[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("people", { p_query: query });
+  return (data ?? []) as Person[];
+}
+
+/** Names and pictures for a set of user ids (approved users only). */
+export async function getNames(ids: string[]): Promise<Record<string, Person>> {
+  if (!supabaseEnabled || ids.length === 0) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("names_for", { p_ids: [...new Set(ids)] });
+  return Object.fromEntries(((data ?? []) as Person[]).map((p) => [p.id, p]));
+}
+
+/** People who asked to follow me. */
+export async function getFollowRequests(): Promise<string[]> {
+  if (!supabaseEnabled) return [];
+  const me = await getUserId();
+  const supabase = await createClient();
+  const { data } = await supabase.from("follows").select("follower").eq("followee", me ?? "").eq("status", "pending");
+  return (data ?? []).map((r) => r.follower as string);
+}
+
+export async function getShare() {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("share, is_admin").maybeSingle();
+  return data as { share: import("@/app/actions").ShareSettings; is_admin: boolean } | null;
+}
+
+export async function getFriendView(id: string): Promise<import("@/lib/friends").FriendRaw | null> {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("friend_view", { p_user: id });
+  return (data ?? null) as import("@/lib/friends").FriendRaw | null;
+}
+
+/** Counts for the little dots in the navigation. */
+export const getBadges = cache(async (): Promise<{ friends?: number; admin?: number | null }> => {
+  if (!supabaseEnabled) return {};
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("my_badges");
+  return (data ?? {}) as { friends?: number; admin?: number | null };
+});

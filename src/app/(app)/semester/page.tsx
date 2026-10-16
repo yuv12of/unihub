@@ -3,11 +3,14 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { SemesterCalendar, type CalItem } from "@/components/SemesterCalendar";
 import { progressKey } from "@/lib/progress";
-import { getUserPlan } from "@/lib/userdata";
+import { getNames, getPeople, getUserPlan } from "@/lib/userdata";
+import { occurrencesFor } from "@/lib/planfor";
+import { CATEGORY } from "@/lib/routines";
+import { addDays } from "@/lib/semester";
 import { sessionKey } from "@/lib/planner";
 import { academicByDay } from "@/lib/academic";
 import { supabaseEnabled } from "@/lib/supabase/config";
-import { courseTheme, semester, todayInIsrael, typeLabel } from "@/lib/semester";
+import { semester, todayInIsrael, typeLabel, themeOf } from "@/lib/semester";
 
 export default function SemesterPage() {
   return (
@@ -26,11 +29,13 @@ export default function SemesterPage() {
 async function Semester() {
   await connection();
   const today = todayInIsrael();
-  const { progress, exams, plan, events, status, courses } = await getUserPlan(today);
+  const [{ progress, exams, plan, events, status, courses, routines, logs }, people] = await Promise.all([getUserPlan(today), getPeople()]);
+  const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
+  const names = await getNames([...events.flatMap((e) => (e.guests ?? []).map((g) => g.invitee)), ...events.map((e) => e.invited_by ?? "").filter(Boolean)]);
 
   const items: CalItem[] = [];
   for (const c of courses) {
-    const theme = courseTheme[c.code];
+    const theme = themeOf(courses, c.code);
     for (const a of c.assignments) {
       const status = progress[progressKey(c.code, a.n)]?.status;
       items.push({
@@ -43,7 +48,7 @@ async function Semester() {
     }
   }
   for (const e of exams) {
-    const theme = courseTheme[e.course_code];
+    const theme = themeOf(courses, e.course_code);
     items.push({
       date: e.date,
       kind: "exam",
@@ -58,7 +63,7 @@ async function Semester() {
     items.push({
       date: s.date,
       kind: "study",
-      color: courseTheme[s.courseCode].color,
+      color: themeOf(courses, s.courseCode).color,
       label: s.title,
       start: s.start,
       end: s.end,
@@ -71,13 +76,31 @@ async function Semester() {
     items.push({
       date: ev.date,
       kind: ev.kind === "tutorial" ? "tutorial" : "event",
-      color: ev.course_code ? courseTheme[ev.course_code]?.color ?? "var(--ink-soft)" : "var(--ink-soft)",
+      color: ev.course_code ? themeOf(courses, ev.course_code).color : "var(--ink-soft)",
       label: (ev.cancelled ? "בוטל: " : "") + (ev.location ? `${ev.title} (${ev.location})` : ev.title),
       done: ev.cancelled,
+      note: ev.invited_by
+        ? `הזמנה מ${names[ev.invited_by]?.name ?? "חבר/ה"}`
+        : ev.guests?.length
+          ? `עם ${ev.guests.map((g) => `${names[g.invitee]?.name.split(" ")[0] ?? "?"}${g.status === "accepted" ? " ✓" : g.status === "declined" ? " ✕" : " ?"}`).join(", ")}`
+          : undefined,
       start: ev.start_time ?? undefined,
       end: ev.end_time ?? undefined,
       eventId: ev.id,
-      deletable: ev.source === "manual",
+      deletable: ev.source === "manual" && !ev.invited_by,
+    });
+  }
+  // Routines: four weeks back to ten weeks ahead (sleep stays out of the calendar).
+  for (const o of occurrencesFor({ routines, logs, events, plan, today, from: addDays(today, -28), to: addDays(today, 70) })) {
+    if (o.category === "sleep") continue;
+    items.push({
+      date: o.date,
+      kind: "routine",
+      color: CATEGORY[o.category].color,
+      label: `${o.emoji} ${o.title}`,
+      start: o.start ?? undefined,
+      end: o.start && o.end && o.end > o.start ? o.end : undefined,
+      done: o.done,
     });
   }
   for (const a of academicByDay()) {
@@ -90,7 +113,8 @@ async function Semester() {
         items={items}
         today={today}
         editable={supabaseEnabled}
-        legend={semester.courses.map((c) => ({ color: courseTheme[c.code].color, label: c.name }))}
+        people={connected.map((p) => ({ id: p.id, name: p.name }))}
+        legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
       />
       {exams.length === 0 && (
         <p className="mt-4 text-sm text-ink-soft">

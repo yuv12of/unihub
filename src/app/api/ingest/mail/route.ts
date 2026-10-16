@@ -49,6 +49,7 @@ export async function POST(req: Request) {
     },
     priv?.feed.events ?? [],
     todayInIsrael(),
+    priv?.courses ?? [],
   );
   const { data: created } = await sb.rpc("mail_rules_apply", {
     p_token: token,
