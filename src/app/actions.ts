@@ -1,6 +1,8 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
+import { deliverNotifications } from "@/lib/push";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { semester } from "@/lib/semester";
@@ -123,6 +125,7 @@ export async function setSessionStatus(key: string, status: "done" | "skipped" |
 }
 
 export async function addEvent(input: { date: string; start: string; end: string; title: string; invite?: string[] }) {
+  notifyNow();
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
   if (!DATE.test(input.date) || !TIME.test(input.start) || !TIME.test(input.end) || input.end <= input.start)
@@ -197,30 +200,16 @@ export async function removePushSubscription(endpoint: string) {
 
 /** Sends a test notification to all of the user's devices. */
 export async function sendTestPush() {
-  const { supabase } = await requireUser();
-  const [{ data: subs }, { data: tok }, { data: pub }] = await Promise.all([
-    supabase.from("push_subscriptions").select("endpoint, p256dh, auth"),
-    supabase.from("ingest_tokens").select("token").maybeSingle(),
-    supabase.rpc("vapid_public"),
-  ]);
-  if (!tok?.token) throw new Error("חסר חיבור לסקריפט Gmail");
-  const { data: priv } = await supabase.rpc("vapid_private", { p_token: tok.token });
-  if (!pub || !priv) throw new Error("No push keys");
-  const webpush = (await import("web-push")).default;
-  webpush.setVapidDetails("https://unihub-beta.vercel.app", pub as string, priv as string);
-  let ok = 0;
-  for (const s of subs ?? []) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify({ title: "Unihub", body: "ההתראות עובדות. נתראה במפגש הלימוד הבא.", url: "/" }),
-      );
-      ok++;
-    } catch {
-      /* dead subscription, ignored */
-    }
-  }
-  return ok;
+  const { supabase, userId } = await requireUser();
+  const { data: subs } = await supabase.from("push_subscriptions").select("endpoint, p256dh, auth");
+  const { sendPushAsServer, sendPush } = await import("@/lib/push");
+  const item = { key: `test|${Date.now()}`, title: "Unihub", body: "ההתראות עובדות. נתראה במפגש הלימוד הבא.", url: "/" };
+  // Server key when available (works for everyone); otherwise through the user's Google script token.
+  const viaServer = await sendPushAsServer(userId, subs ?? [], [item]);
+  if (viaServer) return viaServer;
+  const { data: tok } = await supabase.from("ingest_tokens").select("token").maybeSingle();
+  if (!tok?.token) throw new Error("ההתראות יעבדו אחרי שמנהל האתר ישלים את ההגדרה בשרת");
+  return sendPush(tok.token, subs ?? [], [item]);
 }
 
 /** Spaced repetition (SM-2, simplified). grade: 0 again, 1 hard, 2 good, 3 easy. */
@@ -377,6 +366,7 @@ const CATEGORIES = ["sleep", "meal", "sport", "health", "habit", "chore", "hobby
 const WINDOW_KEYS = ["morning", "noon", "afternoon", "evening", "any"];
 
 export async function saveRoutine(input: RoutineInput) {
+  notifyNow();
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
   if (!title || title.length > 120) throw new Error("חסר שם");
@@ -420,6 +410,7 @@ export async function deleteRoutine(id: string) {
 
 /** Ticks (or unticks) a routine for a day. */
 export async function toggleRoutine(id: string, date: string, done: boolean) {
+  notifyNow();
   const { supabase, userId } = await requireUser();
   if (!DATE.test(date)) throw new Error("Bad date");
   if (done) {
@@ -432,6 +423,7 @@ export async function toggleRoutine(id: string, date: string, done: boolean) {
 }
 
 export async function shareRoutine(id: string, users: string[]) {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("share_routine", { p_routine: id, p_users: users });
   if (error) throw new Error(error.message);
@@ -440,6 +432,7 @@ export async function shareRoutine(id: string, users: string[]) {
 
 /** Join (or decline) a routine someone shared with me; declining after joining = leaving. */
 export async function answerRoutine(id: string, accept: boolean) {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("answer_routine", { p_routine: id, p_accept: accept });
   if (error) throw new Error(error.message);
@@ -449,6 +442,7 @@ export async function answerRoutine(id: string, accept: boolean) {
 // ---------- Event invitations ----------
 
 export async function answerInvite(eventId: string, status: "accepted" | "declined") {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("answer_invite", { p_event: eventId, p_status: status });
   if (error) throw new Error(error.message);
@@ -456,6 +450,7 @@ export async function answerInvite(eventId: string, status: "accepted" | "declin
 }
 
 export async function inviteToEvent(eventId: string, users: string[]) {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("invite_to_event", { p_event: eventId, p_users: users });
   if (error) throw new Error(error.message);
@@ -473,6 +468,7 @@ export async function searchPeople(query: string) {
 }
 
 export async function followUser(id: string) {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("follow_request", { p_user: id });
   if (error) throw new Error(error.message);
@@ -480,6 +476,7 @@ export async function followUser(id: string) {
 }
 
 export async function answerFollow(followerId: string, accept: boolean) {
+  notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("follow_answer", { p_follower: followerId, p_accept: accept });
   if (error) throw new Error(error.message);
@@ -522,4 +519,142 @@ export async function saveShare(share: ShareSettings) {
   const { error } = await supabase.from("profiles").update({ share: clean }).eq("id", userId);
   if (error) throw new Error(error.message);
   refresh();
+}
+
+/** Pushes any notifications this action created, right after the response is sent. */
+function notifyNow() {
+  after(() => deliverNotifications().catch(() => 0));
+}
+
+// ---------- Notifications ----------
+
+export async function markNotificationsRead() {
+  const { supabase } = await requireUser();
+  await supabase.rpc("mark_notifications_read");
+  refresh();
+}
+
+// ---------- Cheers ----------
+
+const CHEERS = ["👏", "🔥", "💪", "❤️", "🎉"];
+export async function sendCheer(toUser: string, emoji: string, label?: string) {
+  const { supabase, userId } = await requireUser();
+  if (!CHEERS.includes(emoji)) throw new Error("Bad emoji");
+  const { error } = await supabase.from("reactions").insert({ from_user: userId, to_user: toUser, emoji, label: label?.slice(0, 120) ?? null });
+  if (error) throw new Error("אפשר לשלוח רק לחברים");
+  notifyNow();
+}
+
+// ---------- Studying now ----------
+
+export async function startStudyLive(input: { title: string; minutes: number; course_code?: string | null; with_user?: string | null }) {
+  const { supabase, userId } = await requireUser();
+  const minutes = Math.max(5, Math.min(300, Math.round(input.minutes)));
+  await supabase.from("study_live").upsert({
+    user_id: userId,
+    title: input.title.slice(0, 160),
+    course_code: input.course_code ?? null,
+    started_at: new Date().toISOString(),
+    ends_at: new Date(Date.now() + minutes * 60_000).toISOString(),
+    with_user: input.with_user ?? null,
+  });
+  if (input.with_user) notifyNow();
+}
+
+export async function endStudyLive() {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("study_live").delete().eq("user_id", userId);
+}
+
+// ---------- Rough days ----------
+
+export async function setDayOff(date: string, reason: "sick" | "reserve" | "family" | "other" | null) {
+  const { supabase, userId } = await requireUser();
+  if (!DATE.test(date)) throw new Error("Bad date");
+  if (reason === null) await supabase.from("day_off").delete().match({ user_id: userId, date });
+  else {
+    const { error } = await supabase.from("day_off").upsert({ user_id: userId, date, reason });
+    if (error) throw new Error(error.message);
+  }
+  refresh();
+}
+
+// ---------- Quick add ----------
+
+/** Saves what the one-line quick add understood (the parse happens in the browser, shown before saving). */
+export async function quickAdd(input: { date: string; start: string | null; end: string | null; title: string; invite: string[] }) {
+  if (input.start && input.end) return addEvent({ date: input.date, start: input.start, end: input.end, title: input.title, invite: input.invite });
+  // No time: an all-day item.
+  const { supabase, userId } = await requireUser();
+  const title = input.title.trim();
+  if (!DATE.test(input.date) || !title || title.length > 200) throw new Error("Bad input");
+  const { data, error } = await supabase
+    .from("user_events")
+    .insert({ user_id: userId, date: input.date, title, kind: "custom", source: "manual" })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  if (input.invite.length) await supabase.rpc("invite_to_event", { p_event: data.id, p_users: input.invite });
+  notifyNow();
+  refresh();
+}
+
+// ---------- Common free time ----------
+
+/** Free times in the next 7 days when I and all chosen friends (who share their schedule) are free. */
+export async function findCommonSlots(friendIds: string[], minutes: number) {
+  await requireUser();
+  const { getFriendView, getUserPlan } = await import("@/lib/userdata");
+  const { summarize } = await import("@/lib/friends");
+  const { occurrencesFor } = await import("@/lib/planfor");
+  const { todayInIsrael, addDays, formatHebrewDate } = await import("@/lib/semester");
+  const { israelNow } = await import("@/lib/privateFeed");
+  const today = todayInIsrael();
+  const to = addDays(today, 6);
+  const len = Math.max(30, Math.min(300, Math.round(minutes)));
+  const busy: { date: string; s: number; e: number }[] = [];
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const add = (date: string, start: string, end: string) => {
+    const s = toMin(start);
+    const e = end <= start ? 24 * 60 : toMin(end);
+    busy.push({ date, s, e });
+  };
+
+  const mine = await getUserPlan(today);
+  for (const s of mine.plan.sessions) if (s.date <= to) add(s.date, s.start, s.end);
+  for (const ev of mine.events) if (ev.date >= today && ev.date <= to && ev.start_time && ev.end_time && !ev.cancelled) add(ev.date, ev.start_time, ev.end_time);
+  for (const o of occurrencesFor({ routines: mine.routines, logs: mine.logs, events: mine.events, plan: mine.plan, today, from: today, to, offDays: mine.offDays }))
+    if (o.start && o.end && o.category !== "sleep") add(o.date, o.start, o.end);
+  const offDays = new Set(mine.offDays);
+
+  const skipped: string[] = [];
+  for (const id of friendIds.slice(0, 8)) {
+    const v = await getFriendView(id);
+    if (!v || v.schedule === "none") {
+      if (v) skipped.push(v.name.split(" ")[0]);
+      continue;
+    }
+    for (const b of summarize(v, today).blocks) add(b.date, b.start, b.end);
+  }
+
+  const now = israelNow();
+  const slots: { date: string; start: string; end: string; label: string }[] = [];
+  const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  for (let d = today; d <= to && slots.length < 8; d = addDays(d, 1)) {
+    if (offDays.has(d)) continue;
+    let perDay = 0;
+    const dayBusy = busy.filter((b) => b.date === d);
+    for (let t = d === today ? Math.ceil((now.minutes + 30) / 30) * 30 : 9 * 60; t + len <= 22 * 60 && perDay < 2; t += 30) {
+      if (dayBusy.some((b) => t < b.e + 15 && t + len > b.s - 15)) continue;
+      slots.push({
+        date: d,
+        start: hhmm(t),
+        end: hhmm(t + len),
+        label: `${d === today ? "היום" : formatHebrewDate(d, { weekday: "short", day: "numeric", month: "numeric" })} ${hhmm(t)}`,
+      });
+      perDay++;
+      t += Math.max(len, 120) - 30; // spread the suggestions out
+    }
+  }
+  return { slots, skipped };
 }

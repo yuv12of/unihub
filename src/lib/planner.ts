@@ -132,6 +132,7 @@ export function buildPlan({
   courses,
   doneMinutes = {},
   skipped = new Set<string>(),
+  offDays = [],
 }: {
   today: string;
   prefs: StudyPrefs;
@@ -143,7 +144,10 @@ export function buildPlan({
   doneMinutes?: Record<string, number>;
   /** keys of sessions marked skipped */
   skipped?: Set<string>;
+  /** rough days: no studying planned, the work moves to the next days */
+  offDays?: string[];
 }): Plan {
+  const off = new Set(offDays);
   const tasks: Task[] = [];
   // Minutes already done before today, per "kind|course|title".
   const credit = new Map<string, number>();
@@ -205,7 +209,7 @@ export function buildPlan({
 
   for (let day = today; day <= horizon; day = addDays(day, 1)) {
     const slot = prefs.availability[String(weekday(day))];
-    if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day)) continue;
+    if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day) || off.has(day)) continue;
     // Free time = the study window minus anything already booked that day (tutorials, own blocks).
     const winStart = toMin(slot.start);
     let segments: [number, number][] = [[winStart, winStart + slot.minutes]];

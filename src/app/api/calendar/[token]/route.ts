@@ -12,6 +12,7 @@ import { courseFromRow, semester, todayInIsrael, typeLabel, addDays, themeOf, ty
 interface FeedData {
   routines?: Routine[];
   routine_logs?: RoutineLog[];
+  off_days?: string[];
   prefs: StudyPrefs | null;
   courses?: CourseRow[];
   progress: { course_code: string; semester: string; n: string; status: Status; due_override?: string | null }[];
@@ -45,7 +46,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   const base = (feed.courses ?? []).map(courseFromRow);
   const courses = coursesFor(progress, base);
   const routines = feed.routines ?? [];
-  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows, courses: base, routines });
+  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows, courses: base, routines, offDays: feed.off_days ?? [] });
 
   const events: CalEvent[] = [];
   for (const c of courses) {
@@ -117,7 +118,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   }
 
   // Routines with a time (sleep and meals stay in the app), two weeks back to three weeks ahead.
-  for (const o of occurrencesFor({ routines, logs: feed.routine_logs ?? [], events: userEvents, plan, today, from: addDays(today, -14), to: addDays(today, 21) })) {
+  for (const o of occurrencesFor({ routines, logs: feed.routine_logs ?? [], events: userEvents, plan, today, from: addDays(today, -14), to: addDays(today, 21), offDays: feed.off_days ?? [] })) {
     if (!o.start || !o.end || o.category === "sleep" || o.category === "meal") continue;
     events.push({
       uid: `routine-${o.routineId}-${o.date}@unihub`,

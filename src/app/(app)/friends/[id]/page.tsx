@@ -9,6 +9,8 @@ import { minutesLabel } from "@/lib/planner";
 import { describe, emojiOf } from "@/lib/routines";
 import { Avatar } from "@/components/Avatar";
 import { StandingText, WeightBar } from "@/components/CourseParts";
+import { Heatmap } from "@/components/Heatmap";
+import { CheerButtons } from "@/components/SocialBits";
 
 export default function FriendPage({ params }: PageProps<"/friends/[id]">) {
   return (
@@ -41,8 +43,24 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
               השבוע {minutesLabel(s.week)} לימוד{s.lastWeek ? ` · בשבוע שעבר ${minutesLabel(s.lastWeek)}` : ""}
             </p>
           )}
+          <div className="mt-2">
+            <CheerButtons to={v.id} label={s.week ? `על ${minutesLabel(s.week)} לימוד השבוע` : "סתם כי"} />
+          </div>
         </div>
       </header>
+
+      {v.share.study && (
+        <section className="panel mt-6 overflow-x-auto p-5">
+          <Heatmap
+            today={today}
+            days={Object.entries(v.study ?? {}).reduce<Record<string, number>>((acc, [k, m]) => {
+              const d = k.split("|")[0];
+              acc[d] = (acc[d] ?? 0) + m;
+              return acc;
+            }, {})}
+          />
+        </section>
+      )}
 
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
         {s.courses.length > 0 && (

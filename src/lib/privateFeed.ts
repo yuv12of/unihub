@@ -10,6 +10,7 @@ import type { Routine, RoutineLog } from "@/lib/routines";
 export interface PrivateFeed {
   routines: Routine[];
   routine_logs: RoutineLog[];
+  off_days?: string[];
   courses: CourseRow[];
   accounts_pending: number;
   prefs: StudyPrefs | null;
@@ -35,15 +36,19 @@ export function bearer(req: Request) {
 export async function loadPrivate(token: string) {
   const { data, error } = await anonClient().rpc("private_feed", { p_token: token });
   if (error || !data) return null;
-  const feed = data as PrivateFeed;
+  return buildFromFeed(data as PrivateFeed);
+}
+
+/** Plan, courses and routines from a user's feed (same result as the app shows). */
+export function buildFromFeed(feed: PrivateFeed) {
   const progress: ProgressMap = Object.fromEntries(
-    feed.progress
+    (feed.progress ?? [])
       .filter((p) => p.semester === semester.semester)
       .map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: p.grade, due: p.due_override }]),
   );
-  const exams = feed.exams.filter((e) => e.semester === semester.semester);
+  const exams = (feed.exams ?? []).filter((e) => e.semester === semester.semester);
   const today = todayInIsrael();
-  const rows = Object.entries(feed.session_status).map(([session_key, status]) => ({
+  const rows = Object.entries(feed.session_status ?? {}).map(([session_key, status]) => ({
     session_key,
     status,
     minutes: feed.session_minutes?.[session_key] ?? null,
@@ -51,9 +56,12 @@ export async function loadPrivate(token: string) {
   const base = (feed.courses ?? []).map(courseFromRow);
   const routines = feed.routines ?? [];
   const logs = feed.routine_logs ?? [];
-  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows, courses: base, routines });
+  const offDays = feed.off_days ?? [];
+  feed.events ??= [];
+  feed.session_status ??= {};
+  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows, courses: base, routines, offDays });
   const live = plan.sessions.filter((s) => feed.session_status[sessionKey(s)] !== "skipped");
-  return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress, base), routines, logs };
+  return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress, base), routines, logs, offDays };
 }
 
 /** Current Israel time as { date: YYYY-MM-DD, minutes since midnight }. */

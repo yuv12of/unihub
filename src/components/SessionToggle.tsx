@@ -2,7 +2,7 @@
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { setSessionStatus } from "@/app/actions";
+import { endStudyLive, setSessionStatus, startStudyLive } from "@/app/actions";
 
 export function SessionToggle({
   sessionKey,
@@ -78,20 +78,34 @@ export function SessionToggle({
   );
 }
 
-/** Full-screen countdown for one study session. Survives a reload (start time kept in this browser). */
-function FocusTimer({
+/**
+ * Full-screen countdown for one study session. Survives a reload (start time kept in this browser).
+ * While it runs, friends who follow you see "studying now" and can join.
+ */
+export function FocusTimer({
   storageKey,
   title,
   minutes,
   onClose,
   onFinish,
+  withUser,
+  withName,
 }: {
   storageKey: string;
   title: string;
   minutes: number;
   onClose: () => void;
   onFinish: (studied: number) => void;
+  /** joining a friend's session */
+  withUser?: string;
+  withName?: string;
 }) {
+  useEffect(() => {
+    startStudyLive({ title, minutes, with_user: withUser ?? null }).catch(() => {});
+    return () => {
+      endStudyLive().catch(() => {});
+    };
+  }, [title, minutes, withUser]);
   // elapsed ms accumulated before the current run, and when the current run started (null = paused)
   const [state, setState] = useState<{ acc: number; since: number | null }>(() => {
     try {
@@ -137,7 +151,9 @@ function FocusTimer({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface px-6 text-center" role="dialog" aria-modal aria-label="טיימר ריכוז">
-      <p className="text-sm text-ink-soft">{over ? "הזמן נגמר. כל הכבוד!" : "זמן ריכוז"}</p>
+      <p className="text-sm text-ink-soft">
+        {over ? "הזמן נגמר. כל הכבוד!" : withName ? `לומדים ביחד עם ${withName}` : "זמן ריכוז"}
+      </p>
       <h2 className="mt-1 text-xl font-semibold">{title}</h2>
       <div className="relative mt-8 grid size-64 place-items-center">
         <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90" aria-hidden>

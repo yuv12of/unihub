@@ -4,7 +4,10 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { getNames, getPendingInvites, getUpdates, getUserPlan } from "@/lib/userdata";
+import { getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { QuickAdd } from "@/components/QuickAdd";
+import { StudyingNow } from "@/components/StudyingNow";
+import { DayOff } from "@/components/DayOff";
 import { occurrencesFor } from "@/lib/planfor";
 import { TodayRoutines } from "@/components/TodayRoutines";
 import { InvitesList } from "@/components/InvitesList";
@@ -62,13 +65,17 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const [{ progress, exams, plan, status, courses, events, routines, logs }, updates, invites] = await Promise.all([
+  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays }, updates, invites, people, live] = await Promise.all([
     getUserPlan(today),
     getUpdates(),
     getPendingInvites(),
+    getPeople(),
+    getStudyingNow(),
   ]);
-  const inviters = await getNames(invites.map((i) => i.inviter));
-  const todayRoutines = occurrencesFor({ routines, logs, events, plan, today, from: today, to: today }).filter((o) => o.category !== "sleep");
+  const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
+  const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
+  const isOff = offDays.includes(today);
+  const todayRoutines = occurrencesFor({ routines, logs, events, plan, today, from: today, to: today, offDays }).filter((o) => o.category !== "sleep");
   const todayEvents = events.filter((e) => e.date === today && (e.kind !== "other" || e.source === "opal"));
   const academicToday = academicOn(today);
   const nextAcademic = academicEvents.find((e) => e.date > today);
@@ -115,6 +122,20 @@ async function Today() {
       </header>
 
       <section aria-labelledby="soon-title" className="min-w-0 space-y-8 lg:col-start-1">
+        {supabaseEnabled && <QuickAdd today={today} people={connected} />}
+
+        <StudyingNow
+          rows={live.map((l) => ({
+            user_id: l.user_id,
+            name: inviters[l.user_id]?.name ?? "חבר/ה",
+            avatar_url: inviters[l.user_id]?.avatar_url ?? null,
+            title: l.title,
+            ends_at: l.ends_at,
+          }))}
+        />
+
+        {supabaseEnabled && <DayOff date={today} isOff={isOff} />}
+
         {courses.length === 0 && (
           <Link href="/courses" className="panel block p-5 hover:border-ink-soft">
             <span className="block font-semibold">ברוכים הבאים ל־Unihub</span>

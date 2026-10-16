@@ -28,7 +28,9 @@ export function planFor({
   rows,
   courses,
   routines = [],
+  offDays = [],
 }: {
+  offDays?: string[];
   /** Life routines: timed fixed ones that block study are planned around. */
   routines?: Routine[];
   /** The user's courses (without deadline extensions; they're applied here). */
@@ -49,6 +51,7 @@ export function planFor({
     courses: coursesFor(progress, courses),
     doneMinutes: Object.fromEntries(rows.filter((r) => r.status === "done" && r.minutes).map((r) => [r.session_key, r.minutes!])),
     skipped: new Set(rows.filter((r) => r.status === "skipped").map((r) => r.session_key)),
+    offDays,
   });
 }
 
@@ -61,7 +64,9 @@ export function occurrencesFor({
   today,
   from,
   to,
+  offDays = [],
 }: {
+  offDays?: string[];
   routines: Routine[];
   logs: RoutineLog[];
   events: EventLike[];
@@ -74,5 +79,5 @@ export function occurrencesFor({
     ...events.filter((e) => e.start_time && e.end_time && !e.cancelled).map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! })),
     ...plan.sessions.map((s) => ({ date: s.date, start: s.start, end: s.end })),
   ];
-  return expandRoutines({ routines, logs, from, to, today, taken });
+  return expandRoutines({ routines, logs, from, to, today, taken, offDays });
 }

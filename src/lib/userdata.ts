@@ -173,12 +173,14 @@ export interface UserPlan {
   /** check-offs including people I share routines with */
   allLogs: RoutineLog[];
   me: string | null;
+  /** rough days (no plan, streaks protected) */
+  offDays: string[];
 }
 
 
 /** Everything needed to show the plan, loaded in parallel. */
 export async function getUserPlan(today: string): Promise<UserPlan> {
-  const [progress, exams, prefs, events, rows, base, allRoutines, allLogs, me] = await Promise.all([
+  const [progress, exams, prefs, events, rows, base, allRoutines, allLogs, me, offDays] = await Promise.all([
     getProgress(),
     getExams(),
     getPrefs(),
@@ -188,12 +190,13 @@ export async function getUserPlan(today: string): Promise<UserPlan> {
     getRoutines(),
     getRoutineLogs(),
     getUserId(),
+    getOffDays(),
   ]);
   const status = Object.fromEntries(rows.map((r) => [r.session_key, r.status]));
   const routines = allRoutines.filter((r) => r.role !== "pending" && r.active);
   const logs = allLogs.filter((l) => l.user_id === me);
-  const plan = planFor({ today, prefs, progress, exams, events, rows, courses: base, routines });
-  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress, base), routines, logs, allLogs, me };
+  const plan = planFor({ today, prefs, progress, exams, events, rows, courses: base, routines, offDays });
+  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress, base), routines, logs, allLogs, me, offDays };
 }
 
 export async function getIngestToken(): Promise<string | null> {
@@ -381,3 +384,67 @@ export const getBadges = cache(async (): Promise<{ friends?: number; admin?: num
   const { data } = await supabase.rpc("my_badges");
   return (data ?? {}) as { friends?: number; admin?: number | null };
 });
+
+/** My rough days (sick, reserve duty…) of the last few months and ahead. */
+export const getOffDays = cache(async (): Promise<string[]> => {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const since = new Date(Date.now() - 120 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await supabase.from("day_off").select("date").gte("date", since);
+  return (data ?? []).map((r) => r.date as string);
+});
+
+export interface LiveStudy {
+  user_id: string;
+  title: string;
+  started_at: string;
+  ends_at: string;
+  with_user: string | null;
+}
+
+/** Friends studying right now (only those who share their study hours with me). */
+export async function getStudyingNow(): Promise<LiveStudy[]> {
+  if (!supabaseEnabled) return [];
+  const me = await getUserId();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("study_live")
+    .select("user_id, title, started_at, ends_at, with_user")
+    .gt("ends_at", new Date().toISOString())
+    .neq("user_id", me ?? "");
+  return (data ?? []) as LiveStudy[];
+}
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  url: string;
+  created_at: string;
+  read_at: string | null;
+  actor: string | null;
+}
+
+export async function getNotifications(limit = 20): Promise<AppNotification[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("notifications")
+    .select("id, kind, title, body, url, created_at, read_at, actor")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as AppNotification[];
+}
+
+/** Study minutes per day (from sessions marked done), for the heatmap and the league. */
+export async function getMyStudyDays(): Promise<Record<string, number>> {
+  const rows = await getSessionRows();
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.status !== "done" || !r.minutes) continue;
+    const d = r.session_key.split("|")[0];
+    out[d] = (out[d] ?? 0) + r.minutes;
+  }
+  return out;
+}

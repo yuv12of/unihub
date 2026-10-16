@@ -1,0 +1,5 @@
+-- Applied through the Supabase connector (2026-10-16): notifications_table, notification_triggers,
+-- cheers_live_dayoff, feed_off_days, service_role_feed, badges_with_notifications.
+-- notifications (+ triggers on follows, event_invites, routine_members, routine_logs, reactions, study_live),
+-- reactions (cheers), study_live (studying now), day_off (rough days); _feed_for gains off_days.
+-- Delivery to everyone uses the server-only SUPABASE_SECRET_KEY (Vercel env), see src/lib/push.ts.

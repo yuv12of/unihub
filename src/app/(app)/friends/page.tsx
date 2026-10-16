@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getFollowRequests, getFriendView, getNames, getPeople, getShare } from "@/lib/userdata";
+import { getFollowRequests, getFriendView, getMyStudyDays, getNames, getNotifications, getPeople, getShare, getUserId } from "@/lib/userdata";
+import { Heatmap } from "@/components/Heatmap";
+import { CheerButtons, GroupFinder, NotificationsList } from "@/components/SocialBits";
+import { weekStart } from "@/lib/routines";
 import { summarize } from "@/lib/friends";
 import { todayInIsrael } from "@/lib/semester";
 import { minutesLabel } from "@/lib/planner";
@@ -25,15 +28,34 @@ export default function FriendsPage() {
 async function Friends() {
   await connection();
   const today = todayInIsrael();
-  const [people, requests, share] = await Promise.all([getPeople(), getFollowRequests(), getShare()]);
+  const [people, requests, share, notes, myDays, me] = await Promise.all([
+    getPeople(),
+    getFollowRequests(),
+    getShare(),
+    getNotifications(15),
+    getMyStudyDays(),
+    getUserId(),
+  ]);
   const requesters = await getNames(requests);
   const following = people.filter((p) => p.i_follow === "accepted");
   const views = await Promise.all(following.map((p) => getFriendView(p.id)));
   const others = people.filter((p) => p.i_follow !== "accepted");
+  const ws = weekStart(today);
+  const myWeek = Object.entries(myDays).filter(([d]) => d >= ws && d <= today).reduce((n, [, m]) => n + m, 0);
+  const league = [
+    { id: me ?? "me", name: "אני", avatar_url: null as string | null, minutes: myWeek, mine: true },
+    ...following.flatMap((p, i) => {
+      const v = views[i];
+      return v?.share.study ? [{ id: p.id, name: p.name, avatar_url: p.avatar_url, minutes: summarize(v, today).week, mine: false }] : [];
+    }),
+  ].sort((a, b) => b.minutes - a.minutes);
+  const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
 
   return (
     <div className="mt-6 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="min-w-0 space-y-8">
+        <NotificationsList items={notes} />
+
         {requests.length > 0 && (
           <section>
             <h2 className="mb-3 text-lg font-semibold">בקשות מעקב</h2>
@@ -99,6 +121,10 @@ async function Friends() {
                         ))}
                       </ul>
                     )}
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className="text-xs text-ink-soft">לפרגן:</span>
+                      <CheerButtons to={p.id} label={s && s.week ? `על ${minutesLabel(s.week)} לימוד השבוע` : "סתם כי"} />
+                    </div>
                     {s && s.routines.some((r) => r.streak.count > 1) && (
                       <p className="mt-3 text-sm text-ink-soft">
                         {s.routines
@@ -138,6 +164,34 @@ async function Friends() {
       </div>
 
       <aside className="space-y-6">
+        {league.length > 1 && (
+          <section className="panel p-5">
+            <h2 className="font-semibold">הליגה השבועית</h2>
+            <p className="mt-1 text-xs text-ink-soft">שעות לימוד מיום ראשון, מבין מי שמשתף שעות לימוד.</p>
+            <ol className="mt-3 space-y-2">
+              {league.map((r, i) => (
+                <li key={r.id} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${r.mine ? "bg-highlight/30" : ""}`}>
+                  <span className="w-5 text-center font-display text-lg tabular-nums">{i === 0 && r.minutes > 0 ? "🏆" : i + 1}</span>
+                  <Avatar name={r.name} url={r.avatar_url} size={26} />
+                  <span className="min-w-0 flex-1 truncate text-sm">{r.mine ? "אני" : r.name.split(" ")[0]}</span>
+                  <span className="text-sm tabular-nums text-ink-soft">{minutesLabel(r.minutes)}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+        <section className="panel p-5">
+          <h2 className="font-semibold">הלימוד שלי</h2>
+          <div className="mt-3 overflow-x-auto">
+            <Heatmap days={myDays} today={today} />
+          </div>
+        </section>
+        <GroupFinder
+          people={connected.map((p) => {
+            const i = following.findIndex((f) => f.id === p.id);
+            return { id: p.id, name: p.name, shares: i >= 0 && !!views[i] && views[i]!.schedule !== "none" };
+          })}
+        />
         <section className="panel p-5">
           <h2 className="font-semibold">חיפוש</h2>
           <FriendsSearch />

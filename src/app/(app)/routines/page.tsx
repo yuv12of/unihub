@@ -25,10 +25,10 @@ export default function RoutinesPage() {
 async function Board() {
   await connection();
   const today = todayInIsrael();
-  const [{ plan, events, allLogs, me, logs }, all, people] = await Promise.all([getUserPlan(today), getRoutines(), getPeople()]);
+  const [{ plan, events, allLogs, me, logs, offDays }, all, people] = await Promise.all([getUserPlan(today), getRoutines(), getPeople()]);
   const ws = weekStart(today);
   const mine = all.filter((r) => r.role !== "pending");
-  const occ = occurrencesFor({ routines: mine.filter((r) => r.active), logs, events, plan, today, from: ws, to: addDays(ws, 6) });
+  const occ = occurrencesFor({ routines: mine.filter((r) => r.active), logs, events, plan, today, from: ws, to: addDays(ws, 6), offDays });
   const names = await getNames([...all.flatMap((r) => r.members.map((m) => m.user_id)), ...all.map((r) => r.user_id)]);
   return (
     <RoutinesBoard
@@ -38,7 +38,7 @@ async function Board() {
       routines={all.map((r) => ({
         ...r,
         progress: weekProgress(r, logs, today),
-        streak: streak(r, logs, today),
+        streak: streak(r, logs, today, offDays),
       }))}
       occurrences={occ}
       logs={allLogs}

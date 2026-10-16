@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { addEvent, deleteEvent, setSessionStatus } from "@/app/actions";
+import { addEvent, deleteEvent, setDayOff, setSessionStatus } from "@/app/actions";
 
 export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
 
@@ -52,7 +52,10 @@ export function SemesterCalendar({
   legend,
   editable,
   people = [],
+  offDays = [],
 }: {
+  /** rough days / days off */
+  offDays?: string[];
   items: CalItem[];
   today: string;
   legend: { color: string; label: string }[];
@@ -166,7 +169,7 @@ export function SemesterCalendar({
         </div>
       </div>
 
-      <DayPanel date={selected} items={byDate.get(selected) ?? []} editable={editable} people={people} />
+      <DayPanel date={selected} items={byDate.get(selected) ?? []} editable={editable} people={people} isOff={offDays.includes(selected)} today={today} />
     </div>
   );
 }
@@ -430,7 +433,7 @@ function WeekGrid({
 
 /* ---------- Day panel (details + planner actions) ---------- */
 
-function DayPanel({ date, items, editable, people }: { date: string; items: CalItem[]; editable: boolean; people: { id: string; name: string }[] }) {
+function DayPanel({ date, items, editable, people, isOff, today }: { date: string; items: CalItem[]; editable: boolean; people: { id: string; name: string }[]; isOff: boolean; today: string }) {
   const [pending, start] = useTransition();
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -448,6 +451,7 @@ function DayPanel({ date, items, editable, people }: { date: string; items: CalI
   return (
     <aside className={`panel self-start p-5 ${pending ? "opacity-70" : ""}`} aria-live="polite">
       <h3 className="font-semibold">{fmt(date, { weekday: "long", day: "numeric", month: "long" })}</h3>
+      {isOff && <p className="mt-1 text-sm">🛋️ יום מנוחה: בלי לימוד, והרצפים נשמרים.</p>}
 
       {items.length === 0 ? (
         <p className="mt-2 text-sm text-ink-soft">אין הגשות, בחינות או לימוד מתוכנן.</p>
@@ -572,13 +576,24 @@ function DayPanel({ date, items, editable, people }: { date: string; items: CalI
               <p className="text-xs text-ink-soft">התוכנית לא תשבץ לימוד בזמן הזה.</p>
             </form>
           ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
-            >
-              הוספת אירוע ליום הזה
-            </button>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
+              >
+                הוספת אירוע ליום הזה
+              </button>
+              {date >= today && (
+                <button
+                  type="button"
+                  onClick={() => run(() => setDayOff(date, isOff ? null : "other"))}
+                  className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
+                >
+                  {isOff ? "ביטול יום המנוחה" : "יום מנוחה / מילואים"}
+                </button>
+              )}
+            </div>
           )}
           {error && (
             <p role="alert" className="mt-2 text-sm">

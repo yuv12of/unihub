@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { connection } from "next/server";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -24,9 +25,10 @@ export async function UserPanel() {
       <div className="text-ink-soft truncate" dir="ltr">
         {user.email}
       </div>
-      <button className="mt-2 text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
-        יציאה
-      </button>
+      <div className="mt-2 flex items-center justify-between">
+        <button className="text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">יציאה</button>
+        <ThemeToggle />
+      </div>
     </form>
   );
 }
@@ -38,6 +40,7 @@ export async function UserBadge() {
   const initial = (user.name ?? user.email).trim().charAt(0).toUpperCase();
   return (
     <form action="/auth/signout" method="post" className="flex items-center gap-3 text-sm">
+      <ThemeToggle compact />
       <button className="text-ink-soft">יציאה</button>
       <Link href="/settings" className="text-ink-soft" aria-label="הגדרות">
         הגדרות

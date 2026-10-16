@@ -29,7 +29,7 @@ export default function SemesterPage() {
 async function Semester() {
   await connection();
   const today = todayInIsrael();
-  const [{ progress, exams, plan, events, status, courses, routines, logs }, people] = await Promise.all([getUserPlan(today), getPeople()]);
+  const [{ progress, exams, plan, events, status, courses, routines, logs, offDays }, people] = await Promise.all([getUserPlan(today), getPeople()]);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
   const names = await getNames([...events.flatMap((e) => (e.guests ?? []).map((g) => g.invitee)), ...events.map((e) => e.invited_by ?? "").filter(Boolean)]);
 
@@ -91,7 +91,7 @@ async function Semester() {
     });
   }
   // Routines: four weeks back to ten weeks ahead (sleep stays out of the calendar).
-  for (const o of occurrencesFor({ routines, logs, events, plan, today, from: addDays(today, -28), to: addDays(today, 70) })) {
+  for (const o of occurrencesFor({ routines, logs, events, plan, today, from: addDays(today, -28), to: addDays(today, 70), offDays })) {
     if (o.category === "sleep") continue;
     items.push({
       date: o.date,
@@ -114,6 +114,7 @@ async function Semester() {
         today={today}
         editable={supabaseEnabled}
         people={connected.map((p) => ({ id: p.id, name: p.name }))}
+        offDays={offDays}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
       />
       {exams.length === 0 && (

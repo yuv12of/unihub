@@ -141,6 +141,7 @@ export function expandRoutines({
   to,
   today,
   taken = [],
+  offDays = [],
 }: {
   routines: Routine[];
   logs: RoutineLog[];
@@ -148,7 +149,10 @@ export function expandRoutines({
   to: string;
   today: string;
   taken?: Busy[];
+  /** rough days (sick, reserve duty…): nothing new is planned on them */
+  offDays?: string[];
 }): Occurrence[] {
+  const off = new Set(offDays);
   const active = routines.filter((r) => r.active);
   const doneSet = new Set(logs.map((l) => `${l.routine_id}|${l.date}`));
   const occ: Occurrence[] = [];
@@ -168,7 +172,8 @@ export function expandRoutines({
   // Fixed routines.
   for (const r of active.filter((x) => x.mode === "fixed"))
     for (let d = from; d <= to; d = addDays(d, 1))
-      if (r.days.includes(weekday(d))) occ.push(make(r, d, timed(r) ? toMin(r.start_time!) : null, false));
+      if (r.days.includes(weekday(d)) && (!off.has(d) || doneSet.has(`${r.id}|${d}`) || r.category === "sleep" || r.category === "meal"))
+        occ.push(make(r, d, timed(r) ? toMin(r.start_time!) : null, false));
 
   // Flexible routines, week by week.
   const { wake, bed } = awakeWindow(active);
@@ -181,8 +186,10 @@ export function expandRoutines({
     for (let ws = weekStart(from); ws <= to; ws = addDays(ws, 7)) {
       const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
       const doneDays = days.filter((d) => doneSet.has(`${r.id}|${d}`));
-      const open = days.filter((d) => d >= today && !doneSet.has(`${r.id}|${d}`));
-      const chosen = spread(open, Math.max(0, goal - doneDays.length));
+      const open = days.filter((d) => d >= today && !doneSet.has(`${r.id}|${d}`) && !off.has(d));
+      // A rough day lowers the week's goal instead of breaking it.
+      const weekGoal = Math.max(0, goal - days.filter((d) => off.has(d)).length);
+      const chosen = spread(open, Math.max(0, weekGoal - doneDays.length));
       for (const d of [...doneDays, ...chosen].sort()) {
         if (d < from || d > to) continue;
         let start: number | null = null;
@@ -208,20 +215,24 @@ export function weekProgress(r: Routine, logs: RoutineLog[], today: string) {
 }
 
 /** Streak: days in a row for daily routines, weeks in a row (goal met) for the rest. */
-export function streak(r: Routine, logs: RoutineLog[], today: string): { count: number; unit: "days" | "weeks" } {
+export function streak(r: Routine, logs: RoutineLog[], today: string, offDays: string[] = []): { count: number; unit: "days" | "weeks" } {
   const mine = new Set(logs.filter((l) => l.routine_id === r.id).map((l) => l.date));
+  const off = new Set(offDays); // rough days don't break a streak
   const daily = (r.mode === "fixed" && r.days.length === 7) || (r.mode === "flexible" && (r.per_week ?? 0) >= 7);
   if (daily) {
-    let d = mine.has(today) ? today : addDays(today, -1);
+    let d = mine.has(today) || off.has(today) ? today : addDays(today, -1);
     let n = 0;
-    while (mine.has(d)) {
-      n++;
+    for (let guard = 0; guard < 800 && (mine.has(d) || off.has(d)); guard++) {
+      if (mine.has(d)) n++;
       d = addDays(d, -1);
     }
     return { count: n, unit: "days" };
   }
   const target = r.mode === "flexible" ? (r.per_week ?? 1) : r.days.length;
-  const met = (ws: string) => Array.from({ length: 7 }, (_, i) => addDays(ws, i)).filter((d) => mine.has(d)).length >= target;
+  const met = (ws: string) => {
+    const week = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    return week.filter((d) => mine.has(d)).length >= Math.max(0, target - week.filter((d) => off.has(d)).length) && week.some((d) => mine.has(d) || off.has(d));
+  };
   let ws = weekStart(today);
   let n = met(ws) ? 1 : 0;
   ws = addDays(ws, -7);

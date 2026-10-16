@@ -31,7 +31,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0c1322;
     --surface: #131c2f;
     --ink: #e6ebf5;
@@ -48,6 +48,25 @@
     --c-amber: #e6c04a;
     --c-slate: #a3adc2;
   }
+}
+
+/* The theme switch in the app overrides the phone/computer setting. */
+:root[data-theme="dark"] {
+  --bg: #0c1322;
+  --surface: #131c2f;
+  --ink: #e6ebf5;
+  --ink-soft: #95a1ba;
+  --rule: #232e46;
+  --highlight: #ffd92e;
+  --highlight-ink: #16213a;
+  --c-blue: #7b9cf5;
+  --c-green: #43c995;
+  --c-purple: #c08cf0;
+  --c-orange: #f0a060;
+  --c-rose: #f08aa4;
+  --c-teal: #4cc6d2;
+  --c-amber: #e6c04a;
+  --c-slate: #a3adc2;
 }
 
 @theme inline {
