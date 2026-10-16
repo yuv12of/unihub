@@ -1,6 +1,6 @@
 import { connection } from "next/server";
-import webpush from "web-push";
-import { anonClient, bearer, israelNow, loadPrivate } from "@/lib/privateFeed";
+import { bearer, israelNow, loadPrivate } from "@/lib/privateFeed";
+import { sendPush, type PushItem } from "@/lib/push";
 import { progressKey } from "@/lib/progress";
 import { addDays, allDeadlines, courseTheme, typeLabel } from "@/lib/semester";
 
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if (!token) return Response.json({ error: "unauthorized" }, { status: 401 });
   const data = await loadPrivate(token);
   if (!data) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const { feed, sessions, progress } = data;
+  const { feed, sessions, progress, courses } = data;
   if (feed.subscriptions.length === 0) return Response.json({ sent: 0, reason: "no subscriptions" });
 
   const now = israelNow();
@@ -25,10 +25,10 @@ export async function POST(req: Request) {
     return diff > 0 && diff <= 20;
   };
 
-  const due: { key: string; title: string; body: string; url: string }[] = [];
+  const due: PushItem[] = [];
   for (const s of sessions.filter((x) => x.date === now.date && inWindow(x.start)))
     due.push({ key: `s|${s.date}|${s.start}|${s.title}`, title: `${s.start} · ${s.title}`, body: `מפגש לימוד עד ${s.end}`, url: "/" });
-  for (const e of feed.events.filter((x) => x.date === now.date && x.start_time && x.kind !== "other" && inWindow(x.start_time)))
+  for (const e of feed.events.filter((x) => x.date === now.date && x.start_time && x.kind !== "other" && !x.cancelled && inWindow(x.start_time)))
     due.push({
       key: `e|${e.id}`,
       title: `${e.start_time} · ${e.title}${e.course_code ? ` ב${courseTheme[e.course_code]?.short ?? ""}` : ""}`,
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     });
   if (now.minutes >= 20 * 60 && now.minutes < 20 * 60 + 30) {
     const tomorrow = addDays(now.date, 1);
-    for (const d of allDeadlines(now.date).filter((x) => x.due === tomorrow)) {
+    for (const d of allDeadlines(now.date, courses).filter((x) => x.due === tomorrow)) {
       const st = progress[progressKey(d.course.code, d.n)]?.status;
       if (st === "submitted" || st === "skipped") continue;
       due.push({
@@ -48,33 +48,5 @@ export async function POST(req: Request) {
       });
     }
   }
-  if (due.length === 0) return Response.json({ sent: 0 });
-
-  const sb = anonClient();
-  const [{ data: pub }, { data: priv }] = await Promise.all([
-    sb.rpc("vapid_public"),
-    sb.rpc("vapid_private", { p_token: token }),
-  ]);
-  if (!pub || !priv) return Response.json({ sent: 0, reason: "push keys not initialised" });
-  webpush.setVapidDetails("https://unihub-beta.vercel.app", pub as string, priv as string);
-
-  let sent = 0;
-  for (const n of due) {
-    const { data: fresh } = await sb.rpc("push_mark", { p_token: token, p_key: n.key });
-    if (!fresh) continue; // already sent
-    for (const s of feed.subscriptions) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          JSON.stringify({ title: n.title, body: n.body, url: n.url, tag: n.key }),
-          { TTL: 1800 },
-        );
-        sent++;
-      } catch (err) {
-        const code = (err as { statusCode?: number }).statusCode;
-        if (code === 404 || code === 410) await sb.rpc("push_mark", { p_token: token, p_key: "", p_dead_endpoint: s.endpoint });
-      }
-    }
-  }
-  return Response.json({ sent });
+  return Response.json({ sent: await sendPush(token, feed.subscriptions, due) });
 }

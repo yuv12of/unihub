@@ -1,18 +1,20 @@
 import { connection } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseKey, supabaseUrl, supabaseEnabled } from "@/lib/supabase/config";
-import { buildPlan, defaultPrefs, sessionKey, type Exam, type StudyPrefs } from "@/lib/planner";
+import { defaultPrefs, sessionKey, type Exam, type StudyPrefs } from "@/lib/planner";
 import { academicEvents } from "@/lib/academic";
-import { progressKey, type ProgressMap, type Status } from "@/lib/progress";
+import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
+import { planFor } from "@/lib/planfor";
 import { renderCalendar, type CalEvent } from "@/lib/ical";
 import { courseTheme, semester, todayInIsrael, typeLabel, addDays } from "@/lib/semester";
 
 interface FeedData {
   prefs: StudyPrefs | null;
-  progress: { course_code: string; semester: string; n: string; status: Status }[];
+  progress: { course_code: string; semester: string; n: string; status: Status; due_override?: string | null }[];
   exams: (Exam & { semester: string })[];
-  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null }[];
+  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null; cancelled?: boolean; external_id?: string | null }[];
   session_status?: Record<string, "done" | "skipped">;
+  session_minutes?: Record<string, number>;
 }
 
 /** Private iCal feed, fetched by Google Calendar without a login; the token is the key. */
@@ -29,19 +31,17 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   const progress: ProgressMap = Object.fromEntries(
     feed.progress
       .filter((p) => p.semester === semester.semester)
-      .map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: null }]),
+      .map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: null, due: p.due_override ?? null }]),
   );
   const exams = feed.exams.filter((e) => e.semester === semester.semester);
   const today = todayInIsrael();
   const userEvents = feed.events ?? [];
-  const busy = userEvents
-    .filter((e) => e.start_time && e.end_time && e.kind !== "other")
-    .map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! }));
-  const plan = buildPlan({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, busy });
   const status = feed.session_status ?? {};
+  const rows = Object.entries(status).map(([session_key, st]) => ({ session_key, status: st, minutes: feed.session_minutes?.[session_key] ?? null }));
+  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows });
 
   const events: CalEvent[] = [];
-  for (const c of semester.courses) {
+  for (const c of coursesFor(progress)) {
     for (const a of c.assignments) {
       if (a.due < addDays(today, -60)) continue;
       const status = progress[progressKey(c.code, a.n)]?.status;
@@ -49,7 +49,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
       events.push({
         uid: `due-${c.code}-${semester.semester}-${a.n}@unihub`,
         title: `${mark}הגשה: ${typeLabel[a.type]} ${a.n} ב${courseTheme[c.code].short}`,
-        description: `${c.name}, משקל ${a.weight}`,
+        description: `${c.name}, משקל ${a.weight}${a.originalDue ? ` (הוארך, במקור ${a.originalDue.split("-").reverse().join("/")})` : ""}`,
         date: a.due,
       });
     }
@@ -73,16 +73,19 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   }
   for (const e of userEvents) {
     if (e.kind === "other" && e.start_time) continue; // phone tutoring hours stay in the app, not the calendar
+    const title = e.cancelled ? `בוטל: ${e.title}` : e.title;
+    // Opal events are re-imported on every sync, so their identity comes from Opal, not the row id.
+    const uid = e.external_id ? `ext-${e.external_id.replace(/[^\w.-]/g, "").slice(0, 120)}@unihub` : `event-${e.id}@unihub`;
     events.push(
       e.start_time && e.end_time
         ? {
-            uid: `event-${e.id}@unihub`,
-            title: e.title,
+            uid,
+            title,
             description: e.location ?? undefined,
             start: { date: e.date, time: e.start_time },
             end: { date: e.date, time: e.end_time },
           }
-        : { uid: `event-${e.id}@unihub`, title: e.title, date: e.date },
+        : { uid, title, date: e.date },
     );
   }
   for (const a of academicEvents) {

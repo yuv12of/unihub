@@ -99,15 +99,17 @@ export async function resetFeed() {
   refresh();
 }
 
-export async function setSessionStatus(key: string, status: "done" | "skipped" | null) {
+/** minutes: how long was actually studied (credited by the planner so the remaining work shrinks). */
+export async function setSessionStatus(key: string, status: "done" | "skipped" | null, minutes?: number) {
   const { supabase, userId } = await requireUser();
   if (key.length > 300) throw new Error("Bad key");
   if (status === null) {
     await supabase.from("session_status").delete().match({ user_id: userId, session_key: key });
   } else {
+    const m = status === "done" && minutes != null && Number.isFinite(minutes) ? Math.max(0, Math.min(600, Math.round(minutes))) : null;
     const { error } = await supabase
       .from("session_status")
-      .upsert({ user_id: userId, session_key: key, status, updated_at: new Date().toISOString() });
+      .upsert({ user_id: userId, session_key: key, status, minutes: m, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
   }
   refresh();
@@ -234,4 +236,51 @@ export async function reviewCard(id: string, grade: 0 | 1 | 2 | 3) {
     .from("cards")
     .update({ interval_days: interval, ease, reps, lapses, due_at: due.toISOString() })
     .match({ id, user_id: userId });
+}
+
+/** Applies a suggested update from mail (grade, moved tutorial …). */
+export async function applyUpdate(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("apply_update", { p_id: id });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Hides an update (an applied one stays applied). */
+export async function dismissUpdate(id: string) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("updates").update({ status: "dismissed" }).match({ id, user_id: userId });
+  refresh();
+}
+
+/** Saves (or removes, when empty) the private Opal calendar export link. */
+export async function saveOpalFeed(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const url = String(formData.get("url") ?? "").trim();
+  if (!url) {
+    await supabase.from("external_feeds").delete().match({ user_id: userId, kind: "opal" });
+    await supabase.from("user_events").delete().match({ user_id: userId, source: "opal" });
+    refresh();
+    return;
+  }
+  const { isOpalExportUrl } = await import("@/lib/icsParse");
+  if (!isOpalExportUrl(url)) throw new Error("זה לא קישור יצוא של לוח השנה באופל");
+  const { error } = await supabase
+    .from("external_feeds")
+    .upsert({ user_id: userId, kind: "opal", url, last_status: "ממתין לסנכרון הראשון", last_synced_at: null });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Runs the Opal sync right away (instead of waiting for the hourly run). */
+export async function syncOpalNow() {
+  const { supabase } = await requireUser();
+  const { data: tok } = await supabase.from("ingest_tokens").select("token").maybeSingle();
+  if (!tok?.token) throw new Error("חסר חיבור לסקריפט Google");
+  const { headers } = await import("next/headers");
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const res = await fetch(`${origin}/api/sync`, { method: "POST", headers: { Authorization: `Bearer ${tok.token}` } });
+  refresh();
+  return (await res.json()) as { opal: string; events?: number; message?: string };
 }

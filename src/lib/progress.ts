@@ -6,6 +6,8 @@ export type Status = "todo" | "in_progress" | "submitted" | "skipped";
 export interface Progress {
   status: Status;
   grade: number | null;
+  /** Deadline moved for this user (extension announced by mail). */
+  due?: string | null;
 }
 export type ProgressMap = Record<string, Progress>;
 
@@ -17,11 +19,11 @@ export async function getProgress(): Promise<ProgressMap> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assignment_progress")
-    .select("course_code, n, status, grade")
+    .select("course_code, n, status, grade, due_override")
     .eq("semester", semester.semester);
   if (error || !data) return {};
   return Object.fromEntries(
-    data.map((r) => [progressKey(r.course_code, r.n), { status: r.status as Status, grade: r.grade }]),
+    data.map((r) => [progressKey(r.course_code, r.n), { status: r.status as Status, grade: r.grade, due: r.due_override }]),
   );
 }
 
@@ -64,4 +66,15 @@ export function standing(course: Course, progress: ProgressMap, today: string): 
     average: gradeWeight ? Math.round(gradeSum / gradeWeight) : null,
     atRisk: open < needed,
   };
+}
+
+/** The semester's courses with this user's deadline extensions applied. */
+export function coursesFor(progress: ProgressMap, courses: Course[] = semester.courses): Course[] {
+  return courses.map((c) => ({
+    ...c,
+    assignments: c.assignments.map((a) => {
+      const due = progress[progressKey(c.code, a.n)]?.due;
+      return due && due !== a.due ? { ...a, due, originalDue: a.due } : a;
+    }),
+  }));
 }

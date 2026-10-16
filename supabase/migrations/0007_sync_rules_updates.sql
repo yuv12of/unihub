@@ -1,0 +1,6 @@
+-- Applied through the Supabase connector as migration "sync_rules_updates" (2026-10-16).
+-- Adds: deadline overrides (assignment_progress.due_override), done-session minutes, cancelled events,
+-- 'opal' event source, OCR text on mail attachments, external_feeds (Opal calendar link),
+-- updates (schedule changes found in mail), and the token-gated functions
+-- mail_rules_apply, opal_feed_url, opal_replace, apply_update (+ internal _apply_update),
+-- plus an updated ingest_mail and _feed_for. See the connector's migration history for the full SQL.

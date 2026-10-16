@@ -26,10 +26,10 @@ export default function SemesterPage() {
 async function Semester() {
   await connection();
   const today = todayInIsrael();
-  const { progress, exams, plan, events, status } = await getUserPlan(today);
+  const { progress, exams, plan, events, status, courses } = await getUserPlan(today);
 
   const items: CalItem[] = [];
-  for (const c of semester.courses) {
+  for (const c of courses) {
     const theme = courseTheme[c.code];
     for (const a of c.assignments) {
       const status = progress[progressKey(c.code, a.n)]?.status;
@@ -37,7 +37,7 @@ async function Semester() {
         date: a.due,
         kind: "due",
         color: theme.color,
-        label: `${typeLabel[a.type]} ${a.n} ב${theme.short}`,
+        label: `${typeLabel[a.type]} ${a.n} ב${theme.short}${a.originalDue ? " (הוארך)" : ""}`,
         done: status === "submitted" || status === "skipped",
       });
     }
@@ -72,7 +72,8 @@ async function Semester() {
       date: ev.date,
       kind: ev.kind === "tutorial" ? "tutorial" : "event",
       color: ev.course_code ? courseTheme[ev.course_code]?.color ?? "var(--ink-soft)" : "var(--ink-soft)",
-      label: ev.location ? `${ev.title} (${ev.location})` : ev.title,
+      label: (ev.cancelled ? "בוטל: " : "") + (ev.location ? `${ev.title} (${ev.location})` : ev.title),
+      done: ev.cancelled,
       start: ev.start_time ?? undefined,
       end: ev.end_time ?? undefined,
       eventId: ev.id,

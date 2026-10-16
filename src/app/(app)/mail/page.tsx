@@ -5,20 +5,21 @@ import { MailBox } from "@/components/MailBox";
 import { getIngestToken, getMails } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
 
-export default function MailPage() {
+export default function MailPage({ searchParams }: PageProps<"/mail">) {
   return (
     <>
       <h1 className="font-display text-4xl">דואר מהאוניברסיטה</h1>
       <p className="mt-2 text-ink-soft">כל ההודעות מהאוניברסיטה הפתוחה במקום אחד, עם סיכום קצר לכל אחת.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
-        <Inbox />
+        <Inbox searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function Inbox() {
+async function Inbox({ searchParams }: { searchParams: PageProps<"/mail">["searchParams"] }) {
   await connection();
+  const { open } = await searchParams;
   const [mails, token] = await Promise.all([getMails(), getIngestToken()]);
   if (mails.length === 0)
     return (
@@ -36,7 +37,7 @@ async function Inbox() {
     );
   return (
     <div className="mt-8">
-      <MailBox mails={mails} editable={supabaseEnabled} />
+      <MailBox mails={mails} editable={supabaseEnabled} initialOpen={typeof open === "string" ? open : undefined} />
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
-import { getProgress, progressKey, standing } from "@/lib/progress";
+import { coursesFor, getProgress, progressKey, standing } from "@/lib/progress";
+import { GradeCalculator } from "@/components/GradeCalculator";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { getNotes } from "@/lib/userdata";
 import { courseTheme, formatHebrewDate, semester, todayInIsrael, typeLabel } from "@/lib/semester";
@@ -28,7 +29,7 @@ async function Courses() {
 
   return (
     <div className="mt-8 grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-3">
-      {semester.courses.map((c) => {
+      {coursesFor(progress).map((c) => {
         const theme = courseTheme[c.code];
         const st = standing(c, progress, today);
         return (
@@ -55,13 +56,28 @@ async function Courses() {
                 items={c.assignments.map((a) => ({
                   n: a.n,
                   label: `${typeLabel[a.type]} ${a.n}`,
-                  due: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }),
+                  due: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }) + (a.originalDue ? " (הוארך)" : ""),
                   weight: a.weight,
                   past: a.due < today,
                   progress: progress[progressKey(c.code, a.n)] ?? { status: "todo", grade: null },
                 }))}
               />
             </div>
+
+            <GradeCalculator
+              color={theme.color}
+              max={c.assignmentWeight.max}
+              rows={c.assignments.map((a) => {
+                const p = progress[progressKey(c.code, a.n)];
+                return {
+                  n: a.n,
+                  label: `${typeLabel[a.type]} ${a.n}`,
+                  weight: a.weight,
+                  grade: p?.status === "submitted" ? (p.grade ?? null) : null,
+                  status: p?.status ?? "todo",
+                };
+              })}
+            />
 
             <CourseNotes notes={notes.filter((n) => n.course_code === c.code)} />
 

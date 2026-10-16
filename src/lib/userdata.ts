@@ -1,8 +1,9 @@
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { semester } from "@/lib/semester";
-import { buildPlan, defaultPrefs, type Busy, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
-import { getProgress, type ProgressMap } from "@/lib/progress";
+import { semester, type Course } from "@/lib/semester";
+import { defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
+import { planFor } from "@/lib/planfor";
+import { coursesFor, getProgress, type ProgressMap } from "@/lib/progress";
 
 /** Signed-in user's exam dates for the current semester. */
 export async function getExams(): Promise<Exam[]> {
@@ -45,6 +46,7 @@ export interface UserEvent {
   course_code: string | null;
   location: string | null;
   source: string;
+  cancelled: boolean;
 }
 
 export async function getEvents(): Promise<UserEvent[]> {
@@ -52,24 +54,18 @@ export async function getEvents(): Promise<UserEvent[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("user_events")
-    .select("id, date, start_time, end_time, title, kind, course_code, location, source")
+    .select("id, date, start_time, end_time, title, kind, course_code, location, source, cancelled")
     .order("date");
   return (data ?? []) as UserEvent[];
 }
 
-export async function getSessionStatus(): Promise<Record<string, "done" | "skipped">> {
-  if (!supabaseEnabled) return {};
+export async function getSessionRows(): Promise<{ session_key: string; status: "done" | "skipped"; minutes: number | null }[]> {
+  if (!supabaseEnabled) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("session_status").select("session_key, status");
-  return Object.fromEntries((data ?? []).map((r) => [r.session_key, r.status]));
+  const { data } = await supabase.from("session_status").select("session_key, status, minutes");
+  return data ?? [];
 }
 
-export function busyFromEvents(events: Pick<UserEvent, "date" | "start_time" | "end_time" | "kind">[]): Busy[] {
-  // Optional things (phone tutoring hours, registration dates) don't block study time.
-  return events
-    .filter((e) => e.start_time && e.end_time && e.kind !== "other")
-    .map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! }));
-}
 
 export interface UserPlan {
   progress: ProgressMap;
@@ -78,19 +74,23 @@ export interface UserPlan {
   events: UserEvent[];
   status: Record<string, "done" | "skipped">;
   plan: Plan;
+  /** Courses with this user's deadline extensions applied. */
+  courses: Course[];
 }
+
 
 /** Everything needed to show the plan, loaded in parallel. */
 export async function getUserPlan(today: string): Promise<UserPlan> {
-  const [progress, exams, prefs, events, status] = await Promise.all([
+  const [progress, exams, prefs, events, rows] = await Promise.all([
     getProgress(),
     getExams(),
     getPrefs(),
     getEvents(),
-    getSessionStatus(),
+    getSessionRows(),
   ]);
-  const plan = buildPlan({ today, prefs, progress, exams, busy: busyFromEvents(events) });
-  return { progress, exams, prefs, events, status, plan };
+  const status = Object.fromEntries(rows.map((r) => [r.session_key, r.status]));
+  const plan = planFor({ today, prefs, progress, exams, events, rows });
+  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress) };
 }
 
 export async function getIngestToken(): Promise<string | null> {
@@ -183,4 +183,43 @@ export async function getNotes(): Promise<Note[]> {
     .order("modified_at", { ascending: false })
     .limit(300);
   return (data ?? []).map(({ text_content, ...n }) => ({ ...n, has_text: !!text_content?.trim() })) as Note[];
+}
+
+export interface Update {
+  id: string;
+  kind: "deadline" | "tutorial_cancel" | "tutorial_new" | "grade" | "info";
+  title: string;
+  detail: string | null;
+  status: "pending" | "applied" | "dismissed";
+  created_at: string;
+  mail_id: string | null;
+}
+
+/** Pending updates from mail, plus ones applied automatically in the last 5 days. */
+export async function getUpdates(): Promise<Update[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const since = new Date(Date.now() - 5 * 86_400_000).toISOString();
+  const { data } = await supabase
+    .from("updates")
+    .select("id, kind, title, detail, status, created_at, mail_id")
+    .or(`status.eq.pending,and(status.eq.applied,created_at.gte.${since})`)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  return (data ?? []) as Update[];
+}
+
+export interface OpalFeed {
+  url: string;
+  last_synced_at: string | null;
+  last_status: string | null;
+  last_count: number | null;
+}
+
+export async function getOpalFeed(): Promise<OpalFeed | null> {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from("external_feeds").select("url, last_synced_at, last_status, last_count").eq("kind", "opal").maybeSingle();
+  // The page only needs to show that a link is saved; the key part never goes to the browser.
+  return data ? { ...data, url: data.url.replace(/authtoken=[^&]+/, "authtoken=••••") } : null;
 }

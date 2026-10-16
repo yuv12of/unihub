@@ -4,7 +4,8 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { getUserPlan } from "@/lib/userdata";
+import { getUpdates, getUserPlan } from "@/lib/userdata";
+import { UpdatesList } from "@/components/UpdatesList";
 import { minutesLabel, nextExams, sessionKey, type Session } from "@/lib/planner";
 import { academicEvents, academicOn } from "@/lib/academic";
 import { SessionToggle } from "@/components/SessionToggle";
@@ -60,13 +61,14 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const { progress, exams, plan, status } = await getUserPlan(today);
+  const [{ progress, exams, plan, status, courses, events }, updates] = await Promise.all([getUserPlan(today), getUpdates()]);
+  const todayEvents = events.filter((e) => e.date === today && (e.kind !== "other" || e.source === "opal"));
   const academicToday = academicOn(today);
   const nextAcademic = academicEvents.find((e) => e.date > today);
   const todaySessions = plan.sessions.filter((x) => x.date === today);
   const week = groupByDay(plan.sessions.filter((x) => x.date > today && x.date <= addDays(today, 6)));
   const upcomingExams = nextExams(exams, today);
-  const open = allDeadlines(today).filter((d) => {
+  const open = allDeadlines(today, courses).filter((d) => {
     const s = progress[progressKey(d.course.code, d.n)]?.status;
     return d.daysLeft >= 0 && s !== "submitted" && s !== "skipped";
   });
@@ -106,9 +108,31 @@ async function Today() {
       </header>
 
       <section aria-labelledby="soon-title" className="min-w-0 space-y-8 lg:col-start-1">
+        {updates.length > 0 && <UpdatesList updates={updates} />}
+
         <div>
           <h2 className="mb-3 text-lg font-semibold">התוכנית להיום</h2>
           <div className="panel overflow-hidden">
+            {todayEvents.length > 0 && (
+              <ul className="divide-y divide-rule border-b border-rule bg-bg/40">
+                {todayEvents.map((e) => (
+                  <li key={e.id} className={`flex items-center gap-4 px-4 py-2.5 text-sm sm:px-5 ${e.cancelled ? "text-ink-soft line-through" : ""}`}>
+                    <span className="w-11 shrink-0 text-center tabular-nums font-medium">{e.start_time ?? "כל היום"}</span>
+                    <span
+                      className="h-6 w-1 shrink-0 rounded-full"
+                      style={{ background: e.course_code ? courseTheme[e.course_code]?.color ?? "var(--ink-soft)" : "var(--ink-soft)" }}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {e.cancelled ? "בוטל: " : ""}
+                      {e.title}
+                      {e.location && <span className="text-ink-soft"> · {e.location}</span>}
+                    </span>
+                    {e.end_time && <span className="shrink-0 text-xs text-ink-soft">עד {e.end_time}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
             {todaySessions.length ? (
               <SessionList sessions={todaySessions} status={status} />
             ) : (
@@ -183,7 +207,7 @@ async function Today() {
           מצב בקורסים
         </h2>
         <ul className="space-y-3">
-          {semester.courses.map((c) => {
+          {courses.map((c) => {
             const theme = courseTheme[c.code];
             const st = standing(c, progress, today);
             const s = standingSentence(st, c.assignmentWeight.min, c.assignmentWeight.max);
@@ -250,7 +274,7 @@ function SessionList({ sessions, status }: { sessions: Session[]; status: Record
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
             </div>
           </div>
-          {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} />}
+          {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} minutes={x.minutes} title={x.title} />}
         </li>
       ))}
     </ol>

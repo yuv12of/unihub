@@ -28,9 +28,10 @@ function clean(body: string | null) {
     .trim();
 }
 
-export function MailBox({ mails, editable }: { mails: Mail[]; editable: boolean }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; editable: boolean; initialOpen?: string }) {
+  const [openId, setOpenId] = useState<string | null>(initialOpen && mails.some((m) => m.id === initialOpen) ? initialOpen : null);
   const [filter, setFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const [readLocal, setReadLocal] = useState<Set<string>>(new Set());
   const [, start] = useTransition();
 
@@ -39,8 +40,13 @@ export function MailBox({ mails, editable }: { mails: Mail[]; editable: boolean 
     [mails],
   );
   const isRead = (m: Mail) => m.is_read || readLocal.has(m.id);
-  const shown = mails.filter((m) =>
-    filter === "all" ? true : filter === "unread" ? !isRead(m) : m.category === filter,
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = mails.filter(
+    (m) =>
+      (filter === "all" ? true : filter === "unread" ? !isRead(m) : m.category === filter) &&
+      words.every((w) =>
+        `${m.subject ?? ""} ${m.summary ?? ""} ${m.body_text ?? ""} ${m.attachments.map((a) => a.filename).join(" ")}`.toLowerCase().includes(w),
+      ),
   );
   const open = mails.find((m) => m.id === openId) ?? null;
 
@@ -55,6 +61,14 @@ export function MailBox({ mails, editable }: { mails: Mail[]; editable: boolean 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
       <div className={`${open ? "hidden lg:block" : ""} min-w-0`}>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="חיפוש בדואר…"
+          aria-label="חיפוש בדואר"
+          className="mb-3 w-full rounded-lg border border-rule bg-surface px-3 py-2 text-[15px] outline-none focus:border-ink"
+        />
         <div className="mb-3 flex flex-wrap gap-2" role="tablist" aria-label="סינון">
           {[["all", "הכל"], ["unread", "לא נקראו"], ...categories.map((c) => [c, c])].map(([k, label]) => (
             <button

@@ -470,7 +470,7 @@ function DayPanel({ date, items, editable }: { date: string; items: CalItem[]; e
                       <>
                         <button
                           type="button"
-                          onClick={() => run(() => setSessionStatus(it.sessionKey!, "done"))}
+                          onClick={() => run(() => setSessionStatus(it.sessionKey!, "done", it.minutes))}
                           className="rounded-full border border-rule px-2.5 py-1 hover:border-ink"
                         >
                           בוצע

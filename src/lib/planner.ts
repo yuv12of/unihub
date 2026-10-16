@@ -6,6 +6,9 @@
  *   1. Assignment prep in the 14 days before a deadline (earliest deadline first).
  *   2. Exam revision in the 21 days before an exam.
  *   3. Optional routine study, rotating between courses, in whatever time is left.
+ * Work already done on earlier days (sessions marked done) is credited, and anything not done
+ * simply stays in the remaining work, so missed sessions roll forward on their own.
+ * A session marked skipped keeps its slot empty and its work moves to another day.
  */
 import { addDays, daysBetween, semester, typeLabel, courseTheme, type Course } from "@/lib/semester";
 import { progressKey, type ProgressMap } from "@/lib/progress";
@@ -87,6 +90,7 @@ interface Task {
   until: string; // last day work may happen
   deadline: string;
   remaining: number;
+  sessionTitle: string;
 }
 
 const toMin = (hhmm: string) => {
@@ -126,6 +130,8 @@ export function buildPlan({
   exams,
   busy = [],
   courses = semester.courses,
+  doneMinutes = {},
+  skipped = new Set<string>(),
 }: {
   today: string;
   prefs: StudyPrefs;
@@ -133,8 +139,21 @@ export function buildPlan({
   exams: Exam[];
   busy?: Busy[];
   courses?: Course[];
+  /** session key -> minutes, for sessions marked done */
+  doneMinutes?: Record<string, number>;
+  /** keys of sessions marked skipped */
+  skipped?: Set<string>;
 }): Plan {
   const tasks: Task[] = [];
+  // Minutes already done before today, per "kind|course|title".
+  const credit = new Map<string, number>();
+  for (const [key, min] of Object.entries(doneMinutes)) {
+    const [date, ...rest] = key.split("|");
+    if (date >= today || !min) continue;
+    const id = rest.join("|");
+    credit.set(id, (credit.get(id) ?? 0) + min);
+  }
+  const creditFor = (kind: string, code: string, title: string) => credit.get(`${kind}|${code}|${title}`) ?? 0;
 
   for (const c of courses) {
     for (const a of c.assignments) {
@@ -143,27 +162,37 @@ export function buildPlan({
       const need = prepMinutes(a.type, a.weight);
       if (!need) continue;
       const until = addDays(a.due, -1) < today ? today : addDays(a.due, -1);
+      const title = `${typeLabel[a.type]} ${a.n} ב${courseTheme[c.code].short}`;
+      const sessionTitle = `הכנה ל${title}`;
+      const remaining = need - creditFor("assignment", c.code, sessionTitle);
+      if (remaining < MIN_CHUNK) continue;
       tasks.push({
         courseCode: c.code,
         kind: "assignment",
-        title: `${typeLabel[a.type]} ${a.n} ב${courseTheme[c.code].short}`,
+        title,
+        sessionTitle,
         from: maxIso(today, addDays(a.due, -PREP_WINDOW_DAYS)),
         until,
         deadline: a.due,
-        remaining: need,
+        remaining,
       });
     }
   }
 
   for (const e of nextExams(exams, today)) {
+    const title = `בחינה ב${courseTheme[e.course_code]?.short ?? e.course_code}`;
+    const sessionTitle = `חזרה ל${title}`;
+    const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, sessionTitle);
+    if (remaining < MIN_CHUNK) continue;
     tasks.push({
       courseCode: e.course_code,
       kind: "exam",
-      title: `בחינה ב${courseTheme[e.course_code]?.short ?? e.course_code}`,
+      title,
+      sessionTitle,
       from: maxIso(today, addDays(e.date, -EXAM_WINDOW_DAYS)),
       until: maxIso(today, addDays(e.date, -1)),
       deadline: e.date,
-      remaining: EXAM_MINUTES,
+      remaining,
     });
   }
 
@@ -194,18 +223,12 @@ export function buildPlan({
     const place = (minutes: number, courseCode: string, kind: SessionKind, title: string) => {
       const seg = segments.find(([a, z]) => z - a >= Math.min(minutes, MIN_CHUNK))!;
       const len = Math.min(minutes, seg[1] - seg[0]);
-      sessions.push({
-        date: day,
-        start: toHHMM(seg[0]),
-        end: toHHMM(seg[0] + len),
-        minutes: len,
-        courseCode,
-        kind,
-        title,
-      });
+      const s: Session = { date: day, start: toHHMM(seg[0]), end: toHHMM(seg[0] + len), minutes: len, courseCode, kind, title };
       seg[0] += len + BREAK_MINUTES;
       capacity = freeNow();
-      return len;
+      sessions.push(s);
+      // Skipped: it stays visible (so it can be undone), but its work is placed again on another day.
+      return skipped.has(sessionKey(s)) ? 0 : len;
     };
 
     // 1 + 2: deadline-driven work, earliest deadline first, one session per task per day
@@ -219,7 +242,7 @@ export function buildPlan({
         if (capacity < MIN_CHUNK) break;
         const chunk = Math.min(prefs.session_minutes, t.remaining, capacity);
         if (chunk < MIN_CHUNK && chunk < t.remaining) continue;
-        t.remaining -= place(chunk, t.courseCode, t.kind, t.kind === "exam" ? `חזרה ל${t.title}` : `הכנה ל${t.title}`);
+        t.remaining -= place(chunk, t.courseCode, t.kind, t.sessionTitle);
         usedToday.add(t);
       }
     }

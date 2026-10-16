@@ -5,7 +5,8 @@ import { resetFeed, resetIngestToken, saveExams, savePrefs } from "@/app/actions
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getExams, getFeedToken, getIngestToken, getPrefs } from "@/lib/userdata";
+import { getExams, getFeedToken, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { OpalSync } from "@/components/OpalSync";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { courseTheme, semester } from "@/lib/semester";
 
@@ -30,7 +31,7 @@ const field = "rounded-lg border border-rule bg-surface px-3 py-2";
 async function Settings() {
   await connection();
   if (!supabaseEnabled) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
-  const [prefs, exams, token, ingest] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken()]);
+  const [prefs, exams, token, ingest, opal] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken(), getOpalFeed()]);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
@@ -180,6 +181,17 @@ async function Settings() {
         </section>
       </div>
 
+      <section id="opal" className="panel scroll-mt-24 p-5 sm:p-6 xl:col-span-2" aria-labelledby="opal-title">
+        <h2 id="opal-title" className="text-lg font-semibold">
+          לוח השנה של אופל
+        </h2>
+        <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+          מפגשים, מטלות ואירועים שהמרצים מפרסמים באתרי הקורסים נכנסים ל־Unihub לבד, כל שעה. הקישור של אופל מאפשר רק לקרוא את
+          לוח השנה, בלי סיסמה, ואפשר לבטל אותו באופל בכל רגע.
+        </p>
+        <OpalSync feed={opal} />
+      </section>
+
       <section className="panel p-5 sm:p-6 xl:col-span-2" aria-labelledby="push-title">
         <h2 id="push-title" className="text-lg font-semibold">
           התראות לטלפון
@@ -196,8 +208,9 @@ async function Settings() {
           חיבור ל־Google: דואר, מייל בוקר, תזכורות ו־Notability
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-          סקריפט אחד בחשבון Google שלך: שולח ל־Unihub רק הודעות מ־openu.ac.il (כל 10 דקות, ומהן נקלטים גם מועדי הבחינות),
-          מפעיל תזכורות לטלפון, שולח לך כל בוקר ב־07:00 מייל עם התוכנית, ומעביר סיכומים חדשים מתיקיית Notability ב־Drive.
+          סקריפט אחד בחשבון Google שלך: שולח ל־Unihub רק הודעות מ־openu.ac.il (כל 10 דקות, עם הטקסט של קובצי ה־PDF
+          המצורפים), מפעיל תזכורות לטלפון, מרענן את לוח השנה של אופל, שולח לך כל בוקר ב־07:00 מייל עם התוכנית ובימי שישי
+          סיכום שבועי, ומעביר סיכומים חדשים מתיקיית Notability ב־Drive.
         </p>
         {ingest ? (
           <div className="mt-4 space-y-4">
@@ -219,8 +232,10 @@ async function Settings() {
                 ב־Notability ייקראו כמו הקורסים (אינפי, לינארית, מבני נתונים) כדי שכל סיכום ישויך לקורס הנכון.
               </li>
             </ol>
-            <p className="text-sm text-ink-soft">
-              כבר הדבקתם גרסה קודמת? החליפו את כל הקוד בגרסה הזו והריצו <b dir="ltr">setup</b> שוב. שום דבר לא ייכפל.
+            <p className="text-sm">
+              <span className="hl">גרסה חדשה (אוקטובר 2026):</span> כבר הדבקתם גרסה קודמת? החליפו את כל הקוד בגרסה הזו, הריצו{" "}
+              <b dir="ltr">setup</b>, ואחר כך פעם אחת <b dir="ltr">backfillAttachmentText</b> (קורא את מסמכי ה־PDF של ארבעת
+              החודשים האחרונים; אם נעצר באמצע, מריצים שוב). שום דבר לא ייכפל.
             </p>
             <details>
               <summary className="cursor-pointer text-sm font-medium">הקוד להדבקה</summary>

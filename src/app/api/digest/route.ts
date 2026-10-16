@@ -13,11 +13,7 @@ import {
   typeLabel,
 } from "@/lib/semester";
 
-const APP = "https://unihub-beta.vercel.app";
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-
-// Fixed hex colours: email clients don't support CSS variables.
-const COLORS: Record<string, string> = { "20109": "#2f5bd3", "20474": "#12855a", "20407": "#8a3fc7" };
+import { APP, COLORS, esc, row, section, table } from "@/lib/emailHtml";
 
 /** Morning email for the Apps Script to send to the user's own inbox. */
 export async function POST(req: Request) {
@@ -26,13 +22,13 @@ export async function POST(req: Request) {
   if (!token) return Response.json({ error: "unauthorized" }, { status: 401 });
   const data = await loadPrivate(token);
   if (!data) return Response.json({ error: "unauthorized" }, { status: 401 });
-  const { feed, progress, exams, today, sessions } = data;
+  const { feed, progress, exams, today, sessions, courses } = data;
 
   const todays = sessions.filter((s) => s.date === today);
   const events = feed.events
     .filter((e) => e.date === today)
     .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
-  const deadlines = allDeadlines(today).filter((d) => {
+  const deadlines = allDeadlines(today, courses).filter((d) => {
     const st = progress[progressKey(d.course.code, d.n)]?.status;
     return d.daysLeft >= 0 && d.daysLeft <= 7 && st !== "submitted" && st !== "skipped";
   });
@@ -40,11 +36,6 @@ export async function POST(req: Request) {
   const academic = academicOn(today);
   const nextAcademic = academicEvents.find((e) => e.date > today);
 
-  const row = (color: string, main: string, sub: string) =>
-    `<tr><td style="width:4px;background:${color};border-radius:2px"></td><td style="padding:6px 10px"><div style="font-size:15px;color:#16213a">${main}</div><div style="font-size:12px;color:#5d6880">${sub}</div></td></tr>`;
-  const section = (title: string, body: string) =>
-    `<h2 style="font-size:16px;margin:22px 0 8px;color:#16213a">${title}</h2>${body}`;
-  const table = (rows: string[]) => `<table style="border-collapse:separate;border-spacing:0 6px;width:100%">${rows.join("")}</table>`;
 
   const parts: string[] = [];
   const timeline = [
@@ -52,7 +43,7 @@ export async function POST(req: Request) {
       t: e.start_time ?? "",
       html: row(
         e.course_code ? COLORS[e.course_code] ?? "#5d6880" : "#5d6880",
-        esc(e.title),
+        (e.cancelled ? "<s>" : "") + esc(e.title) + (e.cancelled ? "</s> (בוטל)" : ""),
         e.start_time ? `${e.start_time}–${e.end_time ?? ""}${e.location ? ` · ${esc(e.location)}` : ""}` : "כל היום",
       ),
     })),
@@ -101,6 +92,11 @@ export async function POST(req: Request) {
           )
           .join(""),
       ),
+    );
+
+  if (feed.updates_pending > 0)
+    parts.push(
+      `<p style="margin-top:20px"><a href="${APP}" style="color:#2f5bd3">${feed.updates_pending} עדכונים מהדואר מחכים לאישור</a></p>`,
     );
 
   if (feed.cards_due > 0)

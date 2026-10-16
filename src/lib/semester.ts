@@ -7,6 +7,7 @@ export interface Assignment {
   type: AssignmentType;
   weight: number;
   due: string; // YYYY-MM-DD, deadline day (Israel time)
+  originalDue?: string; // set when the user's deadline was extended
 }
 
 export interface Course {
@@ -74,8 +75,8 @@ export interface DeadlineItem extends Assignment {
   daysLeft: number;
 }
 
-export function allDeadlines(today: string): DeadlineItem[] {
-  return semester.courses
+export function allDeadlines(today: string, courses: Course[] = semester.courses): DeadlineItem[] {
+  return courses
     .flatMap((course) =>
       course.assignments.map((a) => ({ ...a, course, daysLeft: daysBetween(today, a.due) })),
     )

@@ -1,15 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseKey, supabaseUrl } from "@/lib/supabase/config";
-import { buildPlan, defaultPrefs, sessionKey, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
-import { progressKey, type ProgressMap, type Status } from "@/lib/progress";
+import { defaultPrefs, sessionKey, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
+import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
+import { planFor } from "@/lib/planfor";
 import { semester, todayInIsrael } from "@/lib/semester";
 
 export interface PrivateFeed {
   prefs: StudyPrefs | null;
-  progress: { course_code: string; semester: string; n: string; status: Status }[];
+  progress: { course_code: string; semester: string; n: string; status: Status; grade: number | null; due_override: string | null }[];
   exams: (Exam & { semester: string })[];
-  events: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; course_code: string | null; location: string | null }[];
+  events: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: "custom" | "tutorial" | "other"; course_code: string | null; location: string | null; cancelled: boolean; source: string }[];
   session_status: Record<string, "done" | "skipped">;
+  session_minutes: Record<string, number>;
+  updates_pending: number;
   mails: { subject: string | null; summary: string | null; category: string | null; received_at: string }[];
   cards_due: number;
   subscriptions: { endpoint: string; p256dh: string; auth: string }[];
@@ -30,16 +33,18 @@ export async function loadPrivate(token: string) {
   const progress: ProgressMap = Object.fromEntries(
     feed.progress
       .filter((p) => p.semester === semester.semester)
-      .map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: null }]),
+      .map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: p.grade, due: p.due_override }]),
   );
   const exams = feed.exams.filter((e) => e.semester === semester.semester);
-  const busy = feed.events
-    .filter((e) => e.start_time && e.end_time && e.kind !== "other")
-    .map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! }));
   const today = todayInIsrael();
-  const plan: Plan = buildPlan({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, busy });
+  const rows = Object.entries(feed.session_status).map(([session_key, status]) => ({
+    session_key,
+    status,
+    minutes: feed.session_minutes?.[session_key] ?? null,
+  }));
+  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows });
   const live = plan.sessions.filter((s) => feed.session_status[sessionKey(s)] !== "skipped");
-  return { feed, progress, exams, today, plan, sessions: live };
+  return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress) };
 }
 
 /** Current Israel time as { date: YYYY-MM-DD, minutes since midnight }. */
