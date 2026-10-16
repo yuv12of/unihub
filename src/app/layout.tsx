@@ -16,6 +16,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // Lets the page extend under the iPhone home bar so safe-area padding is reported.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4f6f9" },
     { media: "(prefers-color-scheme: dark)", color: "#0c1322" },

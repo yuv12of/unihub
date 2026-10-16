@@ -32,7 +32,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Suspense>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-12 lg:pb-16 lg:pt-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-[calc(env(safe-area-inset-bottom)+7.5rem)] pt-6 sm:px-6 lg:px-12 lg:pb-16 lg:pt-10">{children}</main>
       </div>
 
       <TabBar />

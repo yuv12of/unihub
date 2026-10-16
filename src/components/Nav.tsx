@@ -48,7 +48,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed inset-x-0 bottom-0 z-20 border-t border-rule bg-surface/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-rule bg-surface/95 backdrop-blur pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden"
     >
       <ul className="mx-auto grid max-w-lg grid-cols-5">
         {items.filter((i) => !i.desktopOnly).map(({ href, label, icon: Icon }) => {
@@ -58,7 +58,7 @@ export function TabBar() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex flex-col items-center gap-0.5 pt-2.5 pb-2 text-[12px] ${
+                className={`flex flex-col items-center gap-1 pt-3 pb-1.5 text-[12px] ${
                   active ? "text-ink font-semibold" : "text-ink-soft"
                 }`}
               >
