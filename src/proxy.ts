@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly"];
+const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/auth", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly"];
 
 /**
  * Refreshes the Supabase session and keeps the app private: anyone can sign in with Google,

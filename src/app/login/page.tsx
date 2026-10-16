@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { SignInButton } from "./SignInButton";
 
 const errors: Record<string, string> = {
@@ -18,6 +19,14 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
       </Suspense>
       <SignInButton />
       <p className="mt-4 text-sm text-ink-soft">חדשים כאן? התחברו, והבקשה תגיע לאישור.</p>
+      <p className="mt-10 flex gap-4 text-xs text-ink-soft">
+        <Link href="/privacy" className="underline underline-offset-4 decoration-rule hover:text-ink">
+          מדיניות פרטיות
+        </Link>
+        <Link href="/terms" className="underline underline-offset-4 decoration-rule hover:text-ink">
+          תנאי שימוש
+        </Link>
+      </p>
     </main>
   );
 }
