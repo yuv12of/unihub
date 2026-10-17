@@ -41,7 +41,7 @@ export async function tokenRequest(body: Record<string, string>) {
     cache: "no-store",
   });
   const json = (await res.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
-  if (!res.ok || !json.access_token) throw new SpotifyError(json.error_description ?? json.error ?? `Spotify ${res.status}`, res.status);
+  if (!res.ok || !json.access_token) throw new SpotifyError([json.error, json.error_description].filter(Boolean).join(": ") || `Spotify ${res.status}`, res.status);
   return json as { access_token: string; refresh_token?: string; expires_in: number };
 }
 
@@ -52,6 +52,7 @@ export async function accessToken(sb: SupabaseClient, userId: string): Promise<s
   if (Date.parse(data.expires_at) - Date.now() > 60_000) return data.access_token;
   try {
     const t = await tokenRequest({ grant_type: "refresh_token", refresh_token: data.refresh_token });
+    // (If two requests refresh at the same time, the second may fail; see the catch below.)
     await sb
       .from("spotify_tokens")
       .update({
@@ -63,8 +64,11 @@ export async function accessToken(sb: SupabaseClient, userId: string): Promise<s
       .eq("user_id", userId);
     return t.access_token;
   } catch (e) {
-    // Revoked in Spotify's settings: forget it so the app offers to connect again.
-    if (e instanceof SpotifyError && e.status === 400) await sb.from("spotify_tokens").delete().eq("user_id", userId);
+    // Another request may have refreshed it a moment ago: use that token if so.
+    const { data: again } = await sb.from("spotify_tokens").select("access_token, refresh_token, expires_at").eq("user_id", userId).maybeSingle<TokenRow>();
+    if (again && again.refresh_token !== data.refresh_token && Date.parse(again.expires_at) > Date.now()) return again.access_token;
+    // Really revoked (in Spotify's settings): forget it so the app offers to connect again.
+    if (e instanceof SpotifyError && e.status === 400 && /invalid_grant|revoked/i.test(e.message)) await sb.from("spotify_tokens").delete().eq("user_id", userId);
     return null;
   }
 }
@@ -72,23 +76,56 @@ export async function accessToken(sb: SupabaseClient, userId: string): Promise<s
 const REASONS: Record<string, string> = {
   NO_ACTIVE_DEVICE: "אין מכשיר פעיל. פתחו את Spotify בטלפון או במחשב ונסו שוב.",
   PREMIUM_REQUIRED: "שליטה בנגינה דורשת Spotify Premium.",
+  VOLUME_CONTROL_DISALLOW: "המכשיר הזה לא מאפשר לשנות עוצמה מרחוק.",
+  DEVICE_NOT_CONTROLLABLE: "את המכשיר הזה אי אפשר לשלוט מרחוק.",
+  NO_PREV_TRACK: "אין שיר קודם.",
+  NO_NEXT_TRACK: "אין שיר הבא.",
+  CONTEXT_DISALLOW: "Spotify לא מאפשר את הפעולה הזאת על מה שמתנגן עכשיו.",
 };
+/** Commands that already happened ("pause" while paused): not worth an error. */
+const HARMLESS = new Set(["ALREADY_PAUSED", "NOT_PAUSED"]);
+
+/** JSON when it's JSON; Spotify answers some commands with a plain-text snapshot id. */
+function parse(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export async function spotifyApi<T = unknown>(token: string, path: string, init: RequestInit = {}): Promise<T | null> {
-  const res = await fetch(`https://api.spotify.com/v1${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
-    cache: "no-store",
-  });
-  if (res.status === 204 || res.status === 202) return null;
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
-  if (!res.ok) {
-    const reason = json?.error?.reason as string | undefined;
-    const msg = (reason && REASONS[reason]) || (res.status === 403 ? REASONS.PREMIUM_REQUIRED : res.status === 404 ? REASONS.NO_ACTIVE_DEVICE : json?.error?.message) || `Spotify ${res.status}`;
-    throw new SpotifyError(msg, res.status);
+  let res: Response;
+  try {
+    res = await fetch(`https://api.spotify.com/v1${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new SpotifyError("אין חיבור ל־Spotify כרגע. נסו שוב.", 503);
   }
-  return json as T;
+  if (res.status === 204 || res.status === 202) return null;
+  const json = parse(await res.text()) as { error?: { reason?: string; message?: string } } | null;
+  if (res.ok) return json as T | null;
+  const reason = json?.error?.reason;
+  if (reason && HARMLESS.has(reason)) return null;
+  const msg =
+    (reason && REASONS[reason]) ||
+    (res.status === 404
+      ? REASONS.NO_ACTIVE_DEVICE
+      : res.status === 429
+        ? "יותר מדי בקשות ל־Spotify. נסו שוב בעוד רגע."
+        : res.status >= 500
+          ? "Spotify לא זמין כרגע. נסו שוב בעוד רגע."
+          : res.status === 403 && /premium/i.test(json?.error?.message ?? "")
+            ? REASONS.PREMIUM_REQUIRED
+            : res.status === 403
+              ? "Spotify לא אפשר את הפעולה הזאת כרגע."
+              : json?.error?.message) || `Spotify ${res.status}`;
+  throw new SpotifyError(msg, res.status);
 }
 
 export interface SpotifyState {
