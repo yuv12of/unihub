@@ -510,7 +510,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                       onClick={() => set("share_with", on ? f.share_with!.filter((x) => x !== p.id) : [...(f.share_with ?? []), p.id])}
                       className={`flex items-center gap-1.5 rounded-full border py-1 pe-3 ps-1 text-sm ${on ? "border-ink bg-ink text-bg" : "border-rule"}`}
                     >
-                      <Avatar name={p.name} url={p.avatar_url} size={22} />
+                      <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} size={22} />
                       {p.name.split(" ")[0]}
                     </button>
                   );

@@ -334,6 +334,9 @@ export interface Person {
   id: string;
   name: string;
   avatar_url: string | null;
+  avatar_emoji?: string | null;
+  avatar_color?: string | null;
+  program?: string | null;
   i_follow?: "pending" | "accepted" | null;
   follows_me?: "pending" | "accepted" | null;
 }
@@ -447,4 +450,43 @@ export async function getMyStudyDays(): Promise<Record<string, number>> {
     out[d] = (out[d] ?? 0) + r.minutes;
   }
   return out;
+}
+
+export interface MyProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+  avatar_emoji: string | null;
+  avatar_color: string | null;
+  bio: string | null;
+  program: string | null;
+  study_year: string | null;
+  weekly_goal_minutes: number | null;
+  prefs: import("@/lib/themes").LookPrefs;
+  share: import("@/app/actions").ShareSettings;
+  created_at: string;
+  is_admin: boolean;
+}
+
+export const getMyProfile = cache(async (): Promise<MyProfile | null> => {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, email, name, avatar_url, avatar_emoji, avatar_color, bio, program, study_year, weekly_goal_minutes, prefs, share, created_at, is_admin")
+    .maybeSingle();
+  return (data ?? null) as MyProfile | null;
+});
+
+/** Cheers I sent and received (counts), for badges. */
+export async function getCheerCounts(): Promise<{ sent: number; received: number }> {
+  if (!supabaseEnabled) return { sent: 0, received: 0 };
+  const me = await getUserId();
+  const supabase = await createClient();
+  const [{ count: sent }, { count: received }] = await Promise.all([
+    supabase.from("reactions").select("id", { count: "exact", head: true }).eq("from_user", me ?? ""),
+    supabase.from("reactions").select("id", { count: "exact", head: true }).eq("to_user", me ?? ""),
+  ]);
+  return { sent: sent ?? 0, received: received ?? 0 };
 }

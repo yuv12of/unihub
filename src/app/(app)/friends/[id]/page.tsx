@@ -10,6 +10,10 @@ import { describe, emojiOf } from "@/lib/routines";
 import { Avatar } from "@/components/Avatar";
 import { StandingText, WeightBar } from "@/components/CourseParts";
 import { Heatmap } from "@/components/Heatmap";
+import { BadgeGrid } from "@/components/BadgeGrid";
+import { computeBadges } from "@/lib/badges";
+import { coursesFor, progressKey } from "@/lib/progress";
+import { courseFromRow, semester } from "@/lib/semester";
 import { CheerButtons } from "@/components/SocialBits";
 
 export default function FriendPage({ params }: PageProps<"/friends/[id]">) {
@@ -28,6 +32,24 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
   const today = todayInIsrael();
   const s = summarize(v, today);
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const studyDays = Object.entries(v.study ?? {}).reduce<Record<string, number>>((acc, [k, m]) => {
+    const d = k.split("|")[0];
+    acc[d] = (acc[d] ?? 0) + m;
+    return acc;
+  }, {});
+  const progress = Object.fromEntries(
+    v.progress.filter((p) => p.semester === semester.semester).map((p) => [progressKey(p.course_code, p.n), { status: p.status, grade: p.grade ?? null, due: p.due_override ?? null }]),
+  );
+  const badges = computeBadges({
+    today,
+    studyDays: v.share.study ? studyDays : undefined,
+    courses: v.share.progress ? coursesFor(progress, v.courses.map(courseFromRow)) : undefined,
+    progress: v.share.progress ? progress : undefined,
+    routines: v.share.routines ? v.routines : undefined,
+    logs: v.share.routines ? v.routine_logs : undefined,
+    friends: v.friends_count,
+    cheersReceived: v.cheers_received,
+  });
 
   return (
     <>
@@ -35,9 +57,11 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
         → חזרה לחברים
       </Link>
       <header className="mt-3 flex items-center gap-4">
-        <Avatar name={v.name} url={v.avatar_url} size={56} />
+        <Avatar name={v.name} url={v.avatar_url} emoji={v.avatar_emoji} color={v.avatar_color} size={72} />
         <div>
           <h1 className="font-display text-4xl">{v.name}</h1>
+          {(v.program || v.study_year) && <p className="text-ink-soft">{[v.program, v.study_year].filter(Boolean).join(" · ")}</p>}
+          {v.bio && <p className="mt-1 max-w-xl leading-relaxed">{v.bio}</p>}
           {v.share.study && (
             <p className="text-ink-soft">
               השבוע {minutesLabel(s.week)} לימוד{s.lastWeek ? ` · בשבוע שעבר ${minutesLabel(s.lastWeek)}` : ""}
@@ -49,16 +73,19 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
         </div>
       </header>
 
+      <section className="panel mt-6 p-5">
+        <h2 className="mb-3 font-semibold">תגים</h2>
+        <BadgeGrid badges={badges} compact />
+      </section>
+
       {v.share.study && (
         <section className="panel mt-6 overflow-x-auto p-5">
-          <Heatmap
-            today={today}
-            days={Object.entries(v.study ?? {}).reduce<Record<string, number>>((acc, [k, m]) => {
-              const d = k.split("|")[0];
-              acc[d] = (acc[d] ?? 0) + m;
-              return acc;
-            }, {})}
-          />
+          <Heatmap today={today} days={studyDays} />
+          {v.weekly_goal_minutes ? (
+            <p className="mt-2 text-sm text-ink-soft">
+              יעד שבועי: {minutesLabel(v.weekly_goal_minutes)}, השבוע {minutesLabel(s.week)}
+            </p>
+          ) : null}
         </section>
       )}
 

@@ -9,6 +9,8 @@ export interface LiveRow {
   user_id: string;
   name: string;
   avatar_url: string | null;
+  avatar_emoji?: string | null;
+  avatar_color?: string | null;
   title: string;
   ends_at: string;
 }
@@ -34,7 +36,7 @@ export function StudyingNow({ rows }: { rows: LiveRow[] }) {
         const left = Math.max(1, Math.round((Date.parse(r.ends_at) - now) / 60_000));
         return (
           <div key={r.user_id} className="flex items-center gap-3">
-            <Avatar name={r.name} url={r.avatar_url} size={32} />
+            <Avatar name={r.name} url={r.avatar_url} emoji={r.avatar_emoji} color={r.avatar_color} size={32} />
             <div className="min-w-0 flex-1 text-sm">
               <div className="font-medium">{r.name.split(" ")[0]}</div>
               <div className="truncate text-ink-soft">

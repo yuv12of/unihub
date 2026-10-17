@@ -4,7 +4,9 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { computeBadges } from "@/lib/badges";
+import { BadgeToast } from "@/components/BadgeToast";
 import { QuickAdd } from "@/components/QuickAdd";
 import { StudyingNow } from "@/components/StudyingNow";
 import { DayOff } from "@/components/DayOff";
@@ -72,9 +74,27 @@ async function Today() {
     getPeople(),
     getStudyingNow(),
   ]);
+  const [profile, studyDays, cheers] = await Promise.all([getMyProfile(), getMyStudyDays(), getCheerCounts()]);
+  const hidden = new Set(profile?.prefs?.hidden ?? []);
+  const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
   const isOff = offDays.includes(today);
+  const earned = computeBadges({
+    today,
+    studyDays,
+    weeklyGoal: profile?.weekly_goal_minutes,
+    courses,
+    progress,
+    routines,
+    logs,
+    offDays,
+    friends: connected.length,
+    cheersSent: cheers.sent,
+    cheersReceived: cheers.received,
+  })
+    .filter((b) => b.earned)
+    .map((b) => ({ id: b.id, emoji: b.emoji, title: b.title }));
   const todayRoutines = occurrencesFor({ routines, logs, events, plan, today, from: today, to: today, offDays }).filter((o) => o.category !== "sleep");
   const todayEvents = events.filter((e) => e.date === today && (e.kind !== "other" || e.source === "opal"));
   const academicToday = academicOn(today);
@@ -122,19 +142,23 @@ async function Today() {
       </header>
 
       <section aria-labelledby="soon-title" className="min-w-0 space-y-8 lg:col-start-1">
-        {supabaseEnabled && <QuickAdd today={today} people={connected} />}
+        <BadgeToast earned={earned} />
 
-        <StudyingNow
+        {supabaseEnabled && show("quickadd") && <QuickAdd today={today} people={connected} />}
+
+        {show("live") && <StudyingNow
           rows={live.map((l) => ({
             user_id: l.user_id,
             name: inviters[l.user_id]?.name ?? "חבר/ה",
             avatar_url: inviters[l.user_id]?.avatar_url ?? null,
+            avatar_emoji: inviters[l.user_id]?.avatar_emoji,
+            avatar_color: inviters[l.user_id]?.avatar_color,
             title: l.title,
             ends_at: l.ends_at,
           }))}
-        />
+        />}
 
-        {supabaseEnabled && <DayOff date={today} isOff={isOff} />}
+        {supabaseEnabled && (show("dayoff") || isOff) && <DayOff date={today} isOff={isOff} />}
 
         {courses.length === 0 && (
           <Link href="/courses" className="panel block p-5 hover:border-ink-soft">
@@ -220,7 +244,7 @@ async function Today() {
           )}
         </div>
 
-        {todayRoutines.length > 0 ? (
+        {!show("routines") ? null : todayRoutines.length > 0 ? (
           <TodayRoutines items={todayRoutines} date={today} />
         ) : (
           <Link href="/routines" className="block text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
@@ -228,7 +252,7 @@ async function Today() {
           </Link>
         )}
 
-        <div>
+        {show("deadlines") && <div>
         <h2 id="soon-title" className="mb-3 text-lg font-semibold">
           בשבועיים הקרובים
         </h2>
@@ -245,11 +269,12 @@ async function Today() {
             }
           />
         </div>
-        </div>
+        </div>}
       </section>
 
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
-        <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />
+        {show("exams") && <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />}
+        {show("standings") && <>
         <h2 id="courses-title" className="mb-3 text-lg font-semibold">
           מצב בקורסים
         </h2>
@@ -277,8 +302,9 @@ async function Today() {
             );
           })}
         </ul>
+        </>}
       </section>
-      {later.length > 0 && (
+      {later.length > 0 && show("deadlines") && (
         <section aria-labelledby="later-title" className="min-w-0 lg:col-start-1">
             <h2 id="later-title" className="mb-3 text-lg font-semibold">אחר כך</h2>
             <div className="panel overflow-hidden">

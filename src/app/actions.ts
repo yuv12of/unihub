@@ -464,7 +464,7 @@ export async function searchPeople(query: string) {
   const q = query.trim();
   if (q.length < 2) return [];
   const { data } = await supabase.rpc("people", { p_query: q });
-  return (data ?? []) as { id: string; name: string; avatar_url: string | null; i_follow: string | null; follows_me: string | null }[];
+  return (data ?? []) as { id: string; name: string; avatar_url: string | null; avatar_emoji?: string | null; avatar_color?: string | null; i_follow: string | null; follows_me: string | null }[];
 }
 
 export async function followUser(id: string) {
@@ -657,4 +657,51 @@ export async function findCommonSlots(friendIds: string[], minutes: number) {
     }
   }
   return { slots, skipped };
+}
+
+// ---------- Profile & look ----------
+
+export interface ProfileInput {
+  name: string;
+  bio: string;
+  program: string;
+  study_year: string;
+  avatar_emoji: string;
+  avatar_color: string;
+  weekly_goal_minutes: number | null;
+}
+
+export async function saveProfile(input: ProfileInput) {
+  const { supabase, userId } = await requireUser();
+  const name = input.name.trim();
+  if (!name || name.length > 60) throw new Error("שם: עד 60 תווים");
+  const goal = input.weekly_goal_minutes == null || Number.isNaN(input.weekly_goal_minutes) ? null : Math.max(0, Math.min(6000, Math.round(input.weekly_goal_minutes)));
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      name,
+      bio: input.bio.trim().slice(0, 300) || null,
+      program: input.program.trim().slice(0, 80) || null,
+      study_year: input.study_year.trim().slice(0, 30) || null,
+      avatar_emoji: [...input.avatar_emoji.trim()].slice(0, 4).join("") || null,
+      avatar_color: /^[a-z]{3,10}$/.test(input.avatar_color) ? input.avatar_color : null,
+      weekly_goal_minutes: goal,
+    })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Look & feel (theme, palette, text size, calm mode, Today sections, focus music), kept per user. */
+export async function saveLook(patch: import("@/lib/themes").LookPrefs) {
+  const { supabase, userId } = await requireUser();
+  const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle();
+  const { PALETTES } = await import("@/lib/themes");
+  const next = { ...((data?.prefs as object) ?? {}), ...patch } as import("@/lib/themes").LookPrefs;
+  if (next.palette && !(next.palette in PALETTES)) delete next.palette;
+  if (next.music && !/^[A-Za-z0-9]{22}$/.test(next.music)) next.music = null;
+  if (next.hidden) next.hidden = next.hidden.filter((h) => /^[a-z]{2,20}$/.test(h)).slice(0, 20);
+  const { error } = await supabase.from("profiles").update({ prefs: next }).eq("id", userId);
+  if (error) throw new Error(error.message);
+  refresh();
 }

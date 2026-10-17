@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { saveLook } from "@/app/actions";
 
 type Theme = "system" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
@@ -24,8 +25,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
     } catch {}
     if (t === "system") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = t;
-    const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-    if (meta) meta.setAttribute("content", t === "dark" ? "#0c1322" : "#f4f6f9");
+    saveLook({ theme: t }).catch(() => {});
   };
   return (
     <button

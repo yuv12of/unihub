@@ -1,30 +1,30 @@
 import Link from "next/link";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { connection } from "next/server";
-import { supabaseEnabled } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Avatar } from "@/components/Avatar";
+import { LookSync } from "@/components/ProfileParts";
+import { getMyProfile } from "@/lib/userdata";
 
 async function currentUser() {
   await connection();
-  if (!supabaseEnabled) return null;
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  if (!claims?.email) return null;
-  const meta = (claims.user_metadata ?? {}) as { full_name?: string; name?: string };
-  return { email: claims.email as string, name: meta.full_name ?? meta.name ?? null };
+  return getMyProfile();
 }
 
-/** Sidebar footer on PC: name, email, sign out. */
+/** Sidebar footer on PC: picture + name (to the profile), sign out, theme. Also applies the saved look. */
 export async function UserPanel() {
-  const user = await currentUser();
-  if (!user) return null;
+  const me = await currentUser();
+  if (!me) return null;
+  const name = me.name ?? me.email.split("@")[0];
   return (
     <form action="/auth/signout" method="post" className="border-t border-rule pt-4 text-sm">
-      {user.name && <div className="font-medium truncate">{user.name}</div>}
-      <div className="text-ink-soft truncate" dir="ltr">
-        {user.email}
-      </div>
+      <LookSync prefs={me.prefs ?? {}} />
+      <Link href="/profile" className="flex items-center gap-2.5 rounded-lg p-1 hover:bg-rule/50">
+        <Avatar name={name} url={me.avatar_url} emoji={me.avatar_emoji} color={me.avatar_color} size={34} />
+        <span className="min-w-0">
+          <span className="block truncate font-medium">{name}</span>
+          <span className="block truncate text-xs text-ink-soft">הפרופיל שלי</span>
+        </span>
+      </Link>
       <div className="mt-2 flex items-center justify-between">
         <button className="text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">יציאה</button>
         <ThemeToggle />
@@ -33,25 +33,21 @@ export async function UserPanel() {
   );
 }
 
-/** Compact avatar + sign-out in the phone header. */
+/** Phone header: theme, settings, and the picture (to the profile). */
 export async function UserBadge() {
-  const user = await currentUser();
-  if (!user) return null;
-  const initial = (user.name ?? user.email).trim().charAt(0).toUpperCase();
+  const me = await currentUser();
+  if (!me) return null;
+  const name = me.name ?? me.email.split("@")[0];
   return (
-    <form action="/auth/signout" method="post" className="flex items-center gap-3 text-sm">
+    <div className="flex items-center gap-3 text-sm">
+      <LookSync prefs={me.prefs ?? {}} />
       <ThemeToggle compact />
-      <button className="text-ink-soft">יציאה</button>
       <Link href="/settings" className="text-ink-soft" aria-label="הגדרות">
         הגדרות
       </Link>
-      <span
-        className="grid size-8 place-items-center rounded-full bg-ink text-bg text-sm font-semibold"
-        aria-label={user.email}
-        title={user.email}
-      >
-        {initial}
-      </span>
-    </form>
+      <Link href="/profile" aria-label="הפרופיל שלי">
+        <Avatar name={name} url={me.avatar_url} emoji={me.avatar_emoji} color={me.avatar_color} size={32} />
+      </Link>
+    </div>
   );
 }

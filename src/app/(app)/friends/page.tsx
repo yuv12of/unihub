@@ -43,10 +43,10 @@ async function Friends() {
   const ws = weekStart(today);
   const myWeek = Object.entries(myDays).filter(([d]) => d >= ws && d <= today).reduce((n, [, m]) => n + m, 0);
   const league = [
-    { id: me ?? "me", name: "אני", avatar_url: null as string | null, minutes: myWeek, mine: true },
+    { id: me ?? "me", name: "אני", avatar_url: null as string | null, avatar_emoji: null as string | null | undefined, avatar_color: null as string | null | undefined, minutes: myWeek, mine: true },
     ...following.flatMap((p, i) => {
       const v = views[i];
-      return v?.share.study ? [{ id: p.id, name: p.name, avatar_url: p.avatar_url, minutes: summarize(v, today).week, mine: false }] : [];
+      return v?.share.study ? [{ id: p.id, name: p.name, avatar_url: p.avatar_url, avatar_emoji: p.avatar_emoji, avatar_color: p.avatar_color, minutes: summarize(v, today).week, mine: false }] : [];
     }),
   ].sort((a, b) => b.minutes - a.minutes);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
@@ -85,7 +85,7 @@ async function Friends() {
                 return (
                   <li key={p.id} className="panel p-4">
                     <Link href={`/friends/${p.id}`} className="flex items-center gap-3">
-                      <Avatar name={p.name} url={p.avatar_url} size={40} />
+                      <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} size={40} />
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold">{p.name}</div>
                         <div className="text-sm text-ink-soft">
@@ -147,7 +147,7 @@ async function Friends() {
             <ul className="panel divide-y divide-rule">
               {others.map((p) => (
                 <li key={p.id} className="flex items-center gap-3 px-4 py-3">
-                  <Avatar name={p.name} url={p.avatar_url} />
+                  <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} />
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">{p.name}</div>
                     <div className="text-xs text-ink-soft">
@@ -172,7 +172,7 @@ async function Friends() {
               {league.map((r, i) => (
                 <li key={r.id} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${r.mine ? "bg-highlight/30" : ""}`}>
                   <span className="w-5 text-center font-display text-lg tabular-nums">{i === 0 && r.minutes > 0 ? "🏆" : i + 1}</span>
-                  <Avatar name={r.name} url={r.avatar_url} size={26} />
+                  <Avatar name={r.name} url={r.avatar_url} emoji={r.avatar_emoji} color={r.avatar_color} size={26} />
                   <span className="min-w-0 flex-1 truncate text-sm">{r.mine ? "אני" : r.name.split(" ")[0]}</span>
                   <span className="text-sm tabular-nums text-ink-soft">{minutesLabel(r.minutes)}</span>
                 </li>

@@ -3,6 +3,7 @@
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { endStudyLive, setSessionStatus, startStudyLive } from "@/app/actions";
+import { FOCUS_PLAYLISTS, embedUrl, playlistUrl } from "@/lib/focusMusic";
 
 export function SessionToggle({
   sessionKey,
@@ -150,7 +151,7 @@ export function FocusTimer({
   const pct = Math.min(1, elapsed / total);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface px-6 text-center" role="dialog" aria-modal aria-label="טיימר ריכוז">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-surface px-6 py-8 text-center" role="dialog" aria-modal aria-label="טיימר ריכוז">
       <p className="text-sm text-ink-soft">
         {over ? "הזמן נגמר. כל הכבוד!" : withName ? `לומדים ביחד עם ${withName}` : "זמן ריכוז"}
       </p>
@@ -207,10 +208,66 @@ export function FocusTimer({
           ביטול
         </button>
       </div>
+      <FocusMusic />
       <p className="mt-6 max-w-xs text-xs text-ink-soft">
         הזמן שלמדת נספר לטובת המטלה. מה שנשאר יתוזמן מחדש בימים הבאים.
       </p>
     </div>,
     document.body,
+  );
+}
+
+/** The chosen Spotify playlist inside the timer: a small player, and a button to open the Spotify app. */
+function FocusMusic() {
+  const [id, setId] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  useEffect(() => {
+    try {
+      setId(localStorage.getItem("music"));
+    } catch {}
+  }, []);
+  const choose = (next: string) => {
+    setId(next);
+    setPicking(false);
+    try {
+      localStorage.setItem("music", next);
+    } catch {}
+  };
+  if (!id && !picking)
+    return (
+      <button type="button" onClick={() => setPicking(true)} className="mt-5 text-sm text-ink-soft underline underline-offset-4 decoration-rule">
+        🎧 מוזיקה לריכוז
+      </button>
+    );
+  return (
+    <div className="mt-5 w-full max-w-sm">
+      {picking || !id ? (
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {FOCUS_PLAYLISTS.map((p) => (
+            <button key={p.id} type="button" onClick={() => choose(p.id)} className="rounded-full border border-rule px-3 py-1 text-sm hover:border-ink">
+              {p.emoji} {p.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
+          <iframe
+            title="Spotify"
+            src={embedUrl(id)}
+            className="h-20 w-full rounded-xl border-0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+          />
+          <div className="mt-1.5 flex justify-center gap-4 text-xs text-ink-soft">
+            <a href={playlistUrl(id)} target="_blank" rel="noreferrer" className="underline underline-offset-4 decoration-rule">
+              פתיחה ב־Spotify
+            </a>
+            <button type="button" onClick={() => setPicking(true)} className="underline underline-offset-4 decoration-rule">
+              פלייליסט אחר
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

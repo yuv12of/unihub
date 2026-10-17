@@ -20,6 +20,7 @@ const items: Item[] = [
   { href: "/courses", label: "קורסים", icon: IconCourses },
   { href: "/study", label: "תרגול", icon: IconStudy },
   { href: "/mail", label: "דואר", icon: IconMail },
+  { href: "/profile", label: "פרופיל", icon: IconProfile },
   { href: "/settings", label: "הגדרות", icon: IconSettings },
   { href: "/admin", label: "חשבונות", icon: IconAdmin, badge: "admin", adminOnly: true },
 ];
@@ -245,6 +246,15 @@ function IconAdmin() {
     <svg {...iconProps}>
       <path d="M12 3.5 19 6v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z" />
       <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function IconProfile() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="8.5" r="3.6" />
+      <path d="M4.5 20c.9-3.8 3.9-5.8 7.5-5.8s6.6 2 7.5 5.8" />
     </svg>
   );
 }

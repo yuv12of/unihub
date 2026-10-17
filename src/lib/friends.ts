@@ -9,6 +9,15 @@ export interface FriendRaw {
   id: string;
   name: string;
   avatar_url: string | null;
+  avatar_emoji?: string | null;
+  avatar_color?: string | null;
+  bio?: string | null;
+  program?: string | null;
+  study_year?: string | null;
+  weekly_goal_minutes?: number | null;
+  member_since?: string;
+  cheers_received?: number;
+  friends_count?: number;
   share: { courses: boolean; progress: boolean; grades: boolean; study: boolean; schedule: "none" | "busy" | "details"; routines: boolean };
   courses: CourseRow[];
   progress: { course_code: string; semester: string; n: string; status: Status; grade?: number | null; due_override?: string | null }[];

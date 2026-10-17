@@ -4,6 +4,7 @@ import "@fontsource-variable/heebo";
 import "@fontsource/secular-one/hebrew-400.css";
 import "@fontsource/secular-one/latin-400.css";
 import "./globals.css";
+import { LOOK_BOOT } from "@/lib/themes";
 
 export const metadata: Metadata = {
   title: "Unihub",
@@ -31,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* Apply the saved light/dark choice before the first paint. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`,
+            __html: LOOK_BOOT,
           }}
         />
       </head>

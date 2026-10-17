@@ -101,7 +101,7 @@ export function FriendsSearch() {
           )}
           {results.map((p) => (
             <li key={p.id} className="flex items-center gap-2">
-              <Avatar name={p.name} url={p.avatar_url} size={28} />
+              <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} size={28} />
               <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
               <PersonActions id={p.id} iFollow={p.i_follow} followsMe={p.follows_me} />
             </li>
