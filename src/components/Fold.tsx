@@ -103,7 +103,7 @@ export function Tabs({
   };
   return (
     <div>
-      <div role="tablist" className="sticky top-[calc(env(safe-area-inset-top)+3.4rem)] z-[5] -mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-rule bg-bg/90 px-4 backdrop-blur sm:mx-0 sm:px-0 lg:top-0">
+      <div role="tablist" className="sticky top-[calc(env(safe-area-inset-top)+3.4rem)] z-[5] -mx-4 mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-rule [scrollbar-width:none] bg-bg/90 px-4 backdrop-blur sm:mx-0 sm:px-0 lg:top-0">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -112,7 +112,7 @@ export function Tabs({
             aria-selected={cur === t.key}
             onClick={() => choose(t.key)}
             className={`relative shrink-0 whitespace-nowrap px-3 py-2.5 text-sm transition-colors ${
-              cur === t.key ? "font-semibold text-ink after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:bg-ink" : "text-ink-soft hover:text-ink"
+              cur === t.key ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-ink" : "text-ink-soft hover:text-ink"
             }`}
           >
             {t.label}
