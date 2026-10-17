@@ -217,7 +217,7 @@ export interface Mail {
   subject: string | null;
   received_at: string;
   body_text: string | null;
-  body_html: string | null;
+  body_html?: string | null;
   summary: string | null;
   category: string | null;
   action_items: { text: string; date?: string }[] | null;
@@ -231,7 +231,8 @@ export async function getMails(limit = 200): Promise<Mail[]> {
   const { data } = await supabase
     .from("mails")
     .select(
-      "id, sender, subject, received_at, body_text, body_html, summary, category, action_items, is_read, attachments:mail_attachments(id, filename, size_bytes)",
+      // body_html is left out: it can be megabytes; the open message loads it on its own (mailHtml).
+      "id, sender, subject, received_at, body_text, summary, category, action_items, is_read, attachments:mail_attachments(id, filename, size_bytes)",
     )
     .order("received_at", { ascending: false })
     .limit(limit);

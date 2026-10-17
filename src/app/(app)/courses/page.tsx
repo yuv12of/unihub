@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Gallery } from "@/components/Fold";
 import { connection } from "next/server";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
@@ -65,7 +66,7 @@ async function Courses() {
       <div className="mt-6">
         <AddCourse semester={semester.semester} />
       </div>
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      <Gallery className="mt-8 items-start sm:gap-6" cols="sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3" item="[&>*]:w-[88%]">
         {coursesFor(progress, base).map((c) => {
           const theme = c;
           const st = standing(c, progress, today);
@@ -178,7 +179,7 @@ async function Courses() {
             </article>
           );
         })}
-      </div>
+      </Gallery>
     </>
   );
 }

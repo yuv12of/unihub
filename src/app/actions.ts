@@ -334,6 +334,13 @@ export async function saveJewish(formData: FormData) {
   refresh();
 }
 
+/** The formatted (HTML) version of one message, loaded when it's opened. */
+export async function mailHtml(id: string): Promise<string | null> {
+  const { supabase } = await requireUser();
+  const { data } = await supabase.from("mails").select("body_html").eq("id", id).maybeSingle();
+  return (data?.body_html as string | null) ?? null;
+}
+
 // ---------- Accounts (admin) ----------
 
 export async function setAccountStatus(userId: string, status: "approved" | "blocked" | "pending") {

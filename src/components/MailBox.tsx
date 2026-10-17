@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { markMailRead } from "@/app/actions";
+import { mailHtml, markMailRead } from "@/app/actions";
 import type { Mail } from "@/lib/userdata";
 
 const when = (iso: string) => {
@@ -178,7 +178,17 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
 
 /** Shows the original formatted email (images, links) safely; falls back to readable text. */
 function MailBody({ mail }: { mail: Mail }) {
-  const [mode, setMode] = useState<"html" | "text">(mail.body_html ? "html" : "text");
+  const [html, setHtml] = useState<string | null>(mail.body_html ?? null);
+  const [mode, setMode] = useState<"html" | "text">("html");
+  useEffect(() => {
+    if (mail.body_html !== undefined) return;
+    let live = true;
+    mailHtml(mail.id).then((h) => live && setHtml(h), () => {});
+    return () => {
+      live = false;
+    };
+  }, [mail.id, mail.body_html]);
+  mail = { ...mail, body_html: html };
   const text = clean(mail.body_text);
   return (
     <div className="mt-5 border-t border-rule pt-4">

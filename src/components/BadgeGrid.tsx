@@ -1,3 +1,4 @@
+import { Gallery } from "@/components/Fold";
 import { BADGE_GROUPS, type Badge } from "@/lib/badges";
 
 export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compact?: boolean }) {
@@ -23,9 +24,9 @@ export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compac
       {groups.map(({ g, list }) => (
         <div key={g}>
           <h3 className="mb-2 text-sm font-semibold text-ink-soft">{BADGE_GROUPS[g]}</h3>
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <Gallery cols="sm:grid-cols-3 lg:grid-cols-4" item="[&>*]:w-[44%]">
             {list.map((b) => (
-              <li
+              <div
                 key={b.id}
                 className={`rounded-xl border p-3 ${b.earned ? "border-transparent bg-highlight/25" : "border-rule bg-surface"}`}
               >
@@ -44,9 +45,9 @@ export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compac
                     </div>
                   </div>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </Gallery>
         </div>
       ))}
     </div>

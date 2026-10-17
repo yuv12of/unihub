@@ -11,6 +11,7 @@ import { Avatar } from "@/components/Avatar";
 import { BadgeGrid } from "@/components/BadgeGrid";
 import { Heatmap } from "@/components/Heatmap";
 import { LookPicker, ProfileEditor } from "@/components/ProfileParts";
+import { Tabs } from "@/components/Fold";
 import { SpotifyCard } from "@/components/SpotifyCard";
 
 export default function ProfilePage() {
@@ -95,21 +96,36 @@ async function Profile() {
         </div>
       )}
 
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">תגים</h2>
-        <BadgeGrid badges={badges} />
-      </section>
-
-      <section className="panel overflow-x-auto p-5">
-        <h2 className="mb-3 font-semibold">ימי לימוד</h2>
-        <Heatmap days={days} today={today} weeks={20} />
-      </section>
-
-      <section className="panel p-5">
-        <h2 className="mb-4 text-lg font-semibold">התאמה אישית</h2>
-        <LookPicker initial={me.prefs ?? {}} />
-        <SpotifyCard />
-      </section>
+      <Tabs
+        id="profile"
+        anchors={{ music: "look" }}
+        tabs={[
+          {
+            key: "badges",
+            label: `תגים (${badges.filter((b) => b.earned).length}/${badges.length})`,
+            panel: <BadgeGrid badges={badges} />,
+          },
+          {
+            key: "days",
+            label: "ימי לימוד",
+            panel: (
+              <section className="panel overflow-x-auto p-5">
+                <Heatmap days={days} today={today} weeks={20} />
+              </section>
+            ),
+          },
+          {
+            key: "look",
+            label: "התאמה אישית",
+            panel: (
+              <section className="panel p-5">
+                <LookPicker initial={me.prefs ?? {}} />
+                <SpotifyCard />
+              </section>
+            ),
+          },
+        ]}
+      />
 
       <form action="/auth/signout" method="post">
         <button className="rounded-lg border border-rule px-4 py-2 text-sm text-ink-soft hover:border-ink">יציאה מהחשבון</button>

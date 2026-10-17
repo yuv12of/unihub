@@ -5,6 +5,7 @@ import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
 import { getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { Fold, Gallery } from "@/components/Fold";
 import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
 import { computeBadges } from "@/lib/badges";
@@ -135,7 +136,7 @@ async function Today() {
           <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">
             {formatHebrewDate(today, { day: "numeric", month: "long" })}
           </h1>
-          {show("clock") && <LiveClock seconds className="font-display text-3xl text-ink-soft sm:text-5xl" />}
+          {show("clock") && <LiveClock seconds className="font-display text-2xl text-ink-soft sm:text-5xl" />}
         </div>
         {(academicToday.length > 0 || nextAcademic) && (
           <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
@@ -266,15 +267,26 @@ async function Today() {
             )}
           </div>
           {plan.warnings.length > 0 && (
-            <p className="mt-3 text-sm leading-relaxed">
-              <span className="hl">
-                אין מספיק זמן לימוד לפני{" "}
-                {plan.warnings.map((w) => `${w.title} (חסרות ${minutesLabel(w.missingMinutes)})`).join(", ")}.
-              </span>{" "}
-              <Link href="/settings" className="text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
+            <details className="group mt-3 text-sm">
+              <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+                <span aria-hidden>⚠️</span>
+                <span className="hl">
+                  חסרות {minutesLabel(plan.warnings.reduce((n, w) => n + w.missingMinutes, 0))} לימוד לפני {plan.warnings.length}{" "}
+                  {plan.warnings.length === 1 ? "מטלה" : "מטלות"}
+                </span>
+                <span className="text-ink-soft group-open:hidden">פירוט</span>
+              </summary>
+              <ul className="mt-2 space-y-1 ps-7 text-ink-soft">
+                {plan.warnings.map((w) => (
+                  <li key={w.title}>
+                    {w.title}: חסרות {minutesLabel(w.missingMinutes)}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/settings#study" className="mt-2 inline-block ps-7 text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
                 הוספת זמני לימוד
               </Link>
-            </p>
+            </details>
           )}
         </div>
 
@@ -312,16 +324,16 @@ async function Today() {
         <h2 id="courses-title" className="mb-3 text-lg font-semibold">
           מצב בקורסים
         </h2>
-        <ul className="space-y-3">
+        <Gallery cols="sm:grid-cols-2 lg:grid-cols-1" className="lg:gap-3">
           {courses.map((c) => {
             const theme = themeOf(courses, c.code);
             const st = standing(c, progress, today);
             const s = standingSentence(st, c.assignmentWeight.min, c.assignmentWeight.max);
             return (
-              <li key={c.code}>
+              <div key={c.code}>
                 <Link
                   href={`/courses#c${c.code}`}
-                  className="panel block px-4 py-4 transition-colors hover:border-ink-soft"
+                  className="panel block h-full px-4 py-4 transition-colors hover:border-ink-soft"
                 >
                   <div className="flex items-center gap-2">
                     <span className="size-2.5 rounded-full" style={{ background: theme.color }} aria-hidden />
@@ -332,15 +344,21 @@ async function Today() {
                     <span className={s.warn ? "hl" : undefined}>{s.text}</span>
                   </p>
                 </Link>
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </Gallery>
         </>}
       </section>
       {later.length > 0 && show("deadlines") && (
-        <section aria-labelledby="later-title" className="min-w-0 lg:col-start-1">
-            <h2 id="later-title" className="mb-3 text-lg font-semibold">אחר כך</h2>
+        <div className="min-w-0 lg:col-start-1">
+          <Fold
+            id="today-later"
+            bare
+            title="אחר כך"
+            summary={`${later.length} הגשות, הבאה ב־${formatHebrewDate(later[0].due, { day: "numeric", month: "numeric" })}`}
+            defaultOpen={false}
+          >
             <div className="panel overflow-hidden">
               <DeadlineList rows={later.map(toRow)} editable={supabaseEnabled} empty={null} />
             </div>
@@ -350,7 +368,8 @@ async function Today() {
             >
               כל המטלות בסמסטר
             </Link>
-        </section>
+          </Fold>
+        </div>
       )}
     </div>
   );
