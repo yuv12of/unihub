@@ -66,7 +66,7 @@ async function Courses() {
       <div className="mt-6">
         <AddCourse semester={semester.semester} />
       </div>
-      <Gallery className="mt-8 items-start sm:gap-6" cols="sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3" item="[&>*]:w-[88%]">
+      <Gallery className="mt-8 items-start lg:gap-6" until="lg" cols="lg:grid-cols-2 xl:grid-cols-3" item="[&>*]:w-[88%] sm:[&>*]:w-[70%]">
         {coursesFor(progress, base).map((c) => {
           const theme = c;
           const st = standing(c, progress, today);

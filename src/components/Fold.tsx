@@ -132,7 +132,10 @@ export function Gallery({
   className = "",
   cols = "sm:grid-cols-2",
   item = "[&>*]:w-[82%]",
+  until = "sm",
 }: {
+  /** swipe below this breakpoint, grid from it up */
+  until?: "sm" | "lg";
   children: ReactNode;
   className?: string;
   /** grid columns from the sm breakpoint up */
@@ -142,7 +145,9 @@ export function Gallery({
 }) {
   return (
     <div
-      className={`-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 ${cols} ${item} [&>*]:shrink-0 [&>*]:snap-start sm:[&>*]:w-auto ${className}`}
+      className={`-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] ${
+        until === "lg" ? "sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:overflow-visible lg:px-0 lg:pb-0 lg:[&>*]:w-auto" : "sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:[&>*]:w-auto"
+      } ${cols} ${item} [&>*]:shrink-0 [&>*]:snap-start ${className}`}
     >
       {children}
     </div>
