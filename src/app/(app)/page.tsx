@@ -5,6 +5,7 @@ import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
 import { getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
 import { computeBadges } from "@/lib/badges";
 import { BadgeToast } from "@/components/BadgeToast";
@@ -122,9 +123,12 @@ async function Today() {
       {/* Day header spans both columns */}
       <header className="lg:col-span-2">
         <p className="text-ink-soft">{formatHebrewDate(today, { weekday: "long" })}</p>
-        <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">
-          {formatHebrewDate(today, { day: "numeric", month: "long" })}
-        </h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+          <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">
+            {formatHebrewDate(today, { day: "numeric", month: "long" })}
+          </h1>
+          {show("clock") && <LiveClock seconds className="font-display text-3xl text-ink-soft sm:text-5xl" />}
+        </div>
         {(academicToday.length > 0 || nextAcademic) && (
           <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
             <span aria-hidden>🎓</span>

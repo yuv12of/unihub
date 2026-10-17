@@ -122,6 +122,7 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
 }
 
 export const TODAY_SECTIONS: [string, string][] = [
+  ["clock", "שעון"],
   ["quickadd", "הוספה מהירה"],
   ["live", "לומדים עכשיו"],
   ["dayoff", "כפתור יום קשה"],

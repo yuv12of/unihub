@@ -4,6 +4,7 @@ import { SideNav, TabBar } from "@/components/Nav";
 import { getBadges } from "@/lib/userdata";
 import { connection } from "next/server";
 import { UserBadge, UserPanel } from "@/components/UserBadge";
+import { LiveClock } from "@/components/LiveClock";
 import { ScrollReset } from "@/components/ScrollReset";
 import { semester } from "@/lib/semester";
 
@@ -17,7 +18,10 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Link href="/" className="font-display text-2xl">
           Unihub
         </Link>
-        <p className="mt-1 text-sm text-ink-soft">סמסטר {semester.semester}</p>
+        <p className="mt-1 flex justify-between text-sm text-ink-soft">
+          <span>סמסטר {semester.semester}</span>
+          <LiveClock />
+        </p>
         <Suspense fallback={<div className="mt-8 h-96" />}>
           <SideNavWithBadges />
         </Suspense>
