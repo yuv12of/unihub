@@ -1,7 +1,7 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
-import { saveProgress } from "@/app/actions";
+import { saveProgress } from "@/app/act";
 import type { Progress, Status } from "@/lib/progress";
 
 export interface ChecklistItem {

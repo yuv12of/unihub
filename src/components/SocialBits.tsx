@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { addEvent, findCommonSlots, markNotificationsRead, sendCheer } from "@/app/actions";
+import { addEvent, findCommonSlots, markNotificationsRead, sendCheer } from "@/app/act";
 
 const CHEERS = ["👏", "🔥", "💪"];
 

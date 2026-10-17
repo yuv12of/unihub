@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { SideNav, TabBar } from "@/components/Nav";
-import { getBadges } from "@/lib/userdata";
+import { getBadges, getMyProfile } from "@/lib/userdata";
 import { connection } from "next/server";
 import { UserBadge, UserPanel } from "@/components/UserBadge";
 import { LiveClock } from "@/components/LiveClock";
 import { ScrollReset } from "@/components/ScrollReset";
+import { SwRegister } from "@/components/SwRegister";
 import { semester } from "@/lib/semester";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
@@ -36,6 +37,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={null}>
           <ScrollReset />
         </Suspense>
+        <SwRegister />
         {/* Phone: slim header */}
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rule bg-bg/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur lg:hidden">
           <Link href="/" className="font-display text-xl">
@@ -63,5 +65,6 @@ async function SideNavWithBadges() {
 
 async function TabBarWithBadges() {
   await connection();
-  return <TabBar badges={await getBadges()} />;
+  const [badges, me] = await Promise.all([getBadges(), getMyProfile()]);
+  return <TabBar badges={badges} tabs={me?.prefs?.tabs} />;
 }

@@ -8,6 +8,8 @@ async function me() {
   const { data } = await sb.auth.getClaims();
   const userId = data?.claims?.sub;
   if (!userId) throw new Error("Not signed in");
+  const { data: profile } = await sb.from("profiles").select("status").maybeSingle();
+  if (profile?.status !== "approved") throw new Error("החשבון עוד לא אושר");
   return { sb, userId };
 }
 

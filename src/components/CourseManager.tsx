@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addCourse, removeCourse, updateCourseLook } from "@/app/actions";
+import { addCourse, removeCourse, updateCourseLook } from "@/app/act";
 import { PALETTE } from "@/lib/semester";
 
 export function AddCourse({ semester }: { semester: string }) {

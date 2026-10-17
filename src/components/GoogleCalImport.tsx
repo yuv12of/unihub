@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveGoogleFeed, syncGoogleNow } from "@/app/actions";
+import { saveGoogleFeed, syncGoogleNow } from "@/app/act";
 import type { OpalFeed } from "@/lib/userdata";
 
 const when = (iso: string) =>

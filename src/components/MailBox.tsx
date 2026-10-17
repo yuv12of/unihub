@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { mailHtml, markMailRead } from "@/app/actions";
+import { mailHtml, markMailRead } from "@/app/act";
 import type { Mail } from "@/lib/userdata";
 
 const when = (iso: string) => {

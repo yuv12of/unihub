@@ -93,11 +93,17 @@ async function hebcalYear(city: CityKey, year: number): Promise<HebcalItem[]> {
     b: String(c.b),
     year: String(year),
   });
+  // A failure throws, so it isn't cached: the next page view simply tries again.
+  const res = await fetch(`https://www.hebcal.com/hebcal?${q}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`Hebcal ${res.status}`);
+  const json = (await res.json()) as { items?: HebcalItem[] };
+  if (!json.items?.length) throw new Error("Hebcal: no items");
+  return json.items;
+}
+
+async function hebcalYearSafe(city: CityKey, year: number): Promise<HebcalItem[]> {
   try {
-    const res = await fetch(`https://www.hebcal.com/hebcal?${q}`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { items?: HebcalItem[] };
-    return json.items ?? [];
+    return await hebcalYear(city, year);
   } catch {
     return [];
   }
@@ -107,7 +113,7 @@ async function hebcalYear(city: CityKey, year: number): Promise<HebcalItem[]> {
 export async function jewishDays(prefs: JewishPrefs, from: string, to: string): Promise<Record<string, JewishDay>> {
   if (!prefs.show && !prefs.times && !prefs.rest) return {};
   const years = new Set([Number(from.slice(0, 4)), Number(to.slice(0, 4))]);
-  const items = (await Promise.all([...years].map((y) => hebcalYear(prefs.city, y)))).flat();
+  const items = (await Promise.all([...years].map((y) => hebcalYearSafe(prefs.city, y)))).flat();
   const out: Record<string, JewishDay> = {};
   const get = (date: string) => (out[date] ??= { date, holidays: [], rest: new Date(`${date}T12:00:00Z`).getUTCDay() === 6 });
   for (const it of items) {

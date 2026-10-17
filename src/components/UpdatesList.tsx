@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { applyUpdate, dismissUpdate } from "@/app/actions";
+import { applyUpdate, dismissUpdate } from "@/app/act";
 import type { Update } from "@/lib/userdata";
 
 const icon: Record<Update["kind"], string> = {

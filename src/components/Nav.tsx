@@ -25,6 +25,10 @@ const items: Item[] = [
   { href: "/admin", label: "חשבונות", icon: IconAdmin, badge: "admin", adminOnly: true },
 ];
 const PHONE_MAIN = 4; // the rest live under "more"
+/** Default phone tabs; each user can pick their own four (Profile → personalisation). */
+export const DEFAULT_TABS = ["/", "/semester", "/courses", "/routines"];
+/** Pages that can sit in the phone tab bar, for the picker. */
+export const TAB_CHOICES = items.filter((i) => !i.adminOnly).map((i) => ({ href: i.href, label: i.label }));
 
 function useActive() {
   const path = usePathname();
@@ -69,14 +73,15 @@ export function SideNav({ badges = {} }: { badges?: Badges }) {
 }
 
 /** Bottom tab bar on phones: four main places + "more". */
-export function TabBar({ badges = {} }: { badges?: Badges }) {
+export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[] | null }) {
   const isActive = useActive();
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
   const all = visible(badges);
-  const main = all.slice(0, PHONE_MAIN);
-  const more = all.slice(PHONE_MAIN);
+  const chosen = (tabs?.length ? tabs : DEFAULT_TABS).filter((h) => all.some((i) => i.href === h)).slice(0, PHONE_MAIN);
+  const main = chosen.map((h) => all.find((i) => i.href === h)!);
+  const more = all.filter((i) => !chosen.includes(i.href));
   const moreActive = more.some((i) => isActive(i.href));
   const moreBadge = more.reduce((n, i) => n + ((i.badge && badges[i.badge]) || 0), 0);
   const tab = "relative flex flex-col items-center gap-1 pt-3 pb-1.5 text-[12px]";
@@ -107,6 +112,11 @@ export function TabBar({ badges = {} }: { badges?: Badges }) {
                 </Link>
               </li>
             ))}
+            <li className="col-span-3 text-center">
+              <Link href="/profile#look" className="text-xs text-ink-soft underline underline-offset-4 decoration-rule">
+                בחירת הלשוניות בסרגל
+              </Link>
+            </li>
           </ul>
         )}
         <ul className="mx-auto grid max-w-lg grid-cols-5">

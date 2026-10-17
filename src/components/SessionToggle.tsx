@@ -2,7 +2,7 @@
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { endStudyLive, setSessionStatus, startStudyLive } from "@/app/actions";
+import { endStudyLive, setSessionStatus, startStudyLive } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
 
 export function SessionToggle({

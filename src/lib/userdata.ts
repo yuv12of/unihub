@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, courseFromRow, semester, type Course, type CourseRow } from "@/lib/semester";
+import { addDays, courseFromRow, semester, todayInIsrael, type Course, type CourseRow } from "@/lib/semester";
 import { restFor } from "@/lib/hebcal";
 import { defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { planFor } from "@/lib/planfor";
@@ -148,7 +148,7 @@ export async function getPendingInvites(): Promise<Invite[]> {
     .select(`status, inviter, event:user_events(${EVENT_COLS})`)
     .eq("invitee", me ?? "")
     .eq("status", "pending");
-  return ((data ?? []) as unknown as Invite[]).filter((i) => i.event && i.event.date >= new Date().toISOString().slice(0, 10));
+  return ((data ?? []) as unknown as Invite[]).filter((i) => i.event && i.event.date >= todayInIsrael());
 }
 
 export async function getSessionRows(): Promise<{ session_key: string; status: "done" | "skipped"; minutes: number | null }[]> {
@@ -342,6 +342,14 @@ export async function getGoogleFeed(): Promise<OpalFeed | null> {
   const { data } = await supabase.from("external_feeds").select("url, last_synced_at, last_status, last_count").eq("kind", "google").maybeSingle();
   return data ? { ...data, url: data.url.replace(/private-[0-9a-f]+/, "private-••••") } : null;
 }
+
+/** Whether this user connected Spotify (cheap check, so players render only for them). */
+export const hasSpotify = cache(async (): Promise<boolean> => {
+  if (!supabaseEnabled || !process.env.SPOTIFY_CLIENT_ID) return false;
+  const supabase = await createClient();
+  const { count } = await supabase.from("spotify_tokens").select("user_id", { count: "exact", head: true });
+  return (count ?? 0) > 0;
+});
 
 export interface Person {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { answerFollow, followUser, removeFollower, saveShare, searchPeople, unfollow, type ShareSettings } from "@/app/actions";
+import { answerFollow, followUser, removeFollower, saveShare, searchPeople, unfollow, type ShareSettings } from "@/app/act";
 import { Avatar } from "@/components/Avatar";
 
 const btn = "rounded-full px-3 py-1.5 text-sm disabled:opacity-50";

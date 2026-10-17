@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { quickAdd } from "@/app/actions";
+import { quickAdd } from "@/app/act";
 import { parseQuick } from "@/lib/quickAdd";
 
 /** One line → an event, with a preview of what was understood before saving. */

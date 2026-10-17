@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { saveLook } from "@/app/actions";
+import { saveLook } from "@/app/act";
 
 type Theme = "system" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };

@@ -21,6 +21,8 @@ export interface LookPrefs {
   hidden?: string[];
   /** Spotify playlist id (or full link) for the focus timer */
   music?: string | null;
+  /** phone tab bar: up to 4 page paths */
+  tabs?: string[];
 }
 
 /** Applies look prefs to <html> and remembers them in this browser (read before first paint). */

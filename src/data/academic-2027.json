@@ -1,9 +1,9 @@
 {
   "source": "https://academic.openu.ac.il/yedion/timetable/pages/default.aspx (updated 04/10/2026)",
   "events": [
-    { "date": "2026-10-25", "title": "תחילת סמסטר א2027" },
+    { "date": "2026-10-25", "title": "תחילת סמסטר 2027א" },
     { "date": "2026-12-06", "title": "חופשת חנוכה (אין מפגשים)", "holiday": true },
-    { "date": "2027-01-31", "title": "סיום סמסטר א2027" },
+    { "date": "2027-01-31", "title": "סיום סמסטר 2027א" },
     { "date": "2027-02-01", "end": "2027-03-05", "title": "חופשת סמסטר" },
     { "date": "2027-03-07", "title": "תחילת סמסטר ב2027" },
     { "date": "2027-03-23", "title": "חופשת פורים", "holiday": true },

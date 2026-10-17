@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { ensurePushKey, removePushSubscription, savePushSubscription, sendTestPush } from "@/app/actions";
+import { ensurePushKey, removePushSubscription, savePushSubscription, sendTestPush } from "@/app/act";
 
 function urlB64ToUint8Array(base64: string) {
   const pad = "=".repeat((4 - (base64.length % 4)) % 4);

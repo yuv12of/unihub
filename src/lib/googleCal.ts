@@ -6,7 +6,6 @@
  * events so nothing comes back twice.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { toLocal } from "@/lib/icsParse";
 import { addDays, todayInIsrael } from "@/lib/semester";
 
 export function isGoogleIcsUrl(url: string) {
@@ -47,7 +46,6 @@ function unfold(text: string): RawEvent[] {
 }
 
 const unescape = (v: string) => v.replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1").trim();
-const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const toTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const dayNum = (d: string) => Math.round(Date.parse(`${d}T00:00:00Z`) / 86_400_000);
 const weekday = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
@@ -69,7 +67,57 @@ function parseRule(rule: string) {
   return r;
 }
 
-/** Does date d match the rule (ignoring COUNT/UNTIL)? */
+const IL = "Asia/Jerusalem";
+
+/** Offset (ms) of a time zone from UTC at instant t. Unknown zones count as Israel. */
+function zoneOffset(t: number, tz: string): number {
+  if (tz === "UTC") return 0;
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(new Date(t));
+  } catch {
+    return tz === IL ? 0 : zoneOffset(t, IL);
+  }
+  const g = (k: string) => Number(parts.find((x) => x.type === k)!.value);
+  return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute")) - (t - (t % 60_000));
+}
+
+/** Wall-clock date + time in a zone → UTC milliseconds. */
+function zonedToUtc(date: string, time: string, tz: string): number {
+  const [y, m, d] = date.split("-").map(Number);
+  const [h, mi] = time.split(":").map(Number);
+  const wall = Date.UTC(y, m - 1, d, h, mi);
+  let t = wall - zoneOffset(wall, tz);
+  t = wall - zoneOffset(t, tz); // second pass settles DST edges
+  return t;
+}
+
+function utcToIsrael(t: number): { date: string; min: number } {
+  const local = t + zoneOffset(t, IL);
+  const d = new Date(local);
+  return { date: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+
+/** A DATE or DATE-TIME as written in the file, with the zone it's written in. */
+function rawDT(p: Prop | undefined) {
+  if (!p) return null;
+  const m = p.value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(?:\d{2})?(Z)?)?/);
+  if (!m) return null;
+  const date = `${m[1]}-${m[2]}-${m[3]}`;
+  if (!m[4] || /VALUE=DATE(?!-)/.test(p.params)) return { date, time: null as string | null, tz: IL };
+  const tzid = p.params.match(/TZID="?([^";:]+)"?/)?.[1];
+  return { date, time: `${m[4]}:${m[5]}`, tz: m[6] ? "UTC" : (tzid ?? IL) };
+}
+
+/** Does date d match the rule (ignoring COUNT/UNTIL)? Dates are in the event's own zone. */
 function matches(rule: Record<string, string>, start: string, d: string) {
   const interval = Math.max(1, Number(rule.INTERVAL ?? 1));
   const diffDays = dayNum(d) - dayNum(start);
@@ -80,7 +128,10 @@ function matches(rule: Record<string, string>, start: string, d: string) {
     case "DAILY":
       return diffDays % interval === 0;
     case "WEEKLY": {
-      const weeks = Math.floor((dayNum(d) - weekday(d) - (dayNum(start) - weekday(start))) / 7);
+      // Weeks start on WKST (Monday unless the rule says otherwise, as in RFC 5545).
+      const wkst = Math.max(0, WD.indexOf(rule.WKST ?? "MO"));
+      const weekOf = (x: string) => dayNum(x) - ((weekday(x) - wkst + 7) % 7);
+      const weeks = Math.round((weekOf(d) - weekOf(start)) / 7);
       if (weeks % interval) return false;
       return byday.length ? byday.some((b) => b.slice(-2) === WD[weekday(d)]) : weekday(d) === weekday(start);
     }
@@ -107,38 +158,78 @@ function matches(rule: Record<string, string>, start: string, d: string) {
   }
 }
 
-function instancesOf(ev: RawEvent, from: string, to: string): Instance[] {
-  const s = ev.props.DTSTART && toLocal(ev.props.DTSTART.value, ev.props.DTSTART.params);
+/** The Israel date of an occurrence that starts on `date` (in the event's zone): used to match moved occurrences. */
+function israelDayOf(start: NonNullable<ReturnType<typeof rawDT>>, date: string) {
+  return start.time ? utcToIsrael(zonedToUtc(date, start.time, start.tz)).date : date;
+}
+
+function instancesOf(ev: RawEvent, from: string, to: string, skip: Set<string> = new Set()): Instance[] {
+  const s = rawDT(ev.props.DTSTART);
   if (!s) return [];
-  const e = ev.props.DTEND ? toLocal(ev.props.DTEND.value, ev.props.DTEND.params) : null;
-  let length = 60;
+  const e = rawDT(ev.props.DTEND);
+  let lengthMs = 60 * 60_000;
   let days = 1;
-  if (s.time && e?.time) length = Math.max(0, dayNum(e.date) * 1440 + toMin(e.time) - (dayNum(s.date) * 1440 + toMin(s.time)));
+  if (s.time && e?.time) lengthMs = Math.max(0, zonedToUtc(e.date, e.time, e.tz) - zonedToUtc(s.date, s.time, s.tz));
   else if (!s.time && e) days = Math.max(1, Math.min(14, dayNum(e.date) - dayNum(s.date)));
   else if (ev.props.DURATION) {
-    const m = ev.props.DURATION.value.match(/P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?/);
-    if (m) length = Number(m[1] ?? 0) * 1440 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
+    const m = ev.props.DURATION.value.match(/P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?/);
+    if (m) {
+      const min = Number(m[1] ?? 0) * 7 * 1440 + Number(m[2] ?? 0) * 1440 + Number(m[3] ?? 0) * 60 + Number(m[4] ?? 0);
+      if (s.time) lengthMs = min * 60_000;
+      else days = Math.max(1, Math.min(14, Math.round(min / 1440)));
+    }
   }
-  const make = (date: string): Instance => {
-    if (!s.time) return { date, start: null, end: null, days };
-    const end = Math.min(toMin(s.time) + length, 23 * 60 + 59);
-    return { date, start: s.time, end: toTime(end), days: 1 };
+
+  /** One occurrence (date in the event's zone) → Israel-time pieces, one per day it covers. */
+  const make = (date: string): Instance[] => {
+    if (!s.time) return [{ date, start: null, end: null, days }];
+    const a = zonedToUtc(date, s.time, s.tz);
+    const startIL = utcToIsrael(a);
+    const endIL = utcToIsrael(a + lengthMs);
+    const out: Instance[] = [];
+    for (let d = startIL.date, i = 0; d <= endIL.date && i < 14; d = addDays(d, 1), i++) {
+      const from = d === startIL.date ? startIL.min : 0;
+      const until = d === endIL.date ? endIL.min : 23 * 60 + 59;
+      if (until > from || (d === startIL.date && lengthMs === 0)) out.push({ date: d, start: toTime(from), end: toTime(Math.max(from, until)), days: 1 });
+    }
+    return out;
   };
 
   const rrule = ev.props.RRULE?.value;
-  if (!rrule) return s.date <= to && addDays(s.date, days - 1) >= from ? [make(s.date)] : [];
+  if (!rrule) return make(s.date).filter((x) => addDays(x.date, x.days - 1) >= from && x.date <= to);
 
   const rule = parseRule(rrule);
-  const until = rule.UNTIL ? toLocal(rule.UNTIL, "")?.date ?? to : to;
   const count = rule.COUNT ? Number(rule.COUNT) : Infinity;
-  const ex = new Set(ev.exdates.map((x) => toLocal(x, ev.props.DTSTART.params)?.date).filter(Boolean) as string[]);
+  // UNTIL: a date (inclusive) or an instant.
+  const untilRaw = rule.UNTIL?.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/);
+  const untilDate = untilRaw ? `${untilRaw[1]}-${untilRaw[2]}-${untilRaw[3]}` : null;
+  const untilMs = untilRaw?.[4] ? (untilRaw[7] ? Date.UTC(+untilRaw[1], +untilRaw[2] - 1, +untilRaw[3], +untilRaw[4], +untilRaw[5], +(untilRaw[6] ?? 0)) : zonedToUtc(untilDate!, `${untilRaw[4]}:${untilRaw[5]}`, s.tz)) : null;
+  const ex = new Set(
+    ev.exdates
+      .map((x) => {
+        const r = rawDT({ value: x, params: ev.props.DTSTART.params });
+        if (!r) return null;
+        // An exception written in UTC: find its date in the event's own zone.
+        if (/Z$/.test(x) && s.time && s.tz !== "UTC") {
+          const t = Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8), +x.slice(9, 11), +x.slice(11, 13));
+          return new Date(t + zoneOffset(t, s.tz)).toISOString().slice(0, 10);
+        }
+        return r.date;
+      })
+      .filter(Boolean) as string[],
+  );
+
   const out: Instance[] = [];
   let n = 0;
-  const last = until < to ? until : to;
-  for (let d = s.date, guard = 0; d <= last && n < count && guard < 4000; d = addDays(d, 1), guard++) {
+  // Without COUNT there's no need to walk from the first occurrence years ago: start near the window.
+  const begin = count === Infinity ? (s.date > addDays(from, -15) ? s.date : addDays(from, -15)) : s.date;
+  const lastDay = untilDate && untilDate < addDays(to, 1) ? untilDate : addDays(to, 1);
+  for (let d = begin, guard = 0; d <= lastDay && n < count && guard < 20000; d = addDays(d, 1), guard++) {
     if (!matches(rule, s.date, d)) continue;
+    if (untilMs != null && s.time && zonedToUtc(d, s.time, s.tz) > untilMs) break;
     n++;
-    if (d >= from && !ex.has(d)) out.push(make(d));
+    if (ex.has(d) || skip.has(israelDayOf(s, d))) continue;
+    for (const piece of make(d)) if (addDays(piece.date, piece.days - 1) >= from && piece.date <= to) out.push(piece);
   }
   return out;
 }
@@ -159,12 +250,13 @@ export function googleToRows(text: string, today = todayInIsrael()): GoogleRow[]
   const to = addDays(today, 180);
   const raw = unfold(text);
   // Single occurrences that were moved or cancelled: "uid|original date" → the new version.
-  const moved = new Map<string, RawEvent>();
+  const moved = new Map<string, Set<string>>();
   for (const ev of raw) {
-    const rid = ev.props["RECURRENCE-ID"];
-    if (!rid) continue;
-    const d = toLocal(rid.value, rid.params)?.date;
-    if (d) moved.set(`${ev.props.UID?.value}|${d}`, ev);
+    const r = rawDT(ev.props["RECURRENCE-ID"]);
+    if (!r) continue;
+    const uid = ev.props.UID?.value ?? "";
+    const d = r.time ? utcToIsrael(zonedToUtc(r.date, r.time, r.tz)).date : r.date;
+    moved.set(uid, (moved.get(uid) ?? new Set()).add(d));
   }
   const rows: GoogleRow[] = [];
   const push = (ev: RawEvent, inst: Instance) => {
@@ -188,13 +280,12 @@ export function googleToRows(text: string, today = todayInIsrael()): GoogleRow[]
   };
   for (const ev of raw) {
     if (ev.props["RECURRENCE-ID"]) {
-      for (const inst of instancesOf({ ...ev, props: { ...ev.props, RRULE: undefined as unknown as Prop } }, from, to)) push(ev, inst);
+      const { RRULE: _drop, ...props } = ev.props;
+      for (const inst of instancesOf({ ...ev, props }, from, to)) push(ev, inst);
       continue;
     }
-    for (const inst of instancesOf(ev, from, to)) {
-      if (ev.props.RRULE && moved.has(`${ev.props.UID?.value}|${inst.date}`)) continue; // replaced above
-      push(ev, inst);
-    }
+    // Occurrences that were moved or cancelled are replaced by their own entries above.
+    for (const inst of instancesOf(ev, from, to, ev.props.RRULE ? moved.get(ev.props.UID?.value ?? "") : undefined)) push(ev, inst);
   }
   // Same id twice (rare) would break the unique key; keep the first.
   const seen = new Set<string>();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { addEvent, deleteEvent, setDayOff, setSessionStatus } from "@/app/actions";
+import { addEvent, deleteEvent, setDayOff, setSessionStatus } from "@/app/act";
 
 export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
 
@@ -386,8 +386,12 @@ function WeekGrid({
                 {hoursList.map((h) => (
                   <div key={h} className="border-t border-rule/70" style={{ height: HOUR_PX }} />
                 ))}
-                {(byDate.get(d) ?? []).filter(timed).map((it, k) => {
+                {(() => {
+                  const list = (byDate.get(d) ?? []).filter(timed);
+                  const lay = columns(list);
+                  return list.map((it, k) => {
                   const top = ((toMin(it.start!) - minH * 60) / 60) * HOUR_PX;
+                  const { col, cols } = lay.get(it)!;
                   const height = Math.max(20, ((toMin(it.end!) - toMin(it.start!)) / 60) * HOUR_PX - 2);
                   const faded = it.status === "skipped";
                   return (
@@ -398,12 +402,14 @@ function WeekGrid({
                         e.stopPropagation();
                         onSelect(d);
                       }}
-                      className={`absolute inset-x-1 overflow-hidden rounded-md px-1.5 py-1 text-start text-[11px] leading-tight ${
+                      className={`absolute overflow-hidden rounded-md px-1.5 py-1 text-start text-[11px] leading-tight ${
                         faded ? "opacity-40" : ""
                       }`}
                       style={{
                         top,
                         height,
+                        insetInlineStart: `calc(${(col / cols) * 100}% + 2px)`,
+                        width: `calc(${100 / cols}% - 4px)`,
                         background:
                           it.kind === "study" || it.kind === "routine"
                             ? `color-mix(in srgb, ${it.color} ${it.kind === "routine" ? 10 : 16}%, var(--surface))`
@@ -421,7 +427,8 @@ function WeekGrid({
                       </span>
                     </button>
                   );
-                })}
+                  });
+                })()}
               </div>
             ))}
           </div>
@@ -429,6 +436,33 @@ function WeekGrid({
       </div>
     </>
   );
+}
+
+/** Overlapping timed items share the width: each gets a column inside its overlap group. */
+function columns(list: CalItem[]) {
+  const out = new Map<CalItem, { col: number; cols: number }>();
+  const sorted = [...list].sort((a, b) => toMin(a.start!) - toMin(b.start!) || toMin(b.end!) - toMin(a.end!));
+  let group: CalItem[] = [];
+  let groupEnd = -1;
+  let colEnds: number[] = [];
+  const flush = () => {
+    for (const it of group) out.get(it)!.cols = colEnds.length;
+    group = [];
+    colEnds = [];
+  };
+  for (const it of sorted) {
+    const st = toMin(it.start!);
+    const en = Math.max(toMin(it.end!), st + 20);
+    if (st >= groupEnd) flush();
+    let col = colEnds.findIndex((e) => e <= st);
+    if (col < 0) col = colEnds.push(en) - 1;
+    else colEnds[col] = en;
+    out.set(it, { col, cols: 1 });
+    group.push(it);
+    groupEnd = Math.max(groupEnd, en);
+  }
+  flush();
+  return out;
 }
 
 /* ---------- Day panel (details + planner actions) ---------- */

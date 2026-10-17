@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { answerInvite } from "@/app/actions";
+import { answerInvite } from "@/app/act";
 import type { Invite } from "@/lib/userdata";
 
 const when = (iso: string) =>

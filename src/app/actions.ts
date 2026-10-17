@@ -55,7 +55,14 @@ async function requireUser() {
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar date in YYYY-MM-DD (rejects 2027-02-31). */
+const DATE = {
+  test(v: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+    const d = new Date(v + "T00:00:00Z");
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  },
+};
 
 export async function savePrefs(formData: FormData) {
   const { supabase, userId } = await requireUser();
@@ -64,7 +71,9 @@ export async function savePrefs(formData: FormData) {
     const start = String(formData.get(`start-${d}`) ?? "18:00");
     const minutes = formData.get(`on-${d}`) ? Number(formData.get(`minutes-${d}`) ?? 0) : 0;
     if (!TIME.test(start) || !Number.isFinite(minutes) || minutes < 0 || minutes > 600) throw new Error("Bad availability");
-    availability[String(d)] = { start, minutes };
+    // A window can't run past midnight (the planner would date those sessions wrongly).
+    const [h, m] = start.split(":").map(Number);
+    availability[String(d)] = { start, minutes: Math.min(minutes, 24 * 60 - 1 - (h * 60 + m)) };
   }
   const session = Number(formData.get("session_minutes"));
   if (!Number.isFinite(session) || session < 30 || session > 240) throw new Error("Bad session length");
@@ -109,9 +118,10 @@ export async function resetFeed() {
 }
 
 /** minutes: how long was actually studied (credited by the planner so the remaining work shrinks). */
-export async function setSessionStatus(key: string, status: "done" | "skipped" | null, minutes?: number) {
+async function setSessionStatus_(key: string, status: "done" | "skipped" | null, minutes?: number) {
   const { supabase, userId } = await requireUser();
   if (key.length > 300) throw new Error("Bad key");
+  if (status !== null && status !== "done" && status !== "skipped") throw new Error("Bad status");
   if (status === null) {
     await supabase.from("session_status").delete().match({ user_id: userId, session_key: key });
   } else {
@@ -124,7 +134,7 @@ export async function setSessionStatus(key: string, status: "done" | "skipped" |
   refresh();
 }
 
-export async function addEvent(input: { date: string; start: string; end: string; title: string; invite?: string[] }) {
+async function addEvent_(input: { date: string; start: string; end: string; title: string; invite?: string[] }) {
   notifyNow();
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
@@ -171,7 +181,7 @@ export async function resetIngestToken() {
 }
 
 /** Returns the app's public push key, generating the key pair once if it doesn't exist yet. */
-export async function ensurePushKey(): Promise<string> {
+async function ensurePushKey_(): Promise<string> {
   const { supabase } = await requireUser();
   const { data: existing } = await supabase.rpc("vapid_public");
   if (existing) return existing as string;
@@ -182,7 +192,7 @@ export async function ensurePushKey(): Promise<string> {
   return data as string;
 }
 
-export async function savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string }) {
+async function savePushSubscription_(sub: { endpoint: string; p256dh: string; auth: string }) {
   const { supabase, userId } = await requireUser();
   if (!/^https:\/\//.test(sub.endpoint)) throw new Error("Bad endpoint");
   const { error } = await supabase
@@ -199,7 +209,7 @@ export async function removePushSubscription(endpoint: string) {
 }
 
 /** Sends a test notification to all of the user's devices. */
-export async function sendTestPush() {
+async function sendTestPush_() {
   const { supabase, userId } = await requireUser();
   const { data: subs } = await supabase.from("push_subscriptions").select("endpoint, p256dh, auth");
   const { sendPushAsServer, sendPush } = await import("@/lib/push");
@@ -213,8 +223,9 @@ export async function sendTestPush() {
 }
 
 /** Spaced repetition (SM-2, simplified). grade: 0 again, 1 hard, 2 good, 3 easy. */
-export async function reviewCard(id: string, grade: 0 | 1 | 2 | 3) {
+async function reviewCard_(id: string, grade: 0 | 1 | 2 | 3) {
   const { supabase, userId } = await requireUser();
+  if (![0, 1, 2, 3].includes(grade)) throw new Error("Bad grade");
   const { data: c } = await supabase
     .from("cards")
     .select("interval_days, ease, reps, lapses")
@@ -240,7 +251,7 @@ export async function reviewCard(id: string, grade: 0 | 1 | 2 | 3) {
 }
 
 /** Applies a suggested update from mail (grade, moved tutorial …). */
-export async function applyUpdate(id: string) {
+async function applyUpdate_(id: string) {
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("apply_update", { p_id: id });
   if (error) throw new Error(error.message);
@@ -255,7 +266,7 @@ export async function dismissUpdate(id: string) {
 }
 
 /** Saves (or removes, when empty) the private Opal calendar export link. */
-export async function saveOpalFeed(formData: FormData) {
+async function saveOpalFeed_(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const url = String(formData.get("url") ?? "").trim();
   if (!url) {
@@ -274,7 +285,7 @@ export async function saveOpalFeed(formData: FormData) {
 }
 
 /** Runs the Opal sync right away (instead of waiting for the hourly run). */
-export async function syncOpalNow() {
+async function syncOpalNow_() {
   const { supabase } = await requireUser();
   const { data: tok } = await supabase.from("ingest_tokens").select("token").maybeSingle();
   if (!tok?.token) throw new Error("חסר חיבור לסקריפט Google");
@@ -287,7 +298,7 @@ export async function syncOpalNow() {
 }
 
 /** Saves (or removes, when empty) the Google Calendar secret iCal address, then imports it right away. */
-export async function saveGoogleFeed(url: string) {
+async function saveGoogleFeed_(url: string) {
   const { supabase, userId } = await requireUser();
   url = url.trim();
   if (!url) {
@@ -305,7 +316,7 @@ export async function saveGoogleFeed(url: string) {
   return { ok: r.ok, count: r.count ?? 0, message: r.message };
 }
 
-export async function syncGoogleNow() {
+async function syncGoogleNow_() {
   const { supabase, userId } = await requireUser();
   const { data } = await supabase.from("external_feeds").select("url").match({ user_id: userId, kind: "google" }).maybeSingle();
   if (!data) throw new Error("יומן Google לא מחובר");
@@ -343,7 +354,7 @@ export async function mailHtml(id: string): Promise<string | null> {
 
 // ---------- Accounts (admin) ----------
 
-export async function setAccountStatus(userId: string, status: "approved" | "blocked" | "pending") {
+async function setAccountStatus_(userId: string, status: "approved" | "blocked" | "pending") {
   const { supabase, isAdmin } = await requireUser();
   if (!isAdmin) throw new Error("Not allowed");
   const { error } = await supabase.rpc("admin_set_status", { p_user: userId, p_status: status });
@@ -354,7 +365,7 @@ export async function setAccountStatus(userId: string, status: "approved" | "blo
 // ---------- Courses ----------
 
 /** Adds a course by its number: reads the official requirements page and stores it for this user. */
-export async function addCourse(codeInput: string) {
+async function addCourse_(codeInput: string) {
   const { supabase, userId } = await requireUser();
   const code = codeInput.trim();
   if (!/^\d{5}$/.test(code)) throw new Error("מספר קורס הוא 5 ספרות");
@@ -386,7 +397,7 @@ export async function removeCourse(code: string) {
   refresh();
 }
 
-export async function updateCourseLook(code: string, look: { color?: string; short?: string }) {
+async function updateCourseLook_(code: string, look: { color?: string; short?: string }) {
   const { supabase, userId } = await requireUser();
   const { PALETTE } = await import("@/lib/semester");
   const patch: Record<string, string> = {};
@@ -420,7 +431,7 @@ export interface RoutineInput {
 const CATEGORIES = ["sleep", "meal", "sport", "health", "habit", "chore", "hobby", "social", "other"];
 const WINDOW_KEYS = ["morning", "noon", "afternoon", "evening", "any"];
 
-export async function saveRoutine(input: RoutineInput) {
+async function saveRoutine_(input: RoutineInput) {
   notifyNow();
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
@@ -464,7 +475,7 @@ export async function deleteRoutine(id: string) {
 }
 
 /** Ticks (or unticks) a routine for a day. */
-export async function toggleRoutine(id: string, date: string, done: boolean) {
+async function toggleRoutine_(id: string, date: string, done: boolean) {
   notifyNow();
   const { supabase, userId } = await requireUser();
   if (!DATE.test(date)) throw new Error("Bad date");
@@ -486,7 +497,7 @@ export async function shareRoutine(id: string, users: string[]) {
 }
 
 /** Join (or decline) a routine someone shared with me; declining after joining = leaving. */
-export async function answerRoutine(id: string, accept: boolean) {
+async function answerRoutine_(id: string, accept: boolean) {
   notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("answer_routine", { p_routine: id, p_accept: accept });
@@ -496,7 +507,7 @@ export async function answerRoutine(id: string, accept: boolean) {
 
 // ---------- Event invitations ----------
 
-export async function answerInvite(eventId: string, status: "accepted" | "declined") {
+async function answerInvite_(eventId: string, status: "accepted" | "declined") {
   notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("answer_invite", { p_event: eventId, p_status: status });
@@ -522,7 +533,7 @@ export async function searchPeople(query: string) {
   return (data ?? []) as { id: string; name: string; avatar_url: string | null; avatar_emoji?: string | null; avatar_color?: string | null; i_follow: string | null; follows_me: string | null }[];
 }
 
-export async function followUser(id: string) {
+async function followUser_(id: string) {
   notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("follow_request", { p_user: id });
@@ -530,7 +541,7 @@ export async function followUser(id: string) {
   refresh();
 }
 
-export async function answerFollow(followerId: string, accept: boolean) {
+async function answerFollow_(followerId: string, accept: boolean) {
   notifyNow();
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc("follow_answer", { p_follower: followerId, p_accept: accept });
@@ -561,7 +572,7 @@ export interface ShareSettings {
   routines: boolean;
 }
 
-export async function saveShare(share: ShareSettings) {
+async function saveShare_(share: ShareSettings) {
   const { supabase, userId } = await requireUser();
   const clean: ShareSettings = {
     courses: !!share.courses,
@@ -592,7 +603,7 @@ export async function markNotificationsRead() {
 // ---------- Cheers ----------
 
 const CHEERS = ["👏", "🔥", "💪", "❤️", "🎉"];
-export async function sendCheer(toUser: string, emoji: string, label?: string) {
+async function sendCheer_(toUser: string, emoji: string, label?: string) {
   const { supabase, userId } = await requireUser();
   if (!CHEERS.includes(emoji)) throw new Error("Bad emoji");
   const { error } = await supabase.from("reactions").insert({ from_user: userId, to_user: toUser, emoji, label: label?.slice(0, 120) ?? null });
@@ -604,7 +615,7 @@ export async function sendCheer(toUser: string, emoji: string, label?: string) {
 
 export async function startStudyLive(input: { title: string; minutes: number; course_code?: string | null; with_user?: string | null }) {
   const { supabase, userId } = await requireUser();
-  const minutes = Math.max(5, Math.min(300, Math.round(input.minutes)));
+  const minutes = Number.isFinite(input.minutes) ? Math.max(5, Math.min(300, Math.round(input.minutes))) : 60;
   await supabase.from("study_live").upsert({
     user_id: userId,
     title: input.title.slice(0, 160),
@@ -623,7 +634,7 @@ export async function endStudyLive() {
 
 // ---------- Rough days ----------
 
-export async function setDayOff(date: string, reason: "sick" | "reserve" | "family" | "other" | null) {
+async function setDayOff_(date: string, reason: "sick" | "reserve" | "family" | "other" | null) {
   const { supabase, userId } = await requireUser();
   if (!DATE.test(date)) throw new Error("Bad date");
   if (reason === null) await supabase.from("day_off").delete().match({ user_id: userId, date });
@@ -637,8 +648,8 @@ export async function setDayOff(date: string, reason: "sick" | "reserve" | "fami
 // ---------- Quick add ----------
 
 /** Saves what the one-line quick add understood (the parse happens in the browser, shown before saving). */
-export async function quickAdd(input: { date: string; start: string | null; end: string | null; title: string; invite: string[] }) {
-  if (input.start && input.end) return addEvent({ date: input.date, start: input.start, end: input.end, title: input.title, invite: input.invite });
+async function quickAdd_(input: { date: string; start: string | null; end: string | null; title: string; invite: string[] }) {
+  if (input.start && input.end) return addEvent_({ date: input.date, start: input.start, end: input.end, title: input.title, invite: input.invite });
   // No time: an all-day item.
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
@@ -726,7 +737,7 @@ export interface ProfileInput {
   weekly_goal_minutes: number | null;
 }
 
-export async function saveProfile(input: ProfileInput) {
+async function saveProfile_(input: ProfileInput) {
   const { supabase, userId } = await requireUser();
   const name = input.name.trim();
   if (!name || name.length > 60) throw new Error("שם: עד 60 תווים");
@@ -748,15 +759,115 @@ export async function saveProfile(input: ProfileInput) {
 }
 
 /** Look & feel (theme, palette, text size, calm mode, Today sections, focus music), kept per user. */
-export async function saveLook(patch: import("@/lib/themes").LookPrefs) {
+async function saveLook_(patch: import("@/lib/themes").LookPrefs) {
   const { supabase, userId } = await requireUser();
   const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle();
   const { PALETTES } = await import("@/lib/themes");
   const next = { ...((data?.prefs as object) ?? {}), ...patch } as import("@/lib/themes").LookPrefs;
   if (next.palette && !(next.palette in PALETTES)) delete next.palette;
+  if (next.theme && !["system", "light", "dark"].includes(next.theme)) delete next.theme;
+  if (next.size && !["sm", "md", "lg", "xl"].includes(next.size)) delete next.size;
+  if (next.calm != null) next.calm = !!next.calm;
   if (next.music && !/^[A-Za-z0-9]{22}$/.test(next.music)) next.music = null;
   if (next.hidden) next.hidden = next.hidden.filter((h) => /^[a-z]{2,20}$/.test(h)).slice(0, 20);
+  if (next.tabs) {
+    const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/study", "/mail", "/profile", "/settings"];
+    next.tabs = [...new Set(next.tabs.filter((t) => ok.includes(t)))].slice(0, 4);
+  }
   const { error } = await supabase.from("profiles").update({ prefs: next }).eq("id", userId);
   if (error) throw new Error(error.message);
   refresh();
+}
+
+// ---------- Errors that reach the user ----------
+// In production, the text of an error thrown inside a server action never reaches the browser
+// (only a coded React error does). Actions the app calls directly therefore return
+// { failed: "<Hebrew message>" } instead; "@/app/act" turns that back into a normal Error.
+export type Failed = { failed: string };
+async function guarded<T>(fn: () => Promise<T>): Promise<T | Failed> {
+  try {
+    return await fn();
+  } catch (e) {
+    const digest = (e as { digest?: unknown })?.digest;
+    if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e; // redirect / notFound
+    return { failed: e instanceof Error && e.message ? e.message : "שגיאה" };
+  }
+}
+export async function setSessionStatus(...a: Parameters<typeof setSessionStatus_>) {
+  return guarded(() => setSessionStatus_(...a));
+}
+export async function addEvent(...a: Parameters<typeof addEvent_>) {
+  return guarded(() => addEvent_(...a));
+}
+export async function ensurePushKey(...a: Parameters<typeof ensurePushKey_>) {
+  return guarded(() => ensurePushKey_(...a));
+}
+export async function savePushSubscription(...a: Parameters<typeof savePushSubscription_>) {
+  return guarded(() => savePushSubscription_(...a));
+}
+export async function sendTestPush(...a: Parameters<typeof sendTestPush_>) {
+  return guarded(() => sendTestPush_(...a));
+}
+export async function reviewCard(...a: Parameters<typeof reviewCard_>) {
+  return guarded(() => reviewCard_(...a));
+}
+export async function applyUpdate(...a: Parameters<typeof applyUpdate_>) {
+  return guarded(() => applyUpdate_(...a));
+}
+export async function saveOpalFeed(...a: Parameters<typeof saveOpalFeed_>) {
+  return guarded(() => saveOpalFeed_(...a));
+}
+export async function syncOpalNow(...a: Parameters<typeof syncOpalNow_>) {
+  return guarded(() => syncOpalNow_(...a));
+}
+export async function saveGoogleFeed(...a: Parameters<typeof saveGoogleFeed_>) {
+  return guarded(() => saveGoogleFeed_(...a));
+}
+export async function syncGoogleNow(...a: Parameters<typeof syncGoogleNow_>) {
+  return guarded(() => syncGoogleNow_(...a));
+}
+export async function setAccountStatus(...a: Parameters<typeof setAccountStatus_>) {
+  return guarded(() => setAccountStatus_(...a));
+}
+export async function addCourse(...a: Parameters<typeof addCourse_>) {
+  return guarded(() => addCourse_(...a));
+}
+export async function updateCourseLook(...a: Parameters<typeof updateCourseLook_>) {
+  return guarded(() => updateCourseLook_(...a));
+}
+export async function saveRoutine(...a: Parameters<typeof saveRoutine_>) {
+  return guarded(() => saveRoutine_(...a));
+}
+export async function toggleRoutine(...a: Parameters<typeof toggleRoutine_>) {
+  return guarded(() => toggleRoutine_(...a));
+}
+export async function answerRoutine(...a: Parameters<typeof answerRoutine_>) {
+  return guarded(() => answerRoutine_(...a));
+}
+export async function answerInvite(...a: Parameters<typeof answerInvite_>) {
+  return guarded(() => answerInvite_(...a));
+}
+export async function followUser(...a: Parameters<typeof followUser_>) {
+  return guarded(() => followUser_(...a));
+}
+export async function answerFollow(...a: Parameters<typeof answerFollow_>) {
+  return guarded(() => answerFollow_(...a));
+}
+export async function saveShare(...a: Parameters<typeof saveShare_>) {
+  return guarded(() => saveShare_(...a));
+}
+export async function sendCheer(...a: Parameters<typeof sendCheer_>) {
+  return guarded(() => sendCheer_(...a));
+}
+export async function setDayOff(...a: Parameters<typeof setDayOff_>) {
+  return guarded(() => setDayOff_(...a));
+}
+export async function quickAdd(...a: Parameters<typeof quickAdd_>) {
+  return guarded(() => quickAdd_(...a));
+}
+export async function saveProfile(...a: Parameters<typeof saveProfile_>) {
+  return guarded(() => saveProfile_(...a));
+}
+export async function saveLook(...a: Parameters<typeof saveLook_>) {
+  return guarded(() => saveLook_(...a));
 }

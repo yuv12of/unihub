@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
-import { toggleRoutine } from "@/app/actions";
+import { toggleRoutine } from "@/app/act";
 import { CATEGORY, type Occurrence } from "@/lib/routines";
 
 /** Today's routines with a tick each. */

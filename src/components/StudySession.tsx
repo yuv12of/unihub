@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { reviewCard } from "@/app/actions";
+import { reviewCard } from "@/app/act";
 import type { Card } from "@/lib/userdata";
 
 const GRADES: { g: 0 | 1 | 2 | 3; label: string; hint: string }[] = [

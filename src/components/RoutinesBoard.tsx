@@ -1,7 +1,7 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { answerRoutine, deleteRoutine, saveRoutine, toggleRoutine, type RoutineInput } from "@/app/actions";
+import { answerRoutine, deleteRoutine, saveRoutine, toggleRoutine, type RoutineInput } from "@/app/act";
 import {
   CATEGORY,
   DAY_LETTERS,

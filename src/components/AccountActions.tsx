@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { setAccountStatus } from "@/app/actions";
+import { setAccountStatus } from "@/app/act";
 
 export function AccountActions({ id, status }: { id: string; status: "pending" | "approved" | "blocked" }) {
   const [pending, start] = useTransition();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setDayOff } from "@/app/actions";
+import { setDayOff } from "@/app/act";
 
 const REASONS = [
   ["sick", "🤒 חולה"],

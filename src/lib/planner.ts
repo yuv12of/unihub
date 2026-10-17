@@ -58,6 +58,8 @@ export interface Session {
   courseCode: string;
   kind: SessionKind;
   title: string; // "הכנה לממ״ן 01 באינפי"
+  /** stable id inside the course ("a01", "exam", "routine"): the key survives renaming a course */
+  ref?: string;
 }
 
 export interface PlanWarning {
@@ -93,6 +95,7 @@ interface Task {
   deadline: string;
   remaining: number;
   sessionTitle: string;
+  ref: string;
 }
 
 const toMin = (hhmm: string) => {
@@ -121,8 +124,8 @@ export interface Busy {
 }
 
 /** Stable identity for a planned session, used to remember done / skipped. */
-export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title">) {
-  return `${s.date}|${s.kind}|${s.courseCode}|${s.title}`;
+export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title" | "ref">) {
+  return `${s.date}|${s.kind}|${s.courseCode}|${s.ref ?? s.title}`;
 }
 
 export function buildPlan({
@@ -159,7 +162,7 @@ export function buildPlan({
     const id = rest.join("|");
     credit.set(id, (credit.get(id) ?? 0) + min);
   }
-  const creditFor = (kind: string, code: string, title: string) => credit.get(`${kind}|${code}|${title}`) ?? 0;
+  const creditFor = (kind: string, code: string, ref: string) => credit.get(`${kind}|${code}|${ref}`) ?? 0;
 
   for (const c of courses) {
     for (const a of c.assignments) {
@@ -170,13 +173,15 @@ export function buildPlan({
       const until = addDays(a.due, -1) < today ? today : addDays(a.due, -1);
       const title = `${typeLabel[a.type]} ${a.n} ב${c.short}`;
       const sessionTitle = `הכנה ל${title}`;
-      const remaining = need - creditFor("assignment", c.code, sessionTitle);
+      const ref = `a${a.n}`;
+      const remaining = need - creditFor("assignment", c.code, ref);
       if (remaining < MIN_CHUNK) continue;
       tasks.push({
         courseCode: c.code,
         kind: "assignment",
         title,
         sessionTitle,
+        ref,
         from: maxIso(today, addDays(a.due, -PREP_WINDOW_DAYS)),
         until,
         deadline: a.due,
@@ -188,13 +193,14 @@ export function buildPlan({
   for (const e of nextExams(exams, today)) {
     const title = `בחינה ב${themeOf(courses, e.course_code).short}`;
     const sessionTitle = `חזרה ל${title}`;
-    const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, sessionTitle);
+    const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, "exam");
     if (remaining < MIN_CHUNK) continue;
     tasks.push({
       courseCode: e.course_code,
       kind: "exam",
       title,
       sessionTitle,
+      ref: "exam",
       from: maxIso(today, addDays(e.date, -EXAM_WINDOW_DAYS)),
       until: maxIso(today, addDays(e.date, -1)),
       deadline: e.date,
@@ -214,7 +220,8 @@ export function buildPlan({
     if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day) || off.has(day)) continue;
     // Free time = the study window minus anything already booked that day (tutorials, own blocks).
     const winStart = toMin(slot.start);
-    let segments: [number, number][] = [[winStart, winStart + slot.minutes]];
+    // A window that runs past midnight stops at midnight (sessions never spill into the next date).
+    let segments: [number, number][] = [[winStart, Math.min(winStart + slot.minutes, 24 * 60 - 1)]];
     for (const b of busy.filter((x) => x.date === day)) {
       const bs = toMin(b.start) - BREAK_MINUTES;
       const be = toMin(b.end) + BREAK_MINUTES;
@@ -226,10 +233,10 @@ export function buildPlan({
     let capacity = freeNow();
     const usedToday = new Set<Task>();
 
-    const place = (minutes: number, courseCode: string, kind: SessionKind, title: string) => {
+    const place = (minutes: number, courseCode: string, kind: SessionKind, title: string, ref: string) => {
       const seg = segments.find(([a, z]) => z - a >= Math.min(minutes, MIN_CHUNK))!;
       const len = Math.min(minutes, seg[1] - seg[0]);
-      const s: Session = { date: day, start: toHHMM(seg[0]), end: toHHMM(seg[0] + len), minutes: len, courseCode, kind, title };
+      const s: Session = { date: day, start: toHHMM(seg[0]), end: toHHMM(seg[0] + len), minutes: len, courseCode, kind, title, ref };
       seg[0] += len + BREAK_MINUTES;
       capacity = freeNow();
       sessions.push(s);
@@ -248,7 +255,7 @@ export function buildPlan({
         if (capacity < MIN_CHUNK) break;
         const chunk = Math.min(prefs.session_minutes, t.remaining, capacity);
         if (chunk < MIN_CHUNK && chunk < t.remaining) continue;
-        t.remaining -= place(chunk, t.courseCode, t.kind, t.sessionTitle);
+        t.remaining -= place(chunk, t.courseCode, t.kind, t.sessionTitle, t.ref);
         usedToday.add(t);
       }
     }
@@ -257,7 +264,7 @@ export function buildPlan({
     if (prefs.fill_routine && capacity >= MIN_CHUNK) {
       const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
       if (code) {
-        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`);
+        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, "routine");
         routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
       }
     }

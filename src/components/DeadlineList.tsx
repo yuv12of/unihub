@@ -1,7 +1,7 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
-import { saveProgress } from "@/app/actions";
+import { saveProgress } from "@/app/act";
 
 export interface DeadlineRowData {
   key: string;

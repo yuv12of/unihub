@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { saveLook, saveProfile, type ProfileInput } from "@/app/actions";
+import { saveLook, saveProfile, type ProfileInput } from "@/app/act";
 import { PALETTES, applyLook, type LookPrefs, type PaletteKey } from "@/lib/themes";
 import { FOCUS_PLAYLISTS, playlistId } from "@/lib/focusMusic";
 import { PALETTE } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
+import { DEFAULT_TABS, TAB_CHOICES } from "@/components/Nav";
 
 const EMOJIS = ["🦊", "🐼", "🦉", "🐢", "🐙", "🦁", "🐧", "🐝", "🌵", "🌻", "🍀", "⚡", "🚀", "🎧", "📚", "🧠", "☕", "🎨", "⚽", "🎸", "🏀", "🐱", "🐶", "🦄"];
 
@@ -234,6 +235,31 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
                 className={`rounded-full border px-3 py-1 text-sm ${shown ? "border-ink" : "border-rule text-ink-soft line-through"}`}
               >
                 {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold">הלשוניות בסרגל התחתון בטלפון</h3>
+        <p className="mt-0.5 text-xs text-ink-soft">בוחרים עד 4. כל השאר נמצאים תחת ״עוד״.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {TAB_CHOICES.map((t) => {
+            const tabs = p.tabs?.length ? p.tabs : DEFAULT_TABS;
+            const i = tabs.indexOf(t.href);
+            const on = i >= 0;
+            return (
+              <button
+                key={t.href}
+                type="button"
+                aria-pressed={on}
+                disabled={!on && tabs.length >= 4}
+                onClick={() => update({ tabs: on ? tabs.filter((h) => h !== t.href) : [...tabs, t.href] })}
+                className={`rounded-full border px-3 py-1 text-sm disabled:opacity-40 ${on ? "border-ink bg-ink text-bg" : "border-rule"}`}
+              >
+                {on ? `${i + 1}. ` : ""}
+                {t.label}
               </button>
             );
           })}
