@@ -76,6 +76,8 @@ export interface Plan {
 const PREP_WINDOW_DAYS = 14;
 const EXAM_WINDOW_DAYS = 21;
 const EXAM_MINUTES = 20 * 60;
+/** Exam period: this many days before an exam, spare study time goes to that course. */
+const EXAM_PERIOD_DAYS = 14;
 const BREAK_MINUTES = 15;
 const MIN_CHUNK = 30;
 
@@ -261,11 +263,22 @@ export function buildPlan({
     }
 
     // 3: routine study for the course that has had the least of it so far.
+    //    Exam period: in the two weeks before an exam, the free time goes to that course instead.
     if (prefs.fill_routine && capacity >= MIN_CHUNK) {
-      const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
-      if (code) {
-        const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, "routine");
-        routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
+      const examSoon = exams
+        .filter((e) => e.date > day && e.date <= addDays(day, EXAM_PERIOD_DAYS))
+        .sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (examSoon) {
+        for (let k = 0; capacity >= MIN_CHUNK && k < 4; k++) {
+          const used = place(Math.min(prefs.session_minutes, capacity), examSoon.course_code, "routine", `חזרה לבחינה ב${themeOf(courses, examSoon.course_code).short}`, `exam${k}`);
+          if (!used) break;
+        }
+      } else {
+        const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
+        if (code) {
+          const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, "routine");
+          routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
+        }
       }
     }
   }

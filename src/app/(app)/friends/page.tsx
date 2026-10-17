@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getFollowRequests, getFriendView, getMyStudyDays, getNames, getNotifications, getPeople, getShare, getUserId } from "@/lib/userdata";
+import { getFamilyLinks, getFollowRequests, getFriendView, getMyStudyDays, getNames, getNotifications, getPeople, getShare, getUserId } from "@/lib/userdata";
 import { Heatmap } from "@/components/Heatmap";
 import { CheerButtons, GroupFinder, NotificationsList } from "@/components/SocialBits";
 import { weekStart } from "@/lib/routines";
@@ -9,6 +9,7 @@ import { summarize } from "@/lib/friends";
 import { todayInIsrael } from "@/lib/semester";
 import { minutesLabel } from "@/lib/planner";
 import { Avatar } from "@/components/Avatar";
+import { FamilyLinks } from "@/components/FamilyLinks";
 import { Fold, Gallery, Tabs } from "@/components/Fold";
 import { FollowRequest, FriendsSearch, PersonActions, ShareSettingsForm } from "@/components/FriendsParts";
 
@@ -29,10 +30,11 @@ export default function FriendsPage() {
 async function Friends() {
   await connection();
   const today = todayInIsrael();
-  const [people, requests, share, notes, myDays, me] = await Promise.all([
+  const [people, requests, share, family, notes, myDays, me] = await Promise.all([
     getPeople(),
     getFollowRequests(),
     getShare(),
+    getFamilyLinks(),
     getNotifications(15),
     getMyStudyDays(),
     getUserId(),
@@ -274,6 +276,16 @@ async function Friends() {
                     <ShareSettingsForm initial={share.share} />
                   </section>
                 )}
+                <section className="panel mt-6 p-5">
+                  <h2 className="font-semibold">דף למשפחה</h2>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    קישור פרטי לקריאה בלבד להורים או לבן/בת הזוג, בלי צורך בחשבון: שעות לימוד, הבחינה וההגשה הקרובות, רצפים, וכפתור לשלוח לך
+                    עידוד. אפשר לבטל בכל רגע.
+                  </p>
+                  <div className="mt-3">
+                    <FamilyLinks links={family} />
+                  </div>
+                </section>
               </div>
             ),
           },

@@ -40,6 +40,10 @@ export const setDayOff = w(A.setDayOff);
 export const quickAdd = w(A.quickAdd);
 export const saveProfile = w(A.saveProfile);
 export const saveLook = w(A.saveLook);
+export const logStudy = w(A.logStudy);
+export const saveReview = w(A.saveReview);
+export const addStuck = w(A.addStuck);
+export const resolveStuck = A.resolveStuck;
 
 export {
   saveProgress,

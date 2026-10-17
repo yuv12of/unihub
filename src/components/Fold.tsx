@@ -145,8 +145,10 @@ export function Gallery({
 }) {
   return (
     <div
-      className={`-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] ${
-        until === "lg" ? "sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:overflow-visible lg:px-0 lg:pb-0 lg:[&>*]:w-auto" : "sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:[&>*]:w-auto"
+      className={`-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [mask-image:linear-gradient(to_right,transparent_0,#000_32px)] ${
+        until === "lg"
+          ? "sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:overflow-visible lg:px-0 lg:pb-0 lg:[&>*]:w-auto lg:[mask-image:none]"
+          : "sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:pb-0 sm:[&>*]:w-auto sm:[mask-image:none]"
       } ${cols} ${item} [&>*]:shrink-0 [&>*]:snap-start ${className}`}
     >
       {children}

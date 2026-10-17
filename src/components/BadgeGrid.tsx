@@ -1,4 +1,4 @@
-import { Gallery } from "@/components/Fold";
+import { Fold, Gallery } from "@/components/Fold";
 import { BADGE_GROUPS, type Badge } from "@/lib/badges";
 
 export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compact?: boolean }) {
@@ -16,11 +16,53 @@ export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compac
       <p className="text-sm text-ink-soft">עוד אין תגים.</p>
     );
   const groups = (Object.keys(BADGE_GROUPS) as Badge["group"][]).map((g) => ({ g, list: badges.filter((b) => b.group === g) })).filter((x) => x.list.length);
+  // Closest to unlocking first: that's what's worth knowing today.
+  const close = badges
+    .filter((b) => !b.earned && b.target > 0)
+    .sort((a, b) => b.value / b.target - a.value / a.target)
+    .slice(0, 3);
   return (
     <div className="space-y-5">
-      <p className="text-sm text-ink-soft">
-        {earned.length} מתוך {badges.length} תגים
-      </p>
+      {earned.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-ink-soft">
+            הרווחת {earned.length} מתוך {badges.length}
+          </h3>
+          <ul className="flex flex-wrap gap-2">
+            {earned.map((b) => (
+              <li key={b.id} className="flex items-center gap-1.5 rounded-full bg-highlight/30 px-3 py-1 text-sm" title={b.desc}>
+                <span aria-hidden>{b.emoji}</span>
+                {b.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {close.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-ink-soft">הכי קרובים</h3>
+          <ul className="grid gap-2 sm:grid-cols-3">
+            {close.map((b) => (
+              <li key={b.id} className="flex items-center gap-3 rounded-xl border border-rule bg-surface p-3">
+                <span className="text-2xl opacity-60 grayscale" aria-hidden>
+                  {b.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{b.title}</span>
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-rule">
+                    <span className="block h-full rounded-full bg-ink" style={{ width: `${Math.min(100, (b.value / b.target) * 100)}%` }} />
+                  </span>
+                  <span className="text-[11px] tabular-nums text-ink-soft">
+                    {b.value}/{b.target}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <Fold id="badges-all" title="כל התגים" summary={`${badges.length} תגים ב־${groups.length} קבוצות`} defaultOpen={false} bare>
+      <div className="space-y-5">
       {groups.map(({ g, list }) => (
         <div key={g}>
           <h3 className="mb-2 text-sm font-semibold text-ink-soft">{BADGE_GROUPS[g]}</h3>
@@ -50,6 +92,8 @@ export function BadgeGrid({ badges, compact = false }: { badges: Badge[]; compac
           </Gallery>
         </div>
       ))}
+      </div>
+      </Fold>
     </div>
   );
 }

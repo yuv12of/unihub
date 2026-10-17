@@ -45,6 +45,24 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
     }
   }
 
+  // 21:00: a look at tomorrow (first study session and first event), so nothing surprises you.
+  if (now.minutes >= 21 * 60 && now.minutes < 21 * 60 + 30) {
+    const tomorrow = addDays(now.date, 1);
+    if (!offDays.includes(tomorrow)) {
+      const first = plan.sessions.find((x) => x.date === tomorrow);
+      const ev = feed.events
+        .filter((x) => x.date === tomorrow && x.start_time && !x.cancelled && x.kind !== "other")
+        .sort((a, b) => a.start_time!.localeCompare(b.start_time!))[0];
+      const count = plan.sessions.filter((x) => x.date === tomorrow).length;
+      const parts = [
+        ev ? `${ev.start_time} ${ev.title}` : "",
+        first ? `${first.start} ${first.title}${count > 1 ? ` (+${count - 1})` : ""}` : "",
+      ].filter(Boolean);
+      if (parts.length)
+        due.push({ key: `tmr|${tomorrow}`, title: "מחר אצלך 🗓️", body: `${parts.join(" · ")}. רוצה להזיז משהו?`, url: "/semester" });
+    }
+  }
+
   // Evening wrap-up: what's still unticked today.
   if (now.minutes >= WRAP_UP_AT && now.minutes < WRAP_UP_AT + 30) {
     const studyLeft = plan.sessions.filter((s) => s.date === now.date && !feed.session_status[sessionKey(s)]).length;

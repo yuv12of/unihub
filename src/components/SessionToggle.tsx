@@ -2,7 +2,7 @@
 
 import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { endStudyLive, setSessionStatus, startStudyLive } from "@/app/act";
+import { addStuck, endStudyLive, setSessionStatus, startStudyLive } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
 
 export function SessionToggle({
@@ -10,11 +10,16 @@ export function SessionToggle({
   status,
   minutes,
   title,
+  hero = false,
+  courseCode,
 }: {
   sessionKey: string;
   status?: "done" | "skipped";
   minutes: number;
   title: string;
+  /** big "start now" button, for the Up next card */
+  hero?: boolean;
+  courseCode?: string;
 }) {
   const [current, set] = useOptimistic(status ?? null, (_s, next: "done" | "skipped" | null) => next);
   const [, start] = useTransition();
@@ -35,6 +40,31 @@ export function SessionToggle({
       >
         {current === "done" ? "✓ בוצע" : "דולג"}
       </button>
+    );
+  const timerEl = timer && (
+    <FocusTimer
+      storageKey={`timer:${sessionKey}`}
+      title={title}
+      minutes={minutes}
+      courseCode={courseCode}
+      onClose={() => setTimer(false)}
+      onFinish={(studied) => {
+        setTimer(false);
+        save("done", studied);
+      }}
+    />
+  );
+  if (hero)
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setTimer(true)} className="rounded-full bg-bg px-5 py-2.5 font-semibold text-ink">
+          ▶ להתחיל עכשיו
+        </button>
+        <button type="button" onClick={() => save("done")} className="rounded-full border border-bg/40 px-4 py-2.5 text-sm">
+          כבר עשיתי
+        </button>
+        {timerEl}
+      </span>
     );
   return (
     <span className="flex shrink-0 items-center gap-1.5">
@@ -63,18 +93,7 @@ export function SessionToggle({
       >
         דילוג
       </button>
-      {timer && (
-        <FocusTimer
-          storageKey={`timer:${sessionKey}`}
-          title={title}
-          minutes={minutes}
-          onClose={() => setTimer(false)}
-          onFinish={(studied) => {
-            setTimer(false);
-            save("done", studied);
-          }}
-        />
-      )}
+      {timerEl}
     </span>
   );
 }
@@ -91,6 +110,7 @@ export function FocusTimer({
   onFinish,
   withUser,
   withName,
+  courseCode,
 }: {
   storageKey: string;
   title: string;
@@ -100,6 +120,8 @@ export function FocusTimer({
   /** joining a friend's session */
   withUser?: string;
   withName?: string;
+  /** for "I'm stuck" notes */
+  courseCode?: string | null;
 }) {
   useEffect(() => {
     startStudyLive({ title, minutes, with_user: withUser ?? null }).catch(() => {});
@@ -208,11 +230,53 @@ export function FocusTimer({
           ביטול
         </button>
       </div>
+      <Stuck courseCode={courseCode ?? null} title={title} />
       <FocusMusic running={!!state.since && !over} over={over} />
       <p className="mt-6 max-w-xs text-xs text-ink-soft">
         הזמן שלמדת נספר לטובת המטלה. מה שנשאר יתוזמן מחדש בימים הבאים.
       </p>
     </div>,
     document.body,
+  );
+}
+
+/** "I'm stuck": jot down what's blocking you without leaving the timer; it waits on the course card. */
+function Stuck({ courseCode, title }: { courseCode: string | null; title: string }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [saved, setSaved] = useState(0);
+  const [pending, start] = useTransition();
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-4 text-sm text-ink-soft underline underline-offset-4 decoration-rule">
+        🤔 נתקעתי{saved ? ` (${saved} נשמרו)` : ""}
+      </button>
+    );
+  return (
+    <form
+      className="mt-4 flex w-full max-w-sm gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        start(async () => {
+          await addStuck({ topic: text, course_code: courseCode }).catch(() => {});
+          setSaved((n) => n + 1);
+          setText("");
+          setOpen(false);
+        });
+      }}
+    >
+      <input
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={300}
+        placeholder={`על מה נתקעת ב${title.replace(/^(הכנה ל|חזרה ל|לימוד שוטף ב)/, "")}?`}
+        className="min-w-0 flex-1 rounded-lg border border-rule bg-bg px-3 py-2 text-sm"
+      />
+      <button disabled={pending} className="rounded-lg bg-ink px-3 text-sm text-bg">
+        שמירה
+      </button>
+    </form>
   );
 }

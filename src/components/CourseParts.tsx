@@ -4,29 +4,21 @@ import type { CourseStanding } from "@/lib/progress";
 /** Bar of earned assignment weight, scaled to the course maximum, with a tick at the minimum. */
 export function WeightBar({ course, st, color }: { course: Course; st: CourseStanding; color: string }) {
   const { min, max } = course.assignmentWeight;
-  const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
+  const pct = (v: number) => `${Math.min(100, (v / Math.max(1, max)) * 100)}%`;
+  const passed = st.earned >= min;
   return (
     <div className="mt-3">
-      <div
-        className="relative h-2 rounded-full bg-rule"
-        role="img"
-        aria-label={`נצברו ${st.earned} מתוך מינימום ${min} נקודות משקל`}
-      >
-        <div
-          className="absolute inset-y-0 start-0 rounded-full transition-[width] duration-500"
-          style={{ width: pct(st.earned), background: color }}
-        />
-        <div
-          className="absolute -inset-y-1 w-0.5 rounded bg-ink"
-          style={{ insetInlineStart: pct(min) }}
-          aria-hidden
-        />
-      </div>
-      <div className="mt-1.5 flex justify-between text-xs text-ink-soft tabular-nums">
-        <span>
-          צברת {st.earned} מתוך {min} נקודות חובה
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="tabular-nums">
+          <span className="text-2xl font-semibold">{st.earned}</span>
+          <span className="text-ink-soft">/{min} נק׳ חובה</span>
+          {passed && <span className="ms-1.5" aria-label="עברת את המינימום">✓</span>}
         </span>
-        <span>עד {max}</span>
+        <span className="text-xs text-ink-soft tabular-nums">אפשר עד {max}</span>
+      </div>
+      <div className="relative h-3 rounded-full bg-rule" role="img" aria-label={`נצברו ${st.earned} מתוך מינימום ${min} נקודות משקל`}>
+        <div className="absolute inset-y-0 start-0 rounded-full transition-[width] duration-500" style={{ width: pct(st.earned), background: color }} />
+        <div className="absolute -inset-y-1 w-1 -translate-x-1/2 rounded-full bg-ink ring-2 ring-surface" style={{ insetInlineStart: pct(min) }} aria-hidden />
       </div>
     </div>
   );

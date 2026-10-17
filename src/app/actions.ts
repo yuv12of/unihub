@@ -602,7 +602,7 @@ export async function markNotificationsRead() {
 
 // ---------- Cheers ----------
 
-const CHEERS = ["👏", "🔥", "💪", "❤️", "🎉"];
+const CHEERS = ["👏", "🔥", "💪", "❤️", "🎉", "☕", "🍀", "😴"];
 async function sendCheer_(toUser: string, emoji: string, label?: string) {
   const { supabase, userId } = await requireUser();
   if (!CHEERS.includes(emoji)) throw new Error("Bad emoji");
@@ -779,6 +779,58 @@ async function saveLook_(patch: import("@/lib/themes").LookPrefs) {
   refresh();
 }
 
+// ---------- Quick study log ----------
+
+/** Logs study time that wasn't a planned session ("I studied 45 min of algebra"). */
+async function logStudy_(input: { course_code: string | null; minutes: number; note?: string }) {
+  const { supabase, userId } = await requireUser();
+  const minutes = Math.round(Number(input.minutes));
+  if (!Number.isFinite(minutes) || minutes < 1 || minutes > 600) throw new Error("כמה דקות? בין 1 ל־600");
+  const code = input.course_code && /^\d{5}$/.test(input.course_code) ? input.course_code : "other";
+  const { todayInIsrael } = await import("@/lib/semester");
+  const key = `${todayInIsrael()}|log|${code}|${Date.now()}`;
+  const { error } = await supabase.from("session_status").insert({ user_id: userId, session_key: key, status: "done", minutes, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  refresh();
+  return minutes;
+}
+
+// ---------- Assignment autopsy & stuck points ----------
+
+async function saveReview_(input: { code: string; n: string; minutes_spent: number | null; difficulty: number | null; hard: string | null }) {
+  const { supabase, userId } = await requireUser();
+  if (!/^\d{5}$/.test(input.code) || !/^\w{1,4}$/.test(input.n)) throw new Error("Bad assignment");
+  const { semester } = await import("@/lib/semester");
+  const m = input.minutes_spent == null ? null : Math.max(0, Math.min(6000, Math.round(input.minutes_spent)));
+  const d = input.difficulty == null ? null : Math.max(1, Math.min(5, Math.round(input.difficulty)));
+  const { error } = await supabase.from("assignment_reviews").upsert({
+    user_id: userId,
+    course_code: input.code,
+    semester: semester.semester,
+    n: input.n,
+    minutes_spent: Number.isFinite(m) ? m : null,
+    difficulty: Number.isFinite(d) ? d : null,
+    hard: input.hard?.slice(0, 500) ?? null,
+  });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+async function addStuck_(input: { topic: string; course_code?: string | null }) {
+  const { supabase, userId } = await requireUser();
+  const topic = input.topic.trim().slice(0, 300);
+  if (!topic) throw new Error("מה תקע אותך?");
+  const code = input.course_code && /^\d{5}$/.test(input.course_code) ? input.course_code : null;
+  const { error } = await supabase.from("stuck_points").insert({ user_id: userId, topic, course_code: code });
+  if (error) throw new Error(error.message);
+}
+
+export async function resolveStuck(id: string, resolved = true) {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("stuck_points").update({ resolved }).match({ id, user_id: userId });
+  refresh();
+}
+
 // ---------- Errors that reach the user ----------
 // In production, the text of an error thrown inside a server action never reaches the browser
 // (only a coded React error does). Actions the app calls directly therefore return
@@ -870,4 +922,13 @@ export async function saveProfile(...a: Parameters<typeof saveProfile_>) {
 }
 export async function saveLook(...a: Parameters<typeof saveLook_>) {
   return guarded(() => saveLook_(...a));
+}
+export async function logStudy(...a: Parameters<typeof logStudy_>) {
+  return guarded(() => logStudy_(...a));
+}
+export async function saveReview(...a: Parameters<typeof saveReview_>) {
+  return guarded(() => saveReview_(...a));
+}
+export async function addStuck(...a: Parameters<typeof addStuck_>) {
+  return guarded(() => addStuck_(...a));
 }

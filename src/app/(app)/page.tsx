@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { hasPushSubscription, getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
 import { Fold, Gallery } from "@/components/Fold";
 import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
@@ -20,6 +20,10 @@ import { UpdatesList } from "@/components/UpdatesList";
 import { minutesLabel, nextExams, sessionKey, type Session } from "@/lib/planner";
 import { academicEvents, academicOn } from "@/lib/academic";
 import { SessionToggle } from "@/components/SessionToggle";
+import { ShareDay } from "@/components/ShareDay";
+import { FirstSteps } from "@/components/FirstSteps";
+import { UpNext, type UpNextItem } from "@/components/UpNext";
+import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import {
   addDays,
@@ -70,14 +74,9 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live] = await Promise.all([
-    getUserPlan(today),
-    getUpdates(),
-    getPendingInvites(),
-    getPeople(),
-    getStudyingNow(),
-  ]);
-  const [profile, studyDays, cheers] = await Promise.all([getMyProfile(), getMyStudyDays(), getCheerCounts()]);
+  // Everything in one round: the page waits for the slowest call, not for the sum of them.
+  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush] =
+    await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription()]);
   const hidden = new Set(profile?.prefs?.hidden ?? []);
   const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
@@ -127,17 +126,31 @@ async function Today() {
   const later = open.filter((d) => d.daysLeft > WINDOW_DAYS).slice(0, 4);
   const next = open[0];
 
+  // Up next: the session or event happening now or next today.
+  const nowMin = israelNow().minutes;
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const sessionNext = todaySessions.filter((x) => !status[sessionKey(x)] && mins(x.end) > nowMin)[0];
+  const eventNext = todayEvents
+    .filter((e) => e.start_time && !e.cancelled && mins(e.end_time ?? e.start_time) > nowMin)
+    .sort((a, b) => a.start_time!.localeCompare(b.start_time!))[0];
+  const upNext: UpNextItem | null =
+    sessionNext && (!eventNext || sessionNext.start <= eventNext.start_time!)
+      ? { title: sessionNext.title, start: sessionNext.start, end: sessionNext.end, color: themeOf(courses, sessionNext.courseCode).color, session: sessionNext }
+      : eventNext
+        ? { title: eventNext.title, start: eventNext.start_time!, end: eventNext.end_time, color: eventNext.course_code ? themeOf(courses, eventNext.course_code).color : "var(--ink-soft)", place: eventNext.location }
+        : null;
+  const tomorrowFirst = plan.sessions.find((x) => x.date === addDays(today, 1));
+  const examSoon = upcomingExams.find((e) => daysBetween(today, e.date) <= 14);
+
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_auto_1fr] lg:gap-x-10">
       {/* Day header spans both columns */}
       <header className="lg:col-span-2">
-        <p className="text-ink-soft">{formatHebrewDate(today, { weekday: "long" })}</p>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">
-            {formatHebrewDate(today, { day: "numeric", month: "long" })}
-          </h1>
-          {show("clock") && <LiveClock seconds className="font-display text-2xl text-ink-soft sm:text-5xl" />}
-        </div>
+        <p className="flex items-baseline gap-3 text-ink-soft">
+          <span>{formatHebrewDate(today, { weekday: "long" })}</span>
+          {show("clock") && <LiveClock className="font-medium text-ink" />}
+        </p>
+        <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">{formatHebrewDate(today, { day: "numeric", month: "long" })}</h1>
         {(academicToday.length > 0 || nextAcademic) && (
           <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
             <span aria-hidden>🎓</span>
@@ -161,23 +174,33 @@ async function Today() {
             {jp.rest && jToday?.rest && <span className="text-ink">יום מנוחה, בלי תכנון ותזכורות</span>}
           </p>
         )}
-        {next && (
-          <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-soft">
-            ההגשה הבאה היא{" "}
-            <span className="font-medium text-ink">
-              {typeLabel[next.type]} {next.n} ב{themeOf(courses, next.course.code).short}
-            </span>
-            ,{" "}
-            <span className={next.daysLeft <= 7 ? "hl font-medium" : "font-medium text-ink"}>
-              {relativeDays(next.daysLeft)}
-            </span>
-            .
-          </p>
-        )}
       </header>
 
       <section aria-labelledby="soon-title" className="min-w-0 space-y-8 lg:col-start-1">
         <BadgeToast earned={earned} />
+
+        {courses.length > 0 && (
+          <UpNext
+            nowMin={nowMin}
+            item={upNext}
+            status={upNext?.session ? status[sessionKey(upNext.session)] : undefined}
+            tomorrow={tomorrowFirst}
+            deadline={
+              next
+                ? {
+                    label: `${typeLabel[next.type]} ${next.n} ב${themeOf(courses, next.course.code).short}`,
+                    when: relativeDays(next.daysLeft),
+                    urgent: next.daysLeft <= 7,
+                  }
+                : null
+            }
+            exam={
+              examSoon
+                ? { course: courses.find((c) => c.code === examSoon.course_code)?.name ?? examSoon.course_code, days: daysBetween(today, examSoon.date), time: examSoon.start_time ?? null }
+                : null
+            }
+          />
+        )}
 
         {supabaseEnabled && show("quickadd") && <QuickAdd today={today} people={connected} />}
 
@@ -193,16 +216,16 @@ async function Today() {
           }))}
         />}
 
-        {supabaseEnabled && (show("dayoff") || isOff) && <DayOff date={today} isOff={isOff} />}
+        {supabaseEnabled && (show("dayoff") || isOff) && <DayOff date={today} isOff={isOff} sessionsToday={todaySessions.filter((x) => !status[sessionKey(x)]).length} routinesToday={todayRoutines.filter((o) => !o.done && o.category !== "meal").length} />}
 
-        {courses.length === 0 && (
-          <Link href="/courses" className="panel block p-5 hover:border-ink-soft">
-            <span className="block font-semibold">ברוכים הבאים ל־Unihub</span>
-            <span className="mt-1 block text-ink-soft">
-              מתחילים בהוספת הקורסים של הסמסטר (לפי מספר הקורס), ואז שגרה: שינה, ארוחות, ספורט. התוכנית תיבנה מזה לבד.
-            </span>
-          </Link>
-        )}
+        <FirstSteps
+          steps={[
+            { label: "להוסיף את הקורסים של הסמסטר", href: "/courses", done: courses.length > 0 },
+            { label: "להזין מועדי בחינות (כשמתפרסמים)", href: "/settings#study", done: exams.length > 0 },
+            { label: "להוסיף שגרה: שינה, ארוחות, ספורט", href: "/routines", done: routines.length > 0 },
+            { label: "להפעיל התראות בטלפון", href: "/settings#notify", done: hasPush },
+          ]}
+        />
 
         {invites.length > 0 && <InvitesList invites={invites} names={inviters} />}
 
@@ -277,11 +300,28 @@ async function Today() {
                 <span className="text-ink-soft group-open:hidden">פירוט</span>
               </summary>
               <ul className="mt-2 space-y-1 ps-7 text-ink-soft">
-                {plan.warnings.map((w) => (
-                  <li key={w.title}>
-                    {w.title}: חסרות {minutesLabel(w.missingMinutes)}
-                  </li>
-                ))}
+                {plan.warnings.map((w) => {
+                  const c = courses.find((x) => x.code === w.courseCode);
+                  // Too late to fit it in: offer a ready-made extension request to the course coordinator.
+                  const tight = w.missingMinutes >= 120;
+                  const body = `שלום${c?.coordinator ? ` ${c.coordinator}` : ""},\n\nאני סטודנט/ית בקורס ${c?.name ?? ""} (${w.courseCode}) בסמסטר ${semester.semester}.\nאבקש הארכה בהגשת ${w.title}, בגלל ___.\nאשמח לדעת אם זה אפשרי ועד מתי.\n\nתודה רבה,\n${profile?.name ?? ""}`;
+                  return (
+                    <li key={w.title}>
+                      {w.title}: חסרות {minutesLabel(w.missingMinutes)}
+                      {tight && (
+                        <>
+                          {" · "}
+                          <a
+                            href={`mailto:?subject=${encodeURIComponent(`בקשת הארכה: ${w.title} (${w.courseCode})`)}&body=${encodeURIComponent(body)}`}
+                            className="text-ink underline underline-offset-4 decoration-rule"
+                          >
+                            ✉️ לבקש הארכה
+                          </a>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
               <Link href="/settings#study" className="mt-2 inline-block ps-7 text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
                 הוספת זמני לימוד
@@ -289,6 +329,17 @@ async function Today() {
             </details>
           )}
         </div>
+
+        {(studyDays[today] ?? 0) > 0 || todaySessions.some((x) => status[sessionKey(x)] === "done") ? (
+          <ShareDay
+            name={(profile?.name ?? "").split(" ")[0] || "אני"}
+            date={formatHebrewDate(today, { weekday: "long", day: "numeric", month: "long" })}
+            minutes={studyDays[today] ?? 0}
+            sessions={todaySessions.filter((x) => status[sessionKey(x)] === "done").length}
+            routines={todayRoutines.filter((o) => o.done).length}
+            streak={studyStreak(studyDays, today)}
+          />
+        ) : null}
 
         {!show("routines") ? null : todayRoutines.length > 0 ? (
           <TodayRoutines items={todayRoutines} date={today} />
@@ -400,7 +451,7 @@ function SessionList({ sessions, status, courses }: { sessions: Session[]; statu
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
             </div>
           </div>
-          {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} minutes={x.minutes} title={x.title} />}
+          {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} minutes={x.minutes} title={x.title} courseCode={x.courseCode} />}
         </li>
       ))}
     </ol>
@@ -448,4 +499,11 @@ function ExamCountdown({ today, upcoming, courses }: { today: string; upcoming: 
       </ul>
     </div>
   );
+}
+
+/** Days in a row (up to today) with logged study. */
+function studyStreak(days: Record<string, number>, today: string) {
+  let n = 0;
+  for (let d = (days[today] ?? 0) > 0 ? today : addDays(today, -1); (days[d] ?? 0) > 0 && n < 400; d = addDays(d, -1)) n++;
+  return n;
 }

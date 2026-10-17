@@ -4,14 +4,21 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { addEvent, findCommonSlots, markNotificationsRead, sendCheer } from "@/app/act";
 
-const CHEERS = ["👏", "🔥", "💪"];
+const CHEERS: [string, string][] = [
+  ["👏", "כל הכבוד"],
+  ["🔥", "אש"],
+  ["💪", "כוח"],
+  ["☕", "קפה עליי"],
+  ["🍀", "בהצלחה"],
+  ["😴", "לכו לישון"],
+];
 
 export function CheerButtons({ to, label }: { to: string; label: string }) {
   const [sent, setSent] = useState<string | null>(null);
   const [pending, start] = useTransition();
   return (
-    <span className="inline-flex items-center gap-1">
-      {CHEERS.map((e) => (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {CHEERS.map(([e, name]) => (
         <button
           key={e}
           type="button"
@@ -23,7 +30,8 @@ export function CheerButtons({ to, label }: { to: string; label: string }) {
             })
           }
           className={`grid size-8 place-items-center rounded-full border text-base transition ${sent === e ? "border-ink bg-highlight" : "border-rule hover:border-ink"} disabled:cursor-default`}
-          aria-label={`לשלוח ${e}`}
+          aria-label={`לשלוח ${name}`}
+          title={name}
         >
           {e}
         </button>

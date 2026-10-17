@@ -289,7 +289,19 @@ function WeekGrid({
     <>
       {/* Phone: one row per day */}
       <ol className="divide-y divide-rule md:hidden">
-        {days.map((d) => {
+        {groupFree(days, (d) => (byDate.get(d) ?? []).length === 0 && d !== today && d !== selected).map((g) => {
+          if (Array.isArray(g))
+            return (
+              <li key={g[0]}>
+                <button type="button" onClick={() => onSelect(g[0])} className="flex w-full items-center gap-3 px-4 py-2 text-start text-sm text-ink-soft">
+                  <span className="w-12 shrink-0 text-xs">
+                    {fmt(g[0], { weekday: "short" })}–{fmt(g[g.length - 1], { weekday: "short" })}
+                  </span>
+                  <span>{g.length} ימים פנויים</span>
+                </button>
+              </li>
+            );
+          const d = g;
           const list = byDate.get(d) ?? [];
           return (
             <li key={d}>
@@ -436,6 +448,26 @@ function WeekGrid({
       </div>
     </>
   );
+}
+
+/** Runs of 2+ free days become one entry (an array); other days stay as they are. */
+function groupFree(days: string[], free: (d: string) => boolean): (string | string[])[] {
+  const out: (string | string[])[] = [];
+  let run: string[] = [];
+  const flush = () => {
+    if (run.length >= 2) out.push(run);
+    else out.push(...run);
+    run = [];
+  };
+  for (const d of days) {
+    if (free(d)) run.push(d);
+    else {
+      flush();
+      out.push(d);
+    }
+  }
+  flush();
+  return out;
 }
 
 /** Overlapping timed items share the width: each gets a column inside its overlap group. */

@@ -334,7 +334,14 @@ body {
 :root[data-size="lg"] { font-size: 18px; }
 :root[data-size="xl"] { font-size: 20px; }
 
-/* Reduced motion / calm mode */
+/* Reduced motion (system setting) / calm mode */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
 :root[data-calm="1"] *, :root[data-calm="1"] *::before, :root[data-calm="1"] *::after {
   animation-duration: 0s !important;
   transition-duration: 0s !important;

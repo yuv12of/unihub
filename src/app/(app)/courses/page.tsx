@@ -7,7 +7,9 @@ import { coursesFor, getProgress, progressKey, standing } from "@/lib/progress";
 import { GradeCalculator } from "@/components/GradeCalculator";
 import { AddCourse, CourseLook } from "@/components/CourseManager";
 import { supabaseEnabled } from "@/lib/supabase/config";
-import { getCourses, getNotes } from "@/lib/userdata";
+import { getCourses, getFriendView, getNotes, getPeople, getReviews, getSpentByAssignment, getStuck } from "@/lib/userdata";
+import { StuckList } from "@/components/StuckList";
+import { Avatar } from "@/components/Avatar";
 import {
   formatHebrewDate,
   semester,
@@ -42,11 +44,27 @@ const linkClass = "underline underline-offset-4 decoration-rule hover:text-ink";
 async function Courses() {
   await connection();
   const today = todayInIsrael();
-  const [progress, notes, base] = await Promise.all([
+  const [progress, notes, base, reviews, spent, stuck, people] = await Promise.all([
     getProgress(),
     getNotes(),
     getCourses(),
+    getReviews(),
+    getSpentByAssignment(),
+    getStuck(),
+    getPeople(),
   ]);
+  // Course rooms: friends I follow who take the same course (and what they've submitted, if they share it).
+  const following = people.filter((p) => p.i_follow === "accepted");
+  const views = await Promise.all(following.map((p) => getFriendView(p.id)));
+  const roomFor = (code: string) =>
+    following.flatMap((p, i) => {
+      const v = views[i];
+      if (!v || !(v.courses ?? []).some((c) => c.code === code)) return [];
+      const done = v.share.progress
+        ? v.progress.filter((x) => x.course_code === code && x.semester === semester.semester && x.status === "submitted").map((x) => x.n)
+        : null;
+      return [{ id: p.id, name: p.name, avatar_url: p.avatar_url, avatar_emoji: p.avatar_emoji, avatar_color: p.avatar_color, done }];
+    });
 
   const colorKey = (css: string) =>
     Object.entries(PALETTE).find(([, v]) => v.css === css)?.[0] ?? "slate";
@@ -109,6 +127,8 @@ async function Courses() {
                       status: "todo",
                       grade: null,
                     },
+                    spent: spent[`${c.code}|${a.n}`],
+                    review: reviews.find((r) => r.course_code === c.code && r.n === a.n) ?? null,
                   }))}
                 />
               </div>
@@ -127,6 +147,10 @@ async function Courses() {
                   };
                 })}
               />
+
+              <CourseRoom people={roomFor(c.code)} />
+
+              <StuckList items={stuck.filter((x) => x.course_code === c.code)} />
 
               <CourseNotes
                 notes={notes.filter((n) => n.course_code === c.code)}
@@ -223,6 +247,32 @@ function CourseNotes({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function CourseRoom({
+  people,
+}: {
+  people: { id: string; name: string; avatar_url: string | null; avatar_emoji?: string | null; avatar_color?: string | null; done: string[] | null }[];
+}) {
+  if (!people.length) return null;
+  return (
+    <div className="border-t border-rule px-5 py-4">
+      <h3 className="text-sm font-semibold">חברים בקורס</h3>
+      <ul className="mt-2 space-y-2 text-sm">
+        {people.map((p) => (
+          <li key={p.id} className="flex items-center gap-2">
+            <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} size={26} />
+            <a href={`/friends/${p.id}`} className="font-medium hover:underline">
+              {p.name.split(" ")[0]}
+            </a>
+            <span className="text-ink-soft">
+              {p.done == null ? "לא משתף/ת התקדמות" : p.done.length ? `הגיש/ה ${p.done.sort().join(", ")}` : "עוד לא הגיש/ה"}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -236,7 +236,14 @@ export async function getMails(limit = 200): Promise<Mail[]> {
     )
     .order("received_at", { ascending: false })
     .limit(limit);
-  return (data ?? []) as Mail[];
+  // The same message sometimes arrives twice (forwarded / two labels): show it once.
+  const seen = new Set<string>();
+  return ((data ?? []) as Mail[]).filter((m) => {
+    const k = `${m.subject ?? ""}|${(m.received_at ?? "").slice(0, 13)}|${(m.body_text ?? m.summary ?? "").replace(/\s+/g, " ").slice(0, 300)}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export interface Card {
@@ -350,6 +357,62 @@ export const hasSpotify = cache(async (): Promise<boolean> => {
   const { count } = await supabase.from("spotify_tokens").select("user_id", { count: "exact", head: true });
   return (count ?? 0) > 0;
 });
+
+export interface Review {
+  course_code: string;
+  n: string;
+  minutes_spent: number | null;
+  difficulty: number | null;
+  hard: string | null;
+}
+
+/** My assignment autopsies for this semester. */
+export async function getReviews(): Promise<Review[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("assignment_reviews").select("course_code, n, minutes_spent, difficulty, hard").eq("semester", semester.semester);
+  return (data ?? []) as Review[];
+}
+
+export interface StuckPoint {
+  id: string;
+  course_code: string | null;
+  topic: string;
+  resolved: boolean;
+  created_at: string;
+}
+
+export async function getStuck(): Promise<StuckPoint[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("stuck_points").select("id, course_code, topic, resolved, created_at").order("created_at", { ascending: false }).limit(100);
+  return (data ?? []) as StuckPoint[];
+}
+
+/** Minutes logged per assignment ("code|n"), from study sessions marked done. */
+export async function getSpentByAssignment(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const r of await getSessionRows()) {
+    if (r.status !== "done" || !r.minutes) continue;
+    const [, kind, code, ref] = r.session_key.split("|");
+    if (kind === "assignment" && ref?.startsWith("a")) out[`${code}|${ref.slice(1)}`] = (out[`${code}|${ref.slice(1)}`] ?? 0) + r.minutes;
+  }
+  return out;
+}
+
+export async function getFamilyLinks(): Promise<{ token: string; name: string; last_seen: string | null }[]> {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("family_links").select("token, name, last_seen").order("created_at");
+  return data ?? [];
+}
+
+export async function hasPushSubscription(): Promise<boolean> {
+  if (!supabaseEnabled) return false;
+  const supabase = await createClient();
+  const { count } = await supabase.from("push_subscriptions").select("endpoint", { count: "exact", head: true });
+  return (count ?? 0) > 0;
+}
 
 export interface Person {
   id: string;

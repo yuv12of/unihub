@@ -1,13 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { SideNav, TabBar } from "@/components/Nav";
-import { getBadges, getMyProfile } from "@/lib/userdata";
+import { getBadges, getCourses, getMyProfile } from "@/lib/userdata";
+import { QuickLog } from "@/components/QuickLog";
+import { supabaseEnabled } from "@/lib/supabase/config";
 import { connection } from "next/server";
 import { UserBadge, UserPanel } from "@/components/UserBadge";
 import { LiveClock } from "@/components/LiveClock";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SwRegister } from "@/components/SwRegister";
-import { semester } from "@/lib/semester";
+import { semester, themeOf } from "@/lib/semester";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -38,6 +40,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <ScrollReset />
         </Suspense>
         <SwRegister />
+        <Suspense fallback={null}>
+          <QuickLogMount />
+        </Suspense>
         {/* Phone: slim header */}
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rule bg-bg/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur lg:hidden">
           <Link href="/" className="font-display text-xl">
@@ -61,6 +66,13 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 async function SideNavWithBadges() {
   await connection();
   return <SideNav badges={await getBadges()} />;
+}
+
+async function QuickLogMount() {
+  await connection();
+  if (!supabaseEnabled || !(await getMyProfile())) return null;
+  const courses = await getCourses();
+  return <QuickLog courses={courses.map((c) => ({ code: c.code, short: themeOf(courses, c.code).short, color: themeOf(courses, c.code).color }))} />;
 }
 
 async function TabBarWithBadges() {
