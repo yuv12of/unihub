@@ -194,11 +194,18 @@ async function Settings() {
           <h2 id="jewish-title" className="text-lg font-semibold">
             חגים ושבת
           </h2>
-          <p className="mt-1 text-sm text-ink-soft">חגים, ראשי חודשים, פרשת השבוע וזמני כניסת ויציאת שבת, לפי Hebcal.</p>
+          <p className="mt-1 text-sm text-ink-soft">חגים וראשי חודשים, ולמי שרוצה גם זמני כניסת ויציאת שבת, לפי Hebcal.</p>
           <form action={saveJewish} className="mt-4 space-y-4">
             <label className="flex items-start gap-3">
               <input type="checkbox" name="show" defaultChecked={jp.show} className="mt-1 size-4" />
-              <span>להציג בלוח ובמסך היום</span>
+              <span>להציג חגים וראשי חודשים בלוח ובמסך היום</span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input type="checkbox" name="times" defaultChecked={jp.times} className="mt-1 size-4" />
+              <span>
+                להציג גם זמני שבת
+                <span className="block text-sm text-ink-soft">הדלקת נרות, הבדלה ופרשת השבוע.</span>
+              </span>
             </label>
             <label className="flex items-start gap-3">
               <input type="checkbox" name="rest" defaultChecked={jp.rest} className="mt-1 size-4" />

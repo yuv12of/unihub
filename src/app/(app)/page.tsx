@@ -83,9 +83,17 @@ async function Today() {
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
   const isOff = manualOff.includes(today);
   const jp = jewishPrefs(prefs.jewish);
-  const jdays = jp.show ? await jewishDays(jp, today, addDays(today, 14)) : {};
-  const jToday = jdays[today];
-  const jNext = Object.values(jdays)
+  const jdays = jp.show || jp.times ? await jewishDays(jp, today, addDays(today, 14)) : {};
+  const jRaw = jdays[today];
+  // Holidays and Shabbat times are separate choices; keep only what this user wants to see.
+  const jToday = jRaw && {
+    ...jRaw,
+    holidays: jp.show ? jRaw.holidays : [],
+    candles: jp.times ? jRaw.candles : undefined,
+    havdalah: jp.times ? jRaw.havdalah : undefined,
+    parasha: jp.times ? jRaw.parasha : undefined,
+  };
+  const jNext = !jp.show ? undefined : Object.values(jdays)
     .filter((d) => d.date > today && d.holidays.some((h) => h.major))
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   const earned = computeBadges({
@@ -137,7 +145,7 @@ async function Today() {
               : `${nextAcademic!.title} ${relativeDays(daysBetween(today, nextAcademic!.date))} (${formatHebrewDate(nextAcademic!.date, { day: "numeric", month: "numeric" })})`}
           </p>
         )}
-        {jp.show && (jToday || jNext) && (
+        {(jToday?.holidays.length || jToday?.candles || jToday?.havdalah || jToday?.parasha || jNext || (jp.rest && jToday?.rest)) && (
           <p className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
             <span aria-hidden>✡️</span>
             {jToday?.holidays.length ? <span className="text-ink">{jToday.holidays.map((h) => h.title).join(", ")}</span> : null}

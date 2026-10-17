@@ -26,18 +26,21 @@ export const CITIES = [
 export type CityKey = (typeof CITIES)[number]["key"];
 
 export interface JewishPrefs {
-  /** show holidays, parasha and Shabbat times */
+  /** show holidays and Rosh Chodesh */
   show: boolean;
+  /** also show candle lighting, havdalah and the parasha */
+  times: boolean;
   /** no study and no reminders on Shabbat and Yom Tov */
   rest: boolean;
   city: CityKey;
 }
-export const defaultJewish: JewishPrefs = { show: true, rest: false, city: "jerusalem" };
+export const defaultJewish: JewishPrefs = { show: true, times: false, rest: false, city: "jerusalem" };
 
 export function jewishPrefs(p: unknown): JewishPrefs {
   const o = (p ?? {}) as Partial<JewishPrefs>;
   return {
     show: o.show ?? defaultJewish.show,
+    times: o.times ?? defaultJewish.times,
     rest: o.rest ?? defaultJewish.rest,
     city: CITIES.some((c) => c.key === o.city) ? (o.city as CityKey) : defaultJewish.city,
   };
@@ -102,7 +105,7 @@ async function hebcalYear(city: CityKey, year: number): Promise<HebcalItem[]> {
 
 /** Day-by-day Jewish calendar between two dates (inclusive). */
 export async function jewishDays(prefs: JewishPrefs, from: string, to: string): Promise<Record<string, JewishDay>> {
-  if (!prefs.show && !prefs.rest) return {};
+  if (!prefs.show && !prefs.times && !prefs.rest) return {};
   const years = new Set([Number(from.slice(0, 4)), Number(to.slice(0, 4))]);
   const items = (await Promise.all([...years].map((y) => hebcalYear(prefs.city, y)))).flat();
   const out: Record<string, JewishDay> = {};

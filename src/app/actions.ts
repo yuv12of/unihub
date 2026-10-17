@@ -321,6 +321,7 @@ export async function saveJewish(formData: FormData) {
   const { jewishPrefs } = await import("@/lib/hebcal");
   const jewish = jewishPrefs({
     show: formData.get("show") === "on",
+    times: formData.get("times") === "on",
     rest: formData.get("rest") === "on",
     city: String(formData.get("city") ?? ""),
   });

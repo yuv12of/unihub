@@ -106,11 +106,11 @@ async function Semester() {
     });
   }
   const jp = jewishPrefs(prefs.jewish);
-  if (jp.show)
+  if (jp.show || jp.times)
     for (const d of Object.values(await jewishDays(jp, addDays(today, -28), addDays(today, 200)))) {
-      for (const h of d.holidays) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✡ ${h.title}`, holiday: h.major && d.rest });
-      if (d.candles) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `🕯️ הדלקת נרות ${d.candles}` });
-      if (d.havdalah) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✨ הבדלה ${d.havdalah}${d.parasha ? ` · ${d.parasha}` : ""}` });
+      if (jp.show) for (const h of d.holidays) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✡ ${h.title}`, holiday: h.major && d.rest });
+      if (jp.times && d.candles) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `🕯️ הדלקת נרות ${d.candles}` });
+      if (jp.times && d.havdalah) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✨ הבדלה ${d.havdalah}${d.parasha ? ` · ${d.parasha}` : ""}` });
     }
   for (const a of academicByDay()) {
     items.push({ date: a.date, kind: "academic", color: "var(--ink-soft)", label: a.title, holiday: a.holiday });
