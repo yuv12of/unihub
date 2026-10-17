@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { jewishDays, jewishPrefs } from "@/lib/hebcal";
 import Link from "next/link";
 import { connection } from "next/server";
 import { SemesterCalendar, type CalItem } from "@/components/SemesterCalendar";
@@ -29,7 +30,7 @@ export default function SemesterPage() {
 async function Semester() {
   await connection();
   const today = todayInIsrael();
-  const [{ progress, exams, plan, events, status, courses, routines, logs, offDays }, people] = await Promise.all([getUserPlan(today), getPeople()]);
+  const [{ progress, exams, plan, events, status, courses, routines, logs, offDays, manualOff, prefs }, people] = await Promise.all([getUserPlan(today), getPeople()]);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
   const names = await getNames([...events.flatMap((e) => (e.guests ?? []).map((g) => g.invitee)), ...events.map((e) => e.invited_by ?? "").filter(Boolean)]);
 
@@ -88,6 +89,7 @@ async function Semester() {
       end: ev.end_time ?? undefined,
       eventId: ev.id,
       deletable: ev.source === "manual" && !ev.invited_by,
+      ...(ev.source === "google" && { note: "מיומן Google" }),
     });
   }
   // Routines: four weeks back to ten weeks ahead (sleep stays out of the calendar).
@@ -103,6 +105,13 @@ async function Semester() {
       done: o.done,
     });
   }
+  const jp = jewishPrefs(prefs.jewish);
+  if (jp.show)
+    for (const d of Object.values(await jewishDays(jp, addDays(today, -28), addDays(today, 200)))) {
+      for (const h of d.holidays) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✡ ${h.title}`, holiday: h.major && d.rest });
+      if (d.candles) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `🕯️ הדלקת נרות ${d.candles}` });
+      if (d.havdalah) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✨ הבדלה ${d.havdalah}${d.parasha ? ` · ${d.parasha}` : ""}` });
+    }
   for (const a of academicByDay()) {
     items.push({ date: a.date, kind: "academic", color: "var(--ink-soft)", label: a.title, holiday: a.holiday });
   }
@@ -114,7 +123,7 @@ async function Semester() {
         today={today}
         editable={supabaseEnabled}
         people={connected.map((p) => ({ id: p.id, name: p.name }))}
-        offDays={offDays}
+        offDays={manualOff}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
       />
       {exams.length === 0 && (

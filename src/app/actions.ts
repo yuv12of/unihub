@@ -286,6 +286,53 @@ export async function syncOpalNow() {
   return (await res.json()) as { opal: string; events?: number; message?: string };
 }
 
+/** Saves (or removes, when empty) the Google Calendar secret iCal address, then imports it right away. */
+export async function saveGoogleFeed(url: string) {
+  const { supabase, userId } = await requireUser();
+  url = url.trim();
+  if (!url) {
+    await supabase.from("external_feeds").delete().match({ user_id: userId, kind: "google" });
+    await supabase.from("user_events").delete().match({ user_id: userId, source: "google" });
+    refresh();
+    return { ok: true as boolean, count: 0, message: undefined as string | undefined };
+  }
+  const { isGoogleIcsUrl, syncGoogleFor } = await import("@/lib/googleCal");
+  if (!isGoogleIcsUrl(url)) throw new Error("זו לא \"הכתובת הסודית בפורמט iCal\" של יומן Google");
+  const { error } = await supabase.from("external_feeds").upsert({ user_id: userId, kind: "google", url, last_status: "מסנכרן…", last_synced_at: null });
+  if (error) throw new Error(error.message);
+  const r = await syncGoogleFor(supabase, userId, url);
+  refresh();
+  return { ok: r.ok, count: r.count ?? 0, message: r.message };
+}
+
+export async function syncGoogleNow() {
+  const { supabase, userId } = await requireUser();
+  const { data } = await supabase.from("external_feeds").select("url").match({ user_id: userId, kind: "google" }).maybeSingle();
+  if (!data) throw new Error("יומן Google לא מחובר");
+  const { syncGoogleFor } = await import("@/lib/googleCal");
+  const r = await syncGoogleFor(supabase, userId, data.url);
+  refresh();
+  return r;
+}
+
+/** Hebcal settings: show holidays/Shabbat times, rest mode, city. */
+export async function saveJewish(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const { jewishPrefs } = await import("@/lib/hebcal");
+  const jewish = jewishPrefs({
+    show: formData.get("show") === "on",
+    rest: formData.get("rest") === "on",
+    city: String(formData.get("city") ?? ""),
+  });
+  const { data } = await supabase.from("study_prefs").update({ jewish }).eq("user_id", userId).select("user_id");
+  if (!data?.length) {
+    const { defaultPrefs } = await import("@/lib/planner");
+    const { error } = await supabase.from("study_prefs").insert({ user_id: userId, availability: defaultPrefs.availability, session_minutes: defaultPrefs.session_minutes, fill_routine: defaultPrefs.fill_routine, jewish });
+    if (error) throw new Error(error.message);
+  }
+  refresh();
+}
+
 // ---------- Accounts (admin) ----------
 
 export async function setAccountStatus(userId: string, status: "approved" | "blocked" | "pending") {

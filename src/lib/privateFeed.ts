@@ -3,7 +3,9 @@ import { supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 import { defaultPrefs, sessionKey, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
 import { planFor } from "@/lib/planfor";
-import { courseFromRow, semester, todayInIsrael, type CourseRow } from "@/lib/semester";
+import { addDays, courseFromRow, semester, todayInIsrael, type CourseRow } from "@/lib/semester";
+import { restFor } from "@/lib/hebcal";
+import type { Busy } from "@/lib/planner";
 
 import type { Routine, RoutineLog } from "@/lib/routines";
 
@@ -36,11 +38,17 @@ export function bearer(req: Request) {
 export async function loadPrivate(token: string) {
   const { data, error } = await anonClient().rpc("private_feed", { p_token: token });
   if (error || !data) return null;
-  return buildFromFeed(data as PrivateFeed);
+  return buildFromFeed(data as PrivateFeed, await restForFeed(data as PrivateFeed));
+}
+
+/** Shabbat/Yom Tov rest mode for a feed (empty when the user hasn't turned it on). */
+export function restForFeed(feed: Pick<PrivateFeed, "prefs">) {
+  const today = todayInIsrael();
+  return restFor(feed.prefs?.jewish, addDays(today, -60), addDays(today, 240));
 }
 
 /** Plan, courses and routines from a user's feed (same result as the app shows). */
-export function buildFromFeed(feed: PrivateFeed) {
+export function buildFromFeed(feed: PrivateFeed, rest: { offDays: string[]; busy: Busy[] } = { offDays: [], busy: [] }) {
   const progress: ProgressMap = Object.fromEntries(
     (feed.progress ?? [])
       .filter((p) => p.semester === semester.semester)
@@ -56,10 +64,10 @@ export function buildFromFeed(feed: PrivateFeed) {
   const base = (feed.courses ?? []).map(courseFromRow);
   const routines = feed.routines ?? [];
   const logs = feed.routine_logs ?? [];
-  const offDays = feed.off_days ?? [];
+  const offDays = [...(feed.off_days ?? []), ...rest.offDays];
   feed.events ??= [];
   feed.session_status ??= {};
-  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows, courses: base, routines, offDays });
+  const plan: Plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: feed.events, rows, courses: base, routines, offDays, extraBusy: rest.busy });
   const live = plan.sessions.filter((s) => feed.session_status[sessionKey(s)] !== "skipped");
   return { feed, progress, exams, today, plan, sessions: live, courses: coursesFor(progress, base), routines, logs, offDays };
 }

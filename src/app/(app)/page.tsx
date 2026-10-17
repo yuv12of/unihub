@@ -5,6 +5,7 @@ import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence, WeightBar } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
 import { getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { jewishDays, jewishPrefs } from "@/lib/hebcal";
 import { computeBadges } from "@/lib/badges";
 import { BadgeToast } from "@/components/BadgeToast";
 import { QuickAdd } from "@/components/QuickAdd";
@@ -67,7 +68,7 @@ function toRow(d: DeadlineItem): DeadlineRowData {
 async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
-  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays }, updates, invites, people, live] = await Promise.all([
+  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live] = await Promise.all([
     getUserPlan(today),
     getUpdates(),
     getPendingInvites(),
@@ -79,7 +80,13 @@ async function Today() {
   const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
-  const isOff = offDays.includes(today);
+  const isOff = manualOff.includes(today);
+  const jp = jewishPrefs(prefs.jewish);
+  const jdays = jp.show ? await jewishDays(jp, today, addDays(today, 14)) : {};
+  const jToday = jdays[today];
+  const jNext = Object.values(jdays)
+    .filter((d) => d.date > today && d.holidays.some((h) => h.major))
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
   const earned = computeBadges({
     today,
     studyDays,
@@ -96,7 +103,7 @@ async function Today() {
     .filter((b) => b.earned)
     .map((b) => ({ id: b.id, emoji: b.emoji, title: b.title }));
   const todayRoutines = occurrencesFor({ routines, logs, events, plan, today, from: today, to: today, offDays }).filter((o) => o.category !== "sleep");
-  const todayEvents = events.filter((e) => e.date === today && (e.kind !== "other" || e.source === "opal"));
+  const todayEvents = events.filter((e) => e.date === today && (e.kind !== "other" || e.source === "opal" || e.source === "google"));
   const academicToday = academicOn(today);
   const nextAcademic = academicEvents.find((e) => e.date > today);
   const todaySessions = plan.sessions.filter((x) => x.date === today);
@@ -124,6 +131,21 @@ async function Today() {
             {academicToday.length > 0
               ? academicToday.map((a) => a.title).join(", ")
               : `${nextAcademic!.title} ${relativeDays(daysBetween(today, nextAcademic!.date))} (${formatHebrewDate(nextAcademic!.date, { day: "numeric", month: "numeric" })})`}
+          </p>
+        )}
+        {jp.show && (jToday || jNext) && (
+          <p className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
+            <span aria-hidden>✡️</span>
+            {jToday?.holidays.length ? <span className="text-ink">{jToday.holidays.map((h) => h.title).join(", ")}</span> : null}
+            {jToday?.parasha && <span>{jToday.parasha}</span>}
+            {jToday?.candles && <span>הדלקת נרות {jToday.candles}</span>}
+            {jToday?.havdalah && <span>הבדלה {jToday.havdalah}</span>}
+            {jNext && !jToday?.holidays.some((h) => h.major) && (
+              <span>
+                {jNext.holidays.find((h) => h.major)!.title} {relativeDays(daysBetween(today, jNext.date))}
+              </span>
+            )}
+            {jp.rest && jToday?.rest && <span className="text-ink">יום מנוחה, בלי תכנון ותזכורות</span>}
           </p>
         )}
         {next && (

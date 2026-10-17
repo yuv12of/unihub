@@ -29,8 +29,11 @@ export function planFor({
   courses,
   routines = [],
   offDays = [],
+  extraBusy = [],
 }: {
   offDays?: string[];
+  /** extra blocked time (e.g. Friday evening in Shabbat rest mode) */
+  extraBusy?: Busy[];
   /** Life routines: timed fixed ones that block study are planned around. */
   routines?: Routine[];
   /** The user's courses (without deadline extensions; they're applied here). */
@@ -47,7 +50,7 @@ export function planFor({
     prefs,
     progress,
     exams,
-    busy: [...busyFromEvents(events), ...routineBusy(routines, today, addDays(today, 240))],
+    busy: [...extraBusy, ...busyFromEvents(events), ...routineBusy(routines, today, addDays(today, 240))],
     courses: coursesFor(progress, courses),
     doneMinutes: Object.fromEntries(rows.filter((r) => r.status === "done" && r.minutes).map((r) => [r.session_key, r.minutes!])),
     skipped: new Set(rows.filter((r) => r.status === "skipped").map((r) => r.session_key)),

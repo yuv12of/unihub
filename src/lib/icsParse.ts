@@ -14,7 +14,7 @@ export interface IcsEvent {
 const unescape = (v: string) => v.replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1");
 
 /** "20261025T150000Z" → Israel date/time; "20261025" → all-day. */
-function toLocal(value: string, params: string): { date: string; time: string | null } | null {
+export function toLocal(value: string, params: string): { date: string; time: string | null } | null {
   const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
   if (!m) return null;
   const date = `${m[1]}-${m[2]}-${m[3]}`;

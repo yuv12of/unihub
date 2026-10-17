@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { courseFromRow, semester, type Course, type CourseRow } from "@/lib/semester";
+import { addDays, courseFromRow, semester, type Course, type CourseRow } from "@/lib/semester";
+import { restFor } from "@/lib/hebcal";
 import { defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { planFor } from "@/lib/planfor";
 import type { Routine, RoutineLog } from "@/lib/routines";
@@ -81,7 +82,7 @@ export async function getPrefs(): Promise<StudyPrefs> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("study_prefs")
-    .select("availability, session_minutes, fill_routine")
+    .select("availability, session_minutes, fill_routine, jewish")
     .maybeSingle();
   return data ? { ...defaultPrefs, ...(data as StudyPrefs) } : defaultPrefs;
 }
@@ -173,8 +174,10 @@ export interface UserPlan {
   /** check-offs including people I share routines with */
   allLogs: RoutineLog[];
   me: string | null;
-  /** rough days (no plan, streaks protected) */
+  /** rough days + (in rest mode) Shabbat and Yom Tov: no plan, streaks protected */
   offDays: string[];
+  /** only the rough days the user marked */
+  manualOff: string[];
 }
 
 
@@ -195,8 +198,10 @@ export async function getUserPlan(today: string): Promise<UserPlan> {
   const status = Object.fromEntries(rows.map((r) => [r.session_key, r.status]));
   const routines = allRoutines.filter((r) => r.role !== "pending" && r.active);
   const logs = allLogs.filter((l) => l.user_id === me);
-  const plan = planFor({ today, prefs, progress, exams, events, rows, courses: base, routines, offDays });
-  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress, base), routines, logs, allLogs, me, offDays };
+  const rest = await restFor(prefs.jewish, addDays(today, -60), addDays(today, 240));
+  const allOff = [...offDays, ...rest.offDays];
+  const plan = planFor({ today, prefs, progress, exams, events, rows, courses: base, routines, offDays: allOff, extraBusy: rest.busy });
+  return { progress, exams, prefs, events, status, plan, courses: coursesFor(progress, base), routines, logs, allLogs, me, offDays: allOff, manualOff: offDays };
 }
 
 export async function getIngestToken(): Promise<string | null> {
@@ -328,6 +333,13 @@ export async function getOpalFeed(): Promise<OpalFeed | null> {
   const { data } = await supabase.from("external_feeds").select("url, last_synced_at, last_status, last_count").eq("kind", "opal").maybeSingle();
   // The page only needs to show that a link is saved; the key part never goes to the browser.
   return data ? { ...data, url: data.url.replace(/authtoken=[^&]+/, "authtoken=••••") } : null;
+}
+
+export async function getGoogleFeed(): Promise<OpalFeed | null> {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data } = await supabase.from("external_feeds").select("url, last_synced_at, last_status, last_count").eq("kind", "google").maybeSingle();
+  return data ? { ...data, url: data.url.replace(/private-[0-9a-f]+/, "private-••••") } : null;
 }
 
 export interface Person {

@@ -11,6 +11,7 @@ import { Avatar } from "@/components/Avatar";
 import { BadgeGrid } from "@/components/BadgeGrid";
 import { Heatmap } from "@/components/Heatmap";
 import { LookPicker, ProfileEditor } from "@/components/ProfileParts";
+import { SpotifyCard } from "@/components/SpotifyCard";
 
 export default function ProfilePage() {
   return (
@@ -107,6 +108,7 @@ async function Profile() {
       <section className="panel p-5">
         <h2 className="mb-4 text-lg font-semibold">התאמה אישית</h2>
         <LookPicker initial={me.prefs ?? {}} />
+        <SpotifyCard />
       </section>
 
       <form action="/auth/signout" method="post">

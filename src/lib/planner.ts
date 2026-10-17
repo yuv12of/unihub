@@ -23,6 +23,8 @@ export interface StudyPrefs {
   availability: Availability;
   session_minutes: number;
   fill_routine: boolean;
+  /** Hebcal settings (see lib/hebcal) */
+  jewish?: import("@/lib/hebcal").JewishPrefs | null;
 }
 
 export const defaultPrefs: StudyPrefs = {

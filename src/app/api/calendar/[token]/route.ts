@@ -6,6 +6,7 @@ import { academicEvents } from "@/lib/academic";
 import { coursesFor, progressKey, type ProgressMap, type Status } from "@/lib/progress";
 import { occurrencesFor, planFor } from "@/lib/planfor";
 import type { Routine, RoutineLog } from "@/lib/routines";
+import { restFor } from "@/lib/hebcal";
 import { renderCalendar, type CalEvent } from "@/lib/ical";
 import { courseFromRow, semester, todayInIsrael, typeLabel, addDays, themeOf, type CourseRow } from "@/lib/semester";
 
@@ -17,7 +18,7 @@ interface FeedData {
   courses?: CourseRow[];
   progress: { course_code: string; semester: string; n: string; status: Status; due_override?: string | null }[];
   exams: (Exam & { semester: string })[];
-  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null; cancelled?: boolean; external_id?: string | null }[];
+  events?: { id: string; date: string; start_time: string | null; end_time: string | null; title: string; kind: string; location: string | null; cancelled?: boolean; external_id?: string | null; source?: string }[];
   session_status?: Record<string, "done" | "skipped">;
   session_minutes?: Record<string, number>;
 }
@@ -46,7 +47,9 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   const base = (feed.courses ?? []).map(courseFromRow);
   const courses = coursesFor(progress, base);
   const routines = feed.routines ?? [];
-  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows, courses: base, routines, offDays: feed.off_days ?? [] });
+  const rest = await restFor(feed.prefs?.jewish, addDays(today, -60), addDays(today, 240));
+  const offDays = [...(feed.off_days ?? []), ...rest.offDays];
+  const plan = planFor({ today, prefs: feed.prefs ?? defaultPrefs, progress, exams, events: userEvents, rows, courses: base, routines, offDays, extraBusy: rest.busy });
 
   const events: CalEvent[] = [];
   for (const c of courses) {
@@ -80,6 +83,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
     }
   }
   for (const e of userEvents) {
+    if (e.source === "google") continue; // came from the user's Google Calendar; sending it back would duplicate it
     if (e.kind === "other" && e.start_time) continue; // phone tutoring hours stay in the app, not the calendar
     const title = e.cancelled ? `בוטל: ${e.title}` : e.title;
     // Opal events are re-imported on every sync, so their identity comes from Opal, not the row id.
@@ -118,7 +122,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/calendar/[token
   }
 
   // Routines with a time (sleep and meals stay in the app), two weeks back to three weeks ahead.
-  for (const o of occurrencesFor({ routines, logs: feed.routine_logs ?? [], events: userEvents, plan, today, from: addDays(today, -14), to: addDays(today, 21), offDays: feed.off_days ?? [] })) {
+  for (const o of occurrencesFor({ routines, logs: feed.routine_logs ?? [], events: userEvents, plan, today, from: addDays(today, -14), to: addDays(today, 21), offDays })) {
     if (!o.start || !o.end || o.category === "sleep" || o.category === "meal") continue;
     events.push({
       uid: `routine-${o.routineId}-${o.date}@unihub`,

@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { headers } from "next/headers";
-import { resetFeed, resetIngestToken, saveExams, savePrefs } from "@/app/actions";
+import { resetFeed, resetIngestToken, saveExams, saveJewish, savePrefs } from "@/app/actions";
+import { GoogleCalImport } from "@/components/GoogleCalImport";
+import { CITIES, jewishPrefs } from "@/lib/hebcal";
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getCourses, getExams, getFeedToken, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
 import { OpalSync } from "@/components/OpalSync";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester, themeOf } from "@/lib/semester";
@@ -31,7 +33,8 @@ const field = "rounded-lg border border-rule bg-surface px-3 py-2";
 async function Settings() {
   await connection();
   if (!supabaseEnabled) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
-  const [prefs, exams, token, ingest, opal, courses] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken(), getOpalFeed(), getCourses()]);
+  const [prefs, exams, token, ingest, opal, courses, google] = await Promise.all([getPrefs(), getExams(), getFeedToken(), getIngestToken(), getOpalFeed(), getCourses(), getGoogleFeed()]);
+  const jp = jewishPrefs(prefs.jewish);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const feedUrl = token ? `${origin}/api/calendar/${token}` : null;
@@ -148,8 +151,9 @@ async function Settings() {
 
         <section className="panel p-5 sm:p-6" aria-labelledby="cal-title">
           <h2 id="cal-title" className="text-lg font-semibold">
-            סנכרון ליומן Google
+            יומן Google, בשני הכיוונים
           </h2>
+          <h3 className="mt-4 font-medium">מ־Unihub ל־Google</h3>
           <p className="mt-1 text-sm text-ink-soft">
             קישור פרטי שמכניס ליומן את ההגשות, הבחינות ומפגשי הלימוד, ומתעדכן לבד.
           </p>
@@ -178,6 +182,45 @@ async function Settings() {
               <SaveButton done="הקישור מוכן">יצירת קישור ליומן</SaveButton>
             </form>
           )}
+          <h3 id="google" className="mt-6 scroll-mt-24 border-t border-rule pt-5 font-medium">מ־Google ל־Unihub</h3>
+          <p className="mt-1 text-sm text-ink-soft">
+            אירועים מהיומן שלכם (עבודה, תורים, משפחה) נכנסים ללוח ולתוכנית, והתוכנית לא משבצת לימוד עליהם. אירועים של יום שלם
+            ואירועים שמסומנים &quot;פנוי&quot; רק מוצגים.
+          </p>
+          <GoogleCalImport feed={google} />
+        </section>
+
+        <section id="jewish" className="panel scroll-mt-24 p-5 sm:p-6" aria-labelledby="jewish-title">
+          <h2 id="jewish-title" className="text-lg font-semibold">
+            חגים ושבת
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">חגים, ראשי חודשים, פרשת השבוע וזמני כניסת ויציאת שבת, לפי Hebcal.</p>
+          <form action={saveJewish} className="mt-4 space-y-4">
+            <label className="flex items-start gap-3">
+              <input type="checkbox" name="show" defaultChecked={jp.show} className="mt-1 size-4" />
+              <span>להציג בלוח ובמסך היום</span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input type="checkbox" name="rest" defaultChecked={jp.rest} className="mt-1 size-4" />
+              <span>
+                מצב שבת
+                <span className="block text-sm text-ink-soft">
+                  בשבת ובחג אין מפגשי לימוד, אין תזכורות והרצפים נשמרים. בערב שבת וחג לא משובץ לימוד מחצי שעה לפני הדלקת נרות.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-center gap-3">
+              עיר לזמני השבת
+              <select name="city" defaultValue={jp.city} className={field}>
+                {CITIES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <SaveButton />
+          </form>
         </section>
       </div>
 

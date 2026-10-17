@@ -1,7 +1,8 @@
 import { connection } from "next/server";
-import { bearer, buildFromFeed, israelNow, loadPrivate, type PrivateFeed } from "@/lib/privateFeed";
+import { bearer, buildFromFeed, israelNow, loadPrivate, restForFeed, type PrivateFeed } from "@/lib/privateFeed";
 import { deliverNotifications, sendPush, sendPushAsServer } from "@/lib/push";
 import { remindersFor } from "@/lib/reminders";
+import { syncDueGoogle } from "@/lib/googleCal";
 import { adminClient } from "@/lib/supabase/admin";
 
 /**
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
 
   const admin = adminClient();
   let others = 0;
+  let google = 0;
   if (admin) {
     const { data: subs } = await admin.from("push_subscriptions").select("user_id, endpoint, p256dh, auth");
     const byUser = new Map<string, { endpoint: string; p256dh: string; auth: string }[]>();
@@ -33,10 +35,12 @@ export async function POST(req: Request) {
       if (list.some((s) => mine.has(s.endpoint))) continue; // that's the caller, done above
       const { data: feed } = await admin.rpc("_feed_for", { uid: userId });
       if (!feed) continue;
-      const built = buildFromFeed({ ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 });
+      const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
+      const built = buildFromFeed(full, await restForFeed(full));
       others += await sendPushAsServer(userId, list, remindersFor(built, now));
     }
     sent += others + (await deliverNotifications());
+    google = await syncDueGoogle(admin);
   }
-  return Response.json({ sent, others });
+  return Response.json({ sent, others, google });
 }
