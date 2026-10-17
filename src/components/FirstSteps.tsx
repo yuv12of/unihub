@@ -19,7 +19,7 @@ export function FirstSteps({ steps }: { steps: { label: string; href: string; do
     <section className="panel p-5" aria-label="צעדים ראשונים">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold">ברוכים הבאים ל־Unihub 👋</h2>
+          <h2 className="section-title">ברוכים הבאים ל־Unihub 👋</h2>
           <p className="text-sm text-ink-soft">
             עוד {left} {left === 1 ? "צעד" : "צעדים"}, והתוכנית בונה את עצמה.
           </p>
@@ -49,10 +49,8 @@ export function FirstSteps({ steps }: { steps: { label: string; href: string; do
           </li>
         ))}
       </ol>
-      <div className="mt-3 flex gap-1" aria-hidden>
-        {steps.map((s) => (
-          <span key={s.href} className={`h-1.5 flex-1 rounded-full ${s.done ? "bg-ink" : "bg-rule"}`} />
-        ))}
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-rule" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={steps.length - left} aria-label="התקדמות">
+        <div className="h-full rounded-full bg-ink transition-[width]" style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} />
       </div>
     </section>
   );

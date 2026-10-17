@@ -76,7 +76,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
               className="w-full max-w-md rounded-t-3xl bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-3xl"
             >
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-rule sm:hidden" aria-hidden />
-              <h2 className="text-lg font-semibold">כמה למדת?</h2>
+              <h2 className="section-title">כמה למדת?</h2>
               {courses.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {courses.map((c) => (

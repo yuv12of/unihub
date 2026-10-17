@@ -56,7 +56,7 @@ export function Fold({
         className={`flex w-full items-center gap-3 text-start ${bare ? "mb-3" : "px-4 py-3.5 sm:px-5"}`}
       >
         <span className="min-w-0 flex-1">
-          <span className="block text-lg font-semibold leading-snug">{title}</span>
+          <span className="section-title block">{title}</span>
           {summary && !open && <span className="mt-0.5 block truncate text-sm text-ink-soft">{summary}</span>}
         </span>
         <svg viewBox="0 0 20 20" className={`size-5 shrink-0 text-ink-soft transition-transform ${open ? "rotate-180" : ""}`} aria-hidden>

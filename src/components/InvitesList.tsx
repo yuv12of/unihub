@@ -12,7 +12,7 @@ export function InvitesList({ invites, names = {} }: { invites: Invite[]; names?
   const [pending, start] = useTransition();
   return (
     <div>
-      <h2 className="mb-3 text-lg font-semibold">הזמנות</h2>
+      <h2 className="section-title mb-3">הזמנות</h2>
       <ul className="panel divide-y divide-rule overflow-hidden">
         {invites.map((i) => (
           <li key={i.event.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">

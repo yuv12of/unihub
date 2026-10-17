@@ -3,6 +3,12 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/heebo";
 import "@fontsource/secular-one/hebrew-400.css";
 import "@fontsource/secular-one/latin-400.css";
+// Faces used by the optional styles (only downloaded when a style uses them).
+import "@fontsource/varela-round/hebrew-400.css";
+import "@fontsource/varela-round/latin-400.css";
+import "@fontsource-variable/rubik/wght.css";
+import "@fontsource/frank-ruhl-libre/hebrew-700.css";
+import "@fontsource/frank-ruhl-libre/latin-700.css";
 import "./globals.css";
 import { LOOK_BOOT } from "@/lib/themes";
 

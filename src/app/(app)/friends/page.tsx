@@ -91,7 +91,7 @@ async function Friends() {
                   <FriendsSearch />
                 </section>
                 <section>
-                  <h2 className="mb-3 text-lg font-semibold">אחרי מי אני עוקב/ת</h2>
+                  <h2 className="section-title mb-3">אחרי מי אני עוקב/ת</h2>
                   {following.length === 0 ? (
                     <p className="panel p-5 text-ink-soft">עוד לא. חפשו חברים לפי שם או מייל (מימין), ושלחו בקשת מעקב.</p>
                   ) : (
@@ -196,7 +196,7 @@ async function Friends() {
               <div className="max-w-3xl space-y-6">
                 {requests.length > 0 && (
                   <section>
-                    <h2 className="mb-3 text-lg font-semibold">בקשות מעקב</h2>
+                    <h2 className="section-title mb-3">בקשות מעקב</h2>
                     <ul className="panel divide-y divide-rule">
                       {requests.map((id) => (
                         <FollowRequest

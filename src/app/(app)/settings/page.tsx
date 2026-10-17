@@ -66,7 +66,7 @@ async function Settings() {
             panel: (
               <div className="grid items-start gap-6 xl:grid-cols-2">
                 <section className="panel p-5 sm:p-6" aria-labelledby="avail-title">
-                  <h2 id="avail-title" className="text-lg font-semibold">
+                  <h2 id="avail-title" className="section-title">
                     זמני לימוד
                   </h2>
                   <p className="mt-1 text-sm text-ink-soft">התוכנית משבצת מפגשי לימוד רק בזמנים האלה.</p>
@@ -122,7 +122,7 @@ async function Settings() {
                   </form>
                 </section>
                 <section className="panel p-5 sm:p-6" aria-labelledby="exam-title">
-                  <h2 id="exam-title" className="text-lg font-semibold">
+                  <h2 id="exam-title" className="section-title">
                     מועדי בחינה
                   </h2>
                   <p className="mt-1 text-sm text-ink-soft">
@@ -180,7 +180,7 @@ async function Settings() {
             panel: (
               <div className="grid items-start gap-6 xl:grid-cols-2">
                 <section className="panel p-5 sm:p-6" aria-labelledby="cal-title">
-                  <h2 id="cal-title" className="text-lg font-semibold">
+                  <h2 id="cal-title" className="section-title">
                     יומן Google, בשני הכיוונים
                   </h2>
                   <h3 className="mt-4 font-medium">מ־Unihub ל־Google</h3>
@@ -223,7 +223,7 @@ async function Settings() {
                 </section>
                 <div className="space-y-6">
                   <section id="opal" className="panel scroll-mt-24 p-5 sm:p-6" aria-labelledby="opal-title">
-                    <h2 id="opal-title" className="text-lg font-semibold">
+                    <h2 id="opal-title" className="section-title">
                       לוח השנה של אופל
                     </h2>
                     <p className="mt-1 max-w-2xl text-sm text-ink-soft">
@@ -233,7 +233,7 @@ async function Settings() {
                     <OpalSync feed={opal} />
                   </section>
                   <section id="jewish" className="panel scroll-mt-24 p-5 sm:p-6" aria-labelledby="jewish-title">
-                    <h2 id="jewish-title" className="text-lg font-semibold">
+                    <h2 id="jewish-title" className="section-title">
                       חגים ושבת
                     </h2>
                     <p className="mt-1 text-sm text-ink-soft">חגים וראשי חודשים, ולמי שרוצה גם זמני כניסת ויציאת שבת, לפי Hebcal.</p>
@@ -281,7 +281,7 @@ async function Settings() {
             panel: (
               <div className="max-w-3xl">
                 <section className="panel p-5 sm:p-6" aria-labelledby="push-title">
-                  <h2 id="push-title" className="text-lg font-semibold">
+                  <h2 id="push-title" className="section-title">
                     התראות לטלפון
                   </h2>
                   <p className="mt-1 max-w-2xl text-sm text-ink-soft">
@@ -299,7 +299,7 @@ async function Settings() {
             panel: (
               <div className="max-w-4xl">
                 <section id="mail" className="panel scroll-mt-24 p-5 sm:p-6" aria-labelledby="mail-title">
-                  <h2 id="mail-title" className="text-lg font-semibold">
+                  <h2 id="mail-title" className="section-title">
                     חיבור ל־Google: דואר, מייל בוקר, תזכורות ו־Notability
                   </h2>
                   <p className="mt-1 max-w-2xl text-sm text-ink-soft">

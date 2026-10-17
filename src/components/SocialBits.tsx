@@ -70,7 +70,7 @@ export function NotificationsList({ items }: { items: NoteRow[] }) {
   if (!items.length) return null;
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold">מה חדש</h2>
+      <h2 className="section-title mb-3">מה חדש</h2>
       <ul className="panel divide-y divide-rule overflow-hidden">
         {items.map((n) => (
           <li key={n.id}>

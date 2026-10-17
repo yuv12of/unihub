@@ -93,7 +93,7 @@ export function RoutinesBoard({
 
       {invites.length > 0 && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">הזמנות לשגרה משותפת</h2>
+          <h2 className="section-title mb-3">הזמנות לשגרה משותפת</h2>
           <ul className="panel divide-y divide-rule">
             {invites.map((r) => (
               <InviteRow key={r.id} r={r} from={names[r.user_id]} />
@@ -109,7 +109,7 @@ export function RoutinesBoard({
       ) : (
         groups.map(({ c, list }) => (
           <section key={c}>
-            <h2 className="mb-3 text-lg font-semibold">
+            <h2 className="section-title mb-3">
               {CATEGORY[c].emoji} {CATEGORY[c].label}
             </h2>
             <ul className="grid gap-3 lg:grid-cols-2">
@@ -338,7 +338,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center" role="dialog" aria-modal aria-label="שגרה">
       <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-xl sm:rounded-2xl">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{f.id ? "עריכת שגרה" : "שגרה חדשה"}</h2>
+          <h2 className="section-title">{f.id ? "עריכת שגרה" : "שגרה חדשה"}</h2>
           <button onClick={onClose} className="text-ink-soft hover:text-ink" aria-label="סגירה">
             ✕
           </button>

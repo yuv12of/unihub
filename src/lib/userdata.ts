@@ -1,4 +1,5 @@
 import { cache } from "react";
+import semesterData from "@/data/semester-2027a.json";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, courseFromRow, semester, todayInIsrael, type Course, type CourseRow } from "@/lib/semester";
@@ -48,7 +49,7 @@ export const getRoutineLogs = cache(async (): Promise<RoutineLog[]> => {
 
 /** The signed-in user's courses this semester (catalog data + their own colour and short name). */
 export const getCourses = cache(async (): Promise<Course[]> => {
-  if (!supabaseEnabled) return [];
+  if (!supabaseEnabled) return process.env.UNIHUB_DEMO ? demoCourses() : [];
   const supabase = await createClient();
   const { data } = await supabase
     .from("user_courses")
@@ -64,6 +65,14 @@ export const getCourses = cache(async (): Promise<Course[]> => {
       return courseFromRow({ ...c, color: r.color, short: r.short });
     });
 });
+
+/** Local design previews only (env UNIHUB_DEMO, no database): the bundled semester's courses. */
+function demoCourses(): Course[] {
+  const colors = ["blue", "purple", "green", "orange"];
+  return ((semesterData as { courses?: { code: string; name: string; nameEn?: string; opalId?: number; coordinator?: string; finalAssessment?: string; assignmentWeight: { min: number; max: number }; assignments: CourseRow["assignments"] }[] }).courses ?? []).map((c, i) =>
+    courseFromRow({ code: c.code, name: c.name, name_en: c.nameEn, opal_id: c.opalId, coordinator: c.coordinator, final_assessment: c.finalAssessment, min_weight: c.assignmentWeight.min, max_weight: c.assignmentWeight.max, assignments: c.assignments, color: colors[i % 4] }),
+  );
+}
 
 /** Signed-in user's exam dates for the current semester. */
 export async function getExams(): Promise<Exam[]> {

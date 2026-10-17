@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { saveLook, saveProfile, type ProfileInput } from "@/app/act";
-import { PALETTES, applyLook, type LookPrefs, type PaletteKey } from "@/lib/themes";
+import { PALETTES, STYLES, applyLook, type LookPrefs, type PaletteKey, type StyleKey } from "@/lib/themes";
 import { FOCUS_PLAYLISTS, playlistId } from "@/lib/focusMusic";
 import { PALETTE } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
@@ -135,7 +135,7 @@ export const TODAY_SECTIONS: [string, string][] = [
 
 /** Colours, light/dark, text size, calm mode, Today sections, focus music. */
 export function LookPicker({ initial }: { initial: LookPrefs }) {
-  const [p, setP] = useState<LookPrefs>({ palette: "default", theme: "system", size: "md", hidden: [], ...initial });
+  const [p, setP] = useState<LookPrefs>({ palette: "default", style: "classic", theme: "system", size: "md", hidden: [], ...initial });
   const [custom, setCustom] = useState("");
   const [, start] = useTransition();
   const update = (patch: LookPrefs) => {
@@ -154,6 +154,31 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold">סגנון</h3>
+        <p className="mt-0.5 text-xs text-ink-soft">אותם צבעים, תחושה אחרת. משתלב עם כל ערכת צבעים.</p>
+        <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {(Object.keys(STYLES) as StyleKey[]).map((k) => {
+            const st = STYLES[k];
+            const on = (p.style ?? "classic") === k;
+            return (
+              <li key={k}>
+                <button
+                  type="button"
+                  onClick={() => update({ style: k })}
+                  aria-pressed={on}
+                  className={`w-full rounded-xl border p-2 text-start ${on ? "border-ink ring-1 ring-ink" : "border-rule"}`}
+                >
+                  <StylePreview k={k} />
+                  <span className="mt-1.5 block text-sm font-medium">{st.label}</span>
+                  <span className="block text-[11px] leading-snug text-ink-soft">{st.desc}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
       <div>
         <h3 className="text-sm font-semibold">ערכת צבעים</h3>
         <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -315,11 +340,49 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
 /** Applies the account's saved look on this device (so it follows you between phone and computer). */
 export function LookSync({ prefs }: { prefs: LookPrefs }) {
   useEffect(() => {
-    if (prefs.palette || prefs.theme || prefs.size || prefs.calm) applyLook(prefs);
+    if (prefs.palette || prefs.style || prefs.theme || prefs.size || prefs.calm) applyLook(prefs);
     try {
       if (prefs.music) localStorage.setItem("music", prefs.music);
       else localStorage.removeItem("music");
     } catch {}
   }, [prefs]);
   return null;
+}
+
+/** A tiny drawing of each style (drawn with inline styles, so all five show at once). */
+function StylePreview({ k }: { k: StyleKey }) {
+  const page: React.CSSProperties = { background: "var(--bg)" };
+  const card: React.CSSProperties = { background: "var(--surface)", border: "1px solid var(--rule)", borderRadius: 6 };
+  const title: React.CSSProperties = { fontFamily: "var(--font-secular)" };
+  if (k === "soft") {
+    Object.assign(card, { borderRadius: 12, border: "1px solid transparent", boxShadow: "0 6px 14px -8px rgb(0 0 0 / .35)" });
+    Object.assign(title, { fontFamily: "'Varela Round'" });
+  } else if (k === "bold") {
+    Object.assign(card, { borderRadius: 2, border: "2px solid var(--ink)", boxShadow: "-3px 3px 0 var(--ink)" });
+    Object.assign(title, { fontFamily: "'Rubik Variable'", fontWeight: 800 });
+  } else if (k === "glass") {
+    Object.assign(page, {
+      background:
+        "radial-gradient(60px 40px at 80% 10%, color-mix(in srgb, var(--c-blue) 45%, transparent), transparent), radial-gradient(60px 50px at 10% 90%, color-mix(in srgb, var(--highlight) 55%, transparent), transparent), var(--bg)",
+    });
+    Object.assign(card, { background: "color-mix(in srgb, var(--surface) 55%, transparent)", borderRadius: 10, backdropFilter: "blur(6px)" });
+  } else if (k === "notebook") {
+    Object.assign(page, {
+      background:
+        "linear-gradient(to left, transparent 10px, color-mix(in srgb, var(--c-rose) 50%, transparent) 10px 11px, transparent 11px), repeating-linear-gradient(to bottom, transparent 0 7px, color-mix(in srgb, var(--ink) 12%, transparent) 7px 8px), var(--bg)",
+    });
+    Object.assign(card, { borderRadius: 2, boxShadow: "0 4px 6px -5px rgb(0 0 0 / .4)" });
+    Object.assign(title, { fontFamily: "'Frank Ruhl Libre'", fontWeight: 700, background: "linear-gradient(transparent 55%, var(--highlight) 55%)" });
+  }
+  return (
+    <span className="block h-16 overflow-hidden rounded-lg p-2" style={page} aria-hidden>
+      <span className="block h-full p-1.5" style={card}>
+        <span className="text-[11px] leading-none" style={title}>
+          היום
+        </span>
+        <span className="mt-1.5 block h-1.5 w-3/4 rounded-full" style={{ background: "var(--rule)" }} />
+        <span className="mt-1 block h-1.5 w-1/2 rounded-full" style={{ background: "var(--ink)", opacity: 0.8 }} />
+      </span>
+    </span>
+  );
 }

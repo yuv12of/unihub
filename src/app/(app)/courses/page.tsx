@@ -72,7 +72,7 @@ async function Courses() {
     <>
       {base.length === 0 && (
         <div className="panel mt-8 max-w-xl p-6">
-          <h2 className="text-lg font-semibold">
+          <h2 className="section-title">
             אילו קורסים את/ה לומד/ת בסמסטר {semester.semester}?
           </h2>
           <p className="mt-1 text-ink-soft">

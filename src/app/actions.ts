@@ -765,6 +765,7 @@ async function saveLook_(patch: import("@/lib/themes").LookPrefs) {
   const { PALETTES } = await import("@/lib/themes");
   const next = { ...((data?.prefs as object) ?? {}), ...patch } as import("@/lib/themes").LookPrefs;
   if (next.palette && !(next.palette in PALETTES)) delete next.palette;
+  if (next.style && !["classic", "soft", "bold", "glass", "notebook"].includes(next.style)) delete next.style;
   if (next.theme && !["system", "light", "dark"].includes(next.theme)) delete next.theme;
   if (next.size && !["sm", "md", "lg", "xl"].includes(next.size)) delete next.size;
   if (next.calm != null) next.calm = !!next.calm;

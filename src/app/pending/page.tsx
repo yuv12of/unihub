@@ -22,7 +22,7 @@ async function Status() {
   const blocked = p?.status === "blocked";
   return (
     <div className="panel mt-6 p-6">
-      <h2 className="text-lg font-semibold">{blocked ? "אין גישה לחשבון הזה" : `שלום${p?.name ? ` ${p.name.split(" ")[0]}` : ""}, הבקשה התקבלה`}</h2>
+      <h2 className="section-title">{blocked ? "אין גישה לחשבון הזה" : `שלום${p?.name ? ` ${p.name.split(" ")[0]}` : ""}, הבקשה התקבלה`}</h2>
       <p className="mt-2 leading-relaxed text-ink-soft">
         {blocked
           ? "החשבון הזה לא אושר ל־Unihub."

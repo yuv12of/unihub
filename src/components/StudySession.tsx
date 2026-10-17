@@ -65,7 +65,7 @@ export function StudySession({
 
       {!card ? (
         <div className="panel max-w-2xl p-6">
-          <h2 className="text-lg font-semibold">סיימת את החזרות להיום</h2>
+          <h2 className="section-title">סיימת את החזרות להיום</h2>
           <p className="mt-1 text-ink-soft">כרטיסים חדשים נוספים כל בוקר לפי מה שלומדים השבוע, והכרטיסים שתרגלת יחזרו בזמן הנכון.</p>
         </div>
       ) : (

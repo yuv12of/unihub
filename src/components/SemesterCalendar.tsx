@@ -117,7 +117,7 @@ export function SemesterCalendar({
               ←
             </button>
           </div>
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="section-title">{title}</h2>
           <button
             type="button"
             onClick={goToday}

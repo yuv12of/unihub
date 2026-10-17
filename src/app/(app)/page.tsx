@@ -232,7 +232,7 @@ async function Today() {
         {updates.length > 0 && <UpdatesList updates={updates} />}
 
         <div>
-          <h2 className="mb-3 text-lg font-semibold">התוכנית להיום</h2>
+          <h2 className="section-title mb-3">התוכנית להיום</h2>
           <div className="panel overflow-hidden">
             {todayEvents.length > 0 && (
               <ul className="divide-y divide-rule border-b border-rule bg-bg/40">
@@ -350,7 +350,7 @@ async function Today() {
         )}
 
         {show("deadlines") && <div>
-        <h2 id="soon-title" className="mb-3 text-lg font-semibold">
+        <h2 id="soon-title" className="section-title mb-3">
           בשבועיים הקרובים
         </h2>
         <div className="panel overflow-hidden">
@@ -372,7 +372,7 @@ async function Today() {
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
         {show("exams") && <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />}
         {show("standings") && <>
-        <h2 id="courses-title" className="mb-3 text-lg font-semibold">
+        <h2 id="courses-title" className="section-title mb-3">
           מצב בקורסים
         </h2>
         <Gallery cols="sm:grid-cols-2 lg:grid-cols-1" className="lg:gap-3">
@@ -463,14 +463,15 @@ const REVISION_DAYS = 21;
 function ExamCountdown({ today, upcoming, courses }: { today: string; upcoming: ReturnType<typeof nextExams>; courses: Course[] }) {
   if (upcoming.length === 0)
     return (
-      <Link href="/settings" className="panel mb-6 block px-4 py-4 text-sm text-ink-soft hover:border-ink-soft">
-        <span className="block font-medium text-ink">ספירה לאחור לבחינות</span>
-        מועדי הבחינות עוד לא הוזנו. כשיתפרסמו, הוסיפו אותם בהגדרות.
+      <Link href="/settings#study" className="mb-6 flex items-center gap-2 rounded-lg border border-dashed border-rule px-4 py-2.5 text-sm text-ink-soft hover:border-ink-soft hover:text-ink">
+        <span aria-hidden>📅</span>
+        <span className="flex-1">להוסיף מועדי בחינות לספירה לאחור</span>
+        <span aria-hidden>+</span>
       </Link>
     );
   return (
     <div className="mb-6">
-      <h2 className="mb-3 text-lg font-semibold">בחינות</h2>
+      <h2 className="section-title mb-3">בחינות</h2>
       <ul className="panel divide-y divide-rule overflow-hidden">
         {upcoming.map((e) => {
           const days = daysBetween(today, e.date);

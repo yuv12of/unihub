@@ -92,7 +92,7 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
       <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
         {s.courses.length > 0 && (
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold">קורסים</h2>
+            <h2 className="section-title">קורסים</h2>
             {s.courses.map(({ course, st }) => (
               <div key={course.code} className="panel px-5 pb-4 pt-4" style={{ borderTop: `4px solid ${course.color}` }}>
                 <div className="font-semibold">{course.name}</div>
@@ -117,7 +117,7 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
 
         {v.schedule !== "none" && (
           <section>
-            <h2 className="mb-3 text-lg font-semibold">השבוע הקרוב</h2>
+            <h2 className="section-title mb-3">השבוע הקרוב</h2>
             <ul className="panel divide-y divide-rule">
               {days.map((d) => {
                 const list = s.blocks.filter((b) => b.date === d);
@@ -150,7 +150,7 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
 
         {s.routines.length > 0 && (
           <section className="lg:col-span-2">
-            <h2 className="mb-3 text-lg font-semibold">שגרה</h2>
+            <h2 className="section-title mb-3">שגרה</h2>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {s.routines
                 .filter((r) => r.routine.category !== "sleep")

@@ -15,7 +15,7 @@ export function TodayRoutines({ items, date }: { items: Occurrence[]; date: stri
   return (
     <div>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">השגרה של היום</h2>
+        <h2 className="section-title">השגרה של היום</h2>
         <Link href="/routines" className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
           {left ? `נשארו ${left}` : "הכל בוצע 🎉"}
         </Link>

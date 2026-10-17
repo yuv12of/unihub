@@ -18,7 +18,7 @@ export function UpdatesList({ updates }: { updates: Update[] }) {
   const [pending, start] = useTransition();
   return (
     <div>
-      <h2 className="mb-3 text-lg font-semibold">עדכונים מהדואר</h2>
+      <h2 className="section-title mb-3">עדכונים מהדואר</h2>
       <ul className="panel divide-y divide-rule overflow-hidden" aria-busy={pending}>
         {updates.map((u) => (
           <li key={u.id} className="flex items-start gap-3 px-4 py-3 sm:px-5">
