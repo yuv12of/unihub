@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { SideNav, TabBar } from "@/components/Nav";
-import { getBadges, getCourses, getMyProfile } from "@/lib/userdata";
+import { getBadges, getCourses, getMyProfile, hasSpotify } from "@/lib/userdata";
+import { MusicBar } from "@/components/SpotifyPlayer";
 import { QuickLog } from "@/components/QuickLog";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { connection } from "next/server";
@@ -53,8 +54,12 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Suspense>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 lg:px-12 lg:pb-16 lg:pt-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 lg:px-12 lg:pb-[calc(4rem+var(--player-h,0px))] lg:pt-10">{children}</main>
       </div>
+
+      <Suspense fallback={null}>
+        <MusicBarMount />
+      </Suspense>
 
       <Suspense fallback={<div className="h-[calc(env(safe-area-inset-bottom)+4.6rem)] shrink-0 border-t border-rule bg-surface lg:hidden" />}>
         <TabBarWithBadges />
@@ -66,6 +71,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 async function SideNavWithBadges() {
   await connection();
   return <SideNav badges={await getBadges()} />;
+}
+
+async function MusicBarMount() {
+  await connection();
+  return (await hasSpotify()) ? <MusicBar /> : null;
 }
 
 async function QuickLogMount() {

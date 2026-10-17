@@ -218,89 +218,95 @@ export function SpotifyControls({
   );
 }
 
-/** PC sidebar: a compact now-playing row that opens the full player. */
-export function SidebarPlayer() {
+/**
+ * Now-playing bar at the bottom of every page (above the tab bar on phones, along the bottom on PC).
+ * Tapping it opens the full player in a sheet. Sets --player-h so floating buttons move above it.
+ */
+export function MusicBar() {
   const [open, setOpen] = useState(false);
-  const { sp, err, send, start } = useSpotify(true, open ? 5000 : 15000);
+  const { sp, err, send, start } = useSpotify(true, open ? 5000 : 12000);
   const [playlist, setPlaylist] = useChosenPlaylist();
-  if (!sp?.connected) return null;
-  const p = sp.playing;
-  return (
-    <div className="mb-3">
-      {open ? (
-        <div className="space-y-1">
-          <SpotifyControls sp={sp} err={err} send={send} start={start} playlist={playlist} onPlaylist={setPlaylist} />
-          <button type="button" onClick={() => setOpen(false)} className="w-full text-center text-xs text-ink-soft hover:text-ink">
-            סגירה
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 rounded-xl bg-bg px-2 py-1.5 ring-1 ring-rule">
-          <button type="button" onClick={() => setOpen(true)} className="flex min-w-0 flex-1 items-center gap-2 text-start" aria-label="נגן Spotify">
-            {p?.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.image} alt="" className="size-8 shrink-0 rounded-md object-cover" />
-            ) : (
-              <span className="grid size-8 shrink-0 place-items-center rounded-md bg-rule/60">🎧</span>
-            )}
-            <span className="min-w-0">
-              <span className="block truncate text-xs font-medium">{p?.title ?? "Spotify"}</span>
-              <span className="block truncate text-[11px] text-ink-soft">{p?.artist ?? "לחצו לבחירת מוזיקה"}</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            aria-label={p?.isPlaying ? "השהיה" : "נגינה"}
-            onClick={() => (p?.isPlaying ? send({ cmd: "pause" }) : start(p ? null : playlist))}
-            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-sm text-bg"
-          >
-            {p?.isPlaying ? "⏸" : "▶"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Phone header: a music button (pulsing while playing) that opens the player in a bottom sheet. */
-export function PhonePlayerButton() {
-  const [open, setOpen] = useState(false);
-  const { sp, err, send, start } = useSpotify(open, 5000);
-  const [playlist, setPlaylist] = useChosenPlaylist();
-  const sheet = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const connected = !!sp?.connected;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!connected || !bar.current) return;
+    const set = () => root.style.setProperty("--player-h", `${bar.current?.offsetHeight ?? 0}px`);
+    set();
+    window.addEventListener("resize", set);
+    return () => {
+      window.removeEventListener("resize", set);
+      root.style.removeProperty("--player-h");
+    };
+  }, [connected]);
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", esc);
-    sheet.current?.focus();
     return () => document.removeEventListener("keydown", esc);
   }, [open]);
-  if (!sp?.connected) return null;
-  const playing = !!sp.playing?.isPlaying;
+  if (!connected) return null;
+  const p = sp?.playing;
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="נגן Spotify"
-        className={`grid size-8 place-items-center rounded-full ${playing ? "bg-ink text-bg" : "text-ink-soft"}`}
+      <div
+        ref={bar}
+        className="relative z-30 shrink-0 border-t border-rule bg-surface lg:fixed lg:bottom-0 lg:end-0 lg:start-60 lg:border-s"
       >
-        <span className={playing ? "motion-safe:animate-pulse" : ""}>🎧</span>
-      </button>
+        {p && p.duration > 0 && (
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-rule" aria-hidden>
+            <div className="h-full bg-ink" style={{ width: `${Math.min(100, (p.progress / p.duration) * 100)}%` }} />
+          </div>
+        )}
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2 lg:px-12">
+          <button type="button" onClick={() => setOpen(true)} className="flex min-w-0 flex-1 items-center gap-3 text-start" aria-label="פתיחת הנגן">
+            {p?.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.image} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+            ) : (
+              <span className="grid size-10 shrink-0 place-items-center rounded-md bg-rule/60 text-lg">🎧</span>
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{p?.title ?? "Spotify"}</span>
+              <span className="block truncate text-xs text-ink-soft">
+                {p ? `${p.artist}${sp?.device ? ` · ${sp.device.name}` : ""}` : sp?.device ? sp.device.name : "לחצו לבחירת מוזיקה"}
+              </span>
+            </span>
+          </button>
+          <div className="flex shrink-0 items-center gap-1" dir="ltr">
+            <button type="button" aria-label="הקודם" onClick={() => send({ cmd: "previous" })} className="hidden size-9 place-items-center rounded-full hover:bg-rule/60 sm:grid">
+              ⏮
+            </button>
+            <button
+              type="button"
+              aria-label={p?.isPlaying ? "השהיה" : "נגינה"}
+              onClick={() => (p?.isPlaying ? send({ cmd: "pause" }) : start(p ? null : playlist))}
+              className="grid size-10 place-items-center rounded-full bg-ink text-bg"
+            >
+              {p?.isPlaying ? "⏸" : "▶"}
+            </button>
+            <button type="button" aria-label="הבא" onClick={() => send({ cmd: "next" })} className="grid size-9 place-items-center rounded-full hover:bg-rule/60">
+              ⏭
+            </button>
+          </div>
+        </div>
+        {err && !open && <p className="px-4 pb-1 text-center text-xs text-red-700">{err}</p>}
+      </div>
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-end bg-black/40" onClick={() => setOpen(false)} role="presentation">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={() => setOpen(false)} role="presentation">
             <div
-              ref={sheet}
-              tabIndex={-1}
               role="dialog"
               aria-modal
               aria-label="נגן Spotify"
               onClick={(e) => e.stopPropagation()}
-              className="w-full rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none"
+              className="w-full max-w-md rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-3xl"
             >
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-rule" aria-hidden />
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-rule sm:hidden" aria-hidden />
               <SpotifyControls sp={sp} err={err} send={send} start={start} playlist={playlist} onPlaylist={setPlaylist} />
+              <button type="button" onClick={() => setOpen(false)} className="mt-3 w-full text-center text-sm text-ink-soft hover:text-ink">
+                סגירה
+              </button>
             </div>
           </div>,
           document.body,

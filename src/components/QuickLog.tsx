@@ -60,7 +60,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
         type="button"
         onClick={() => setOpen(true)}
         aria-label="רישום לימוד"
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem)] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-2xl text-bg shadow-lg lg:bottom-6 lg:end-6"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem+var(--player-h,0px))] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-2xl text-bg shadow-lg lg:bottom-[calc(1.5rem+var(--player-h,0px))] lg:end-6"
       >
         <span aria-hidden>⏱</span>
       </button>

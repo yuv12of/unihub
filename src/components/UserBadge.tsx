@@ -3,8 +3,7 @@ import { connection } from "next/server";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar } from "@/components/Avatar";
 import { LookSync } from "@/components/ProfileParts";
-import { getMyProfile, hasSpotify } from "@/lib/userdata";
-import { PhonePlayerButton, SidebarPlayer } from "@/components/SpotifyPlayer";
+import { getMyProfile } from "@/lib/userdata";
 
 async function currentUser() {
   await connection();
@@ -16,10 +15,8 @@ export async function UserPanel() {
   const me = await currentUser();
   if (!me) return null;
   const name = me.name ?? me.email.split("@")[0];
-  const music = await hasSpotify();
   return (
     <>
-    {music && <SidebarPlayer />}
     <form action="/auth/signout" method="post" className="border-t border-rule pt-4 text-sm">
       <LookSync prefs={me.prefs ?? {}} />
       <Link href="/profile" className="flex items-center gap-2.5 rounded-lg p-1 hover:bg-rule/50">
@@ -43,11 +40,9 @@ export async function UserBadge() {
   const me = await currentUser();
   if (!me) return null;
   const name = me.name ?? me.email.split("@")[0];
-  const music = await hasSpotify();
   return (
     <div className="flex items-center gap-3 text-sm">
       <LookSync prefs={me.prefs ?? {}} />
-      {music && <PhonePlayerButton />}
       <ThemeToggle compact />
       <Link href="/settings" className="text-ink-soft" aria-label="הגדרות">
         הגדרות
