@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SessionToggle } from "@/components/SessionToggle";
 import { ExamKit } from "@/components/ExamKit";
 import { minutesLabel, sessionKey, type Session } from "@/lib/planner";
@@ -22,6 +23,7 @@ export function UpNext({
   tomorrow,
   deadline,
   exam,
+  reading,
 }: {
   nowMin: number;
   item: UpNextItem | null;
@@ -29,6 +31,7 @@ export function UpNext({
   tomorrow?: Session;
   deadline: { label: string; when: string; urgent: boolean } | null;
   exam: { course: string; days: number; time: string | null } | null;
+  reading?: { href: string; title: string; lastPage: number | null } | null;
 }) {
   const live = item && toMin(item.start) <= nowMin;
   const inMin = item ? toMin(item.start) - nowMin : 0;
@@ -49,6 +52,15 @@ export function UpNext({
               <div className="mt-4">
                 <SessionToggle hero sessionKey={sessionKey(item.session)} status={status} minutes={item.session.minutes} title={item.session.title} courseCode={item.session.courseCode} />
               </div>
+            )}
+            {reading && (
+              <Link href={reading.href} className="mt-3 flex items-center gap-2 text-sm opacity-90 hover:opacity-100">
+                <Icon name="book" className="size-4 shrink-0" />
+                <span className="min-w-0 truncate underline decoration-bg/40 underline-offset-4">
+                  לקרוא: {reading.title}
+                  {reading.lastPage ? `, מעמ׳ ${reading.lastPage}` : ""}
+                </span>
+              </Link>
             )}
           </>
         ) : (

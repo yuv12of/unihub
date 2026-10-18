@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { mailHtml, markMailRead } from "@/app/act";
 import type { Mail } from "@/lib/userdata";
+import { Icon } from "@/components/Icon";
 
 const when = (iso: string) => {
   const d = new Date(iso);
@@ -107,7 +108,7 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
                 {(m.category || m.attachments.length > 0) && (
                   <div className="mt-1 flex gap-2 text-[11px] text-ink-soft">
                     {m.category && <span className="rounded bg-rule/70 px-1.5 py-0.5">{m.category}</span>}
-                    {m.attachments.length > 0 && <span>📎 {m.attachments.length}</span>}
+                    {m.attachments.length > 0 && <span className="inline-flex items-center gap-0.5"><Icon name="clip" className="size-3" />{m.attachments.length}</span>}
                   </div>
                 )}
               </button>
@@ -159,7 +160,8 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
                       className="inline-flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-sm hover:border-ink"
                       dir="ltr"
                     >
-                      📎 {a.filename}
+                      <Icon name="clip" className="size-4 shrink-0" />
+                      {a.filename}
                     </a>
                   </li>
                 ))}
@@ -188,7 +190,9 @@ function MailBody({ mail }: { mail: Mail }) {
       live = false;
     };
   }, [mail.id, mail.body_html]);
-  mail = { ...mail, body_html: html };
+  // Plain-text emails also arrive with a "html" copy that is just the text: no tags, so newlines
+  // would collapse in the frame. Only real HTML gets the formatted view.
+  mail = { ...mail, body_html: html && /<(html|body|div|p|br|table|span|a|img|font|b|strong)\b/i.test(html) ? html : null };
   const text = clean(mail.body_text);
   return (
     <div className="mt-5 border-t border-rule pt-4">

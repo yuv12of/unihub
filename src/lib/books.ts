@@ -156,3 +156,49 @@ export function continueChapter(books: Book[]): { book: Book; chapter: Chapter }
   }
   return null;
 }
+
+/** Book sections that aren't chapters to read: front matter, contents, indexes, solutions, summaries. */
+const AUX = /(תוכן|מפתח|ביבליוגרפיה|בעלי זכויות|פתח דבר|הנחיות|מטרות היחידה|רמזים|פתרונות|תשובות|ההגדרות והמשפטים|סו ?ף[־-]?דבר|אחרית דבר|^סיכום|^הקדמה)/;
+
+export interface Reading {
+  bookId: string;
+  idx: number;
+  title: string;
+  lastPage: number | null;
+  pages: number;
+  href: string;
+}
+
+/**
+ * What to read next in each course: the chapter you're in the middle of (opened, not finished),
+ * otherwise the first unfinished real chapter in book order.
+ */
+export function readingByCourse(books: Book[]): Record<string, Reading> {
+  const out: Record<string, Reading> = {};
+  const byCourse = new Map<string, Book[]>();
+  for (const b of books) byCourse.set(b.course_code, [...(byCourse.get(b.course_code) ?? []), b]);
+  for (const [code, list] of byCourse) {
+    const ordered = [...list].sort((a, b) => a.position - b.position);
+    const real = ordered.flatMap((b) =>
+      b.chapters
+        // real chapters only; an optional prep book counts once you've started it
+        .filter((c) => c.idx > 0 && !AUX.test(c.title) && c.end_page - c.start_page >= 4 && (!/הכנה/.test(b.title) || c.read_at))
+        .map((c) => ({ b, c })),
+    );
+    const open = real
+      .filter(({ c }) => c.read_at && !c.done_at)
+      .sort((x, y) => (y.c.read_at ?? "").localeCompare(x.c.read_at ?? ""))[0];
+    const pick = open ?? real.find(({ c }) => !c.done_at);
+    if (!pick) continue;
+    const { b, c } = pick;
+    out[code] = {
+      bookId: b.id,
+      idx: c.idx,
+      title: c.title,
+      lastPage: c.done_at ? null : c.last_page,
+      pages: c.end_page - c.start_page + 1,
+      href: `/books/${b.id}?ch=${c.idx}`,
+    };
+  }
+  return out;
+}

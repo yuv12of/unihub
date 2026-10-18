@@ -26,7 +26,7 @@ import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { Icon } from "@/components/Icon";
-import { continueChapter, getBooks } from "@/lib/books";
+import { getBooks, readingByCourse, type Reading } from "@/lib/books";
 import {
   addDays,
   allDeadlines,
@@ -79,7 +79,7 @@ async function Today() {
   // Everything in one round: the page waits for the slowest call, not for the sum of them.
   const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush, books] =
     await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription(), getBooks()]);
-  const reading = continueChapter(books);
+  const reading = readingByCourse(books);
   const hidden = new Set(profile?.prefs?.hidden ?? []);
   const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
@@ -186,6 +186,7 @@ async function Today() {
           <UpNext
             nowMin={nowMin}
             item={upNext}
+            reading={upNext?.session?.courseCode ? reading[upNext.session.courseCode] ?? null : null}
             status={upNext?.session ? status[sessionKey(upNext.session)] : undefined}
             tomorrow={tomorrowFirst}
             deadline={
@@ -258,7 +259,7 @@ async function Today() {
               </ul>
             )}
             {todaySessions.length ? (
-              <SessionList sessions={todaySessions} status={status} courses={courses} />
+              <SessionList sessions={todaySessions} status={status} courses={courses} reading={reading} />
             ) : (
               <p className="px-5 py-5 text-ink-soft">
                 {week.length
@@ -375,17 +376,33 @@ async function Today() {
 
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
         {show("exams") && <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />}
-        {reading && (
-          <Link href={`/books/${reading.book.id}?ch=${reading.chapter.idx}`} className="panel mb-6 flex items-center gap-3 px-4 py-3 hover:border-ink-soft">
-            <span className="grid size-9 shrink-0 place-items-center rounded-full text-bg" style={{ background: themeOf(courses, reading.book.course_code).color }}>
-              <Icon name="book" className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs text-ink-soft">{reading.chapter.read_at ? "להמשיך לקרוא" : "לקריאה"} · {themeOf(courses, reading.book.course_code).short}</span>
-              <span className="block truncate font-medium">{reading.chapter.title}</span>
-            </span>
-            <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
-          </Link>
+        {show("reading") && Object.keys(reading).length > 0 && (
+          <div className="mb-6">
+            <h2 className="section-title mb-3">לקריאה</h2>
+            <ul className="panel divide-y divide-rule overflow-hidden">
+              {courses
+                .filter((c) => reading[c.code])
+                .map((c) => {
+                  const r = reading[c.code];
+                  return (
+                    <li key={c.code}>
+                      <Link href={r.href} className="flex items-center gap-3 px-4 py-3 hover:bg-bg">
+                        <span className="shrink-0" style={{ color: themeOf(courses, c.code).color }}>
+                          <Icon name="book" className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">{r.title}</span>
+                          <span className="block text-xs text-ink-soft">
+                            {themeOf(courses, c.code).short} · {r.lastPage ? `עצרתם בעמ׳ ${r.lastPage} מתוך ${r.pages}` : `${r.pages} עמ׳`}
+                          </span>
+                        </span>
+                        <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
+                      </Link>
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
         )}
         {show("standings") && <>
         <h2 id="courses-title" className="section-title mb-3">
@@ -451,7 +468,7 @@ function groupByDay(sessions: Session[]): [string, Session[]][] {
   return [...m];
 }
 
-function SessionList({ sessions, status, courses }: { sessions: Session[]; status: Record<string, "done" | "skipped">; courses: Course[] }) {
+function SessionList({ sessions, status, courses, reading }: { sessions: Session[]; status: Record<string, "done" | "skipped">; courses: Course[]; reading: Record<string, Reading> }) {
   return (
     <ol className="divide-y divide-rule">
       {sessions.map((x) => (
@@ -466,6 +483,12 @@ function SessionList({ sessions, status, courses }: { sessions: Session[]; statu
             <div className="text-xs text-ink-soft">
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
             </div>
+            {x.courseCode && reading[x.courseCode] && (
+              <Link href={reading[x.courseCode].href} className="mt-0.5 flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
+                <Icon name="book" className="size-3.5 shrink-0" />
+                <span className="truncate underline decoration-rule underline-offset-2">{reading[x.courseCode].title}</span>
+              </Link>
+            )}
           </div>
           {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} minutes={x.minutes} title={x.title} courseCode={x.courseCode} />}
         </li>

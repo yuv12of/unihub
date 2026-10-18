@@ -130,6 +130,7 @@ export const TODAY_SECTIONS: [string, string][] = [
   ["routines", "השגרה של היום"],
   ["deadlines", "הגשות קרובות"],
   ["exams", "ספירה לאחור לבחינות"],
+  ["reading", "לקריאה (ספרי הקורס)"],
   ["standings", "מצב בקורסים"],
 ];
 
