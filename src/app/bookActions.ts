@@ -1,5 +1,6 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { searchBooks as search, type SearchHit } from "@/lib/books";
@@ -48,4 +49,19 @@ export async function setQuestionStatus(id: string, status: "solved" | "stuck" |
 
 export async function searchMyBooks(q: string, course?: string): Promise<SearchHit[] | Failed> {
   return g(() => search(String(q).slice(0, 100), course));
+}
+
+/** Removes one of my books: its chapter files from storage, then the records (questions and cards go with it). */
+export async function deleteBook(bookId: string) {
+  return g(async () => {
+    const sb = await db();
+    const { data: chapters } = await sb.from("book_chapters").select("id, storage_path").eq("book_id", bookId);
+    const paths = (chapters ?? []).map((c) => c.storage_path).filter(Boolean);
+    if (paths.length) await sb.storage.from("books").remove(paths);
+    if (chapters?.length) await sb.from("cards").delete().in("chapter_id", chapters.map((c) => c.id));
+    const { error } = await sb.from("books").delete().eq("id", bookId);
+    if (error) throw new Error("לא נמחק");
+    refresh();
+    return true;
+  });
 }

@@ -6,6 +6,7 @@ import { continueChapter, getBooks, type Book } from "@/lib/books";
 import { Search } from "@/components/BookReader";
 import { Icon } from "@/components/Icon";
 import { BookUpload } from "@/components/BookUpload";
+import { RemoveBook } from "@/components/BookMenu";
 
 export default function BooksPage({ searchParams }: PageProps<"/books">) {
   return (
@@ -120,6 +121,9 @@ function BookCard({ book, color, course }: { book: Book; color: string; course: 
           </li>
         ))}
       </ol>
+      <div className="mt-2 text-end">
+        <RemoveBook id={book.id} />
+      </div>
     </section>
   );
 }

@@ -428,6 +428,9 @@ function Pages({
   // Draw pages near the screen, drop ones far away, and track the page being read.
   useEffect(() => {
     if (!doc) return;
+    // On a phone the app scrolls inside #scroller, not the window: watch that box.
+    const sc = document.getElementById("scroller");
+    const root = sc && /(auto|scroll)/.test(getComputedStyle(sc).overflowY) ? sc : null;
     const near = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -436,7 +439,7 @@ function Pages({
           else drop(n);
         }
       },
-      { rootMargin: "1600px 0px" },
+      { root, rootMargin: "1600px 0px" },
     );
     const seen = new IntersectionObserver(
       (entries) => {
@@ -447,7 +450,7 @@ function Pages({
             setCurrent(n);
           }
       },
-      { rootMargin: "-45% 0px -45% 0px" },
+      { root, rootMargin: "-45% 0px -45% 0px" },
     );
     slots.current.forEach((s) => {
       if (s) {
@@ -493,7 +496,7 @@ function Pages({
               slots.current[i] = el;
             }}
             data-page={i + 1}
-            className="relative overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-rule"
+            className="relative scroll-mt-40 overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-rule lg:scroll-mt-24"
             style={{ aspectRatio: `1 / ${ratio}` }}
             aria-label={`עמוד ${i + 1}`}
             role="img"

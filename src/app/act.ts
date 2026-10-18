@@ -76,3 +76,4 @@ export const savePlace = w(B.savePlace);
 export const markChapterDone = w(B.markChapterDone);
 export const setQuestionStatus = w(B.setQuestionStatus);
 export const searchMyBooks = w(B.searchMyBooks);
+export const deleteBook = w(B.deleteBook);
