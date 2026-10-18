@@ -5,6 +5,7 @@ import { getCourses } from "@/lib/userdata";
 import { continueChapter, getBooks, type Book } from "@/lib/books";
 import { Search } from "@/components/BookReader";
 import { Icon } from "@/components/Icon";
+import { BookUpload } from "@/components/BookUpload";
 
 export default function BooksPage({ searchParams }: PageProps<"/books">) {
   return (
@@ -26,6 +27,7 @@ async function Library({ searchParams }: { searchParams: PageProps<"/books">["se
   const books = only ? all.filter((b) => b.course_code === only) : all;
   const cont = continueChapter(books);
   const courseOf = (code: string) => courses.find((c) => c.code === code);
+  const upload = <BookUpload courses={courses.map((c) => ({ code: c.code, short: c.short }))} defaultCourse={only} />;
 
   if (!all.length)
     return (
@@ -33,8 +35,9 @@ async function Library({ searchParams }: { searchParams: PageProps<"/books">["se
         <Icon name="book" className="size-8 text-ink-soft" />
         <h2 className="section-title mt-3">עוד אין כאן ספרים</h2>
         <p className="mt-2 text-ink-soft">
-          הספרים מיובאים מאתר הקורס של האוניברסיטה, ונשמרים רק בחשבון שלכם. אחרי הייבוא כל פרק מקבל סיכום, שאלות תרגול וכרטיסיות.
+          מעלים את ה־PDF של ספר הקורס, והוא מתחלק לפרקים לפי תוכן העניינים. הספר נשמר רק בחשבון שלכם.
         </p>
+        <div className="mt-4">{upload}</div>
       </div>
     );
 
@@ -69,8 +72,9 @@ async function Library({ searchParams }: { searchParams: PageProps<"/books">["se
             <BookCard key={b.id} book={b} color={courseOf(b.course_code)?.color ?? "var(--ink-soft)"} course={courseOf(b.course_code)?.short ?? b.course_code} />
           ))}
         </div>
-        <aside className="lg:sticky lg:top-6 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <Search course={only} />
+          {upload}
         </aside>
       </div>
     </div>
