@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { spotifyDo, spotifyNow, spotifyPlaylists, type SpotifyCommand } from "@/app/spotifyActions";
 import { FOCUS_PLAYLISTS } from "@/lib/focusMusic";
 import type { SpotifyState } from "@/lib/spotify";
+import { Icon } from "@/components/Icon";
 
 const read = (k: string) => {
   try {
@@ -87,7 +88,8 @@ export function PlaylistPicker({ current, onPick, mine = true }: { current: stri
         (lists ? (
           lists.map((p) => (
             <button key={p.id} type="button" onClick={() => onPick(p.id)} className={chip(p.id === current)}>
-              🎵 {p.name}
+              <Icon name="music" className="me-1 size-[1em]" />
+              {p.name}
             </button>
           ))
         ) : (
@@ -126,7 +128,7 @@ export function SpotifyControls({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.image} alt="" className="size-14 shrink-0 rounded-lg object-cover" />
         ) : (
-          <div className="grid size-14 shrink-0 place-items-center rounded-lg bg-rule/60 text-2xl">🎧</div>
+          <div className="grid size-14 shrink-0 place-items-center rounded-lg bg-rule/60 text-ink-soft"><Icon name="headphones" className="size-7" /></div>
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{p?.title ?? "שום דבר לא מתנגן"}</p>
@@ -134,7 +136,7 @@ export function SpotifyControls({
         </div>
         <div className="flex shrink-0 items-center gap-1" dir="ltr">
           <button type="button" aria-label="הקודם" onClick={() => send({ cmd: "previous" })} className="grid size-9 place-items-center rounded-full hover:bg-rule/60">
-            ⏮
+            <Icon name="prev" className="size-4" />
           </button>
           <button
             type="button"
@@ -142,10 +144,10 @@ export function SpotifyControls({
             onClick={() => (p?.isPlaying ? send({ cmd: "pause" }) : start(p ? null : playlist))}
             className="grid size-10 place-items-center rounded-full bg-ink text-bg"
           >
-            {p?.isPlaying ? "⏸" : "▶"}
+            {p?.isPlaying ? <Icon name="pause" className="size-4" /> : <Icon name="play" className="size-4 translate-x-px" />}
           </button>
           <button type="button" aria-label="הבא" onClick={() => send({ cmd: "next" })} className="grid size-9 place-items-center rounded-full hover:bg-rule/60">
-            ⏭
+            <Icon name="next" className="size-4" />
           </button>
         </div>
       </div>
@@ -156,7 +158,7 @@ export function SpotifyControls({
       )}
       {sp?.device?.volume != null && (
         <label className="mt-3 flex items-center gap-2 text-xs text-ink-soft">
-          <span aria-hidden>🔈</span>
+          <Icon name="volume" className="size-4" />
           <input
             type="range"
             min={0}
@@ -181,14 +183,15 @@ export function SpotifyControls({
             {!sp?.device && <option value="">בחירת מכשיר…</option>}
             {sp?.devices?.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.type === "Smartphone" ? "📱" : d.type === "Computer" ? "💻" : "🔊"} {d.name}
+                {d.name}
               </option>
             ))}
           </select>
         )}
         {sp?.shuffle != null && (
           <button type="button" onClick={() => send({ cmd: "shuffle", value: !sp.shuffle })} className={sp.shuffle ? "text-ink" : ""} aria-pressed={sp.shuffle}>
-            🔀 ערבוב
+            <Icon name="shuffle" className="me-1 size-4" />
+            ערבוב
           </button>
         )}
         <button type="button" onClick={() => setPicking((x) => !x)} className="underline underline-offset-4 decoration-rule">
@@ -264,7 +267,7 @@ export function MusicBar() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.image} alt="" className="size-10 shrink-0 rounded-md object-cover" />
             ) : (
-              <span className="grid size-10 shrink-0 place-items-center rounded-md bg-rule/60 text-lg">🎧</span>
+              <span className="grid size-10 shrink-0 place-items-center rounded-md bg-rule/60 text-ink-soft"><Icon name="headphones" className="size-5" /></span>
             )}
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{p?.title ?? "Spotify"}</span>
@@ -275,7 +278,7 @@ export function MusicBar() {
           </button>
           <div className="flex shrink-0 items-center gap-1" dir="ltr">
             <button type="button" aria-label="הקודם" onClick={() => send({ cmd: "previous" })} className="hidden size-9 place-items-center rounded-full hover:bg-rule/60 sm:grid">
-              ⏮
+              <Icon name="prev" className="size-4" />
             </button>
             <button
               type="button"
@@ -283,10 +286,10 @@ export function MusicBar() {
               onClick={() => (p?.isPlaying ? send({ cmd: "pause" }) : start(p ? null : playlist))}
               className="grid size-10 place-items-center rounded-full bg-ink text-bg"
             >
-              {p?.isPlaying ? "⏸" : "▶"}
+              {p?.isPlaying ? <Icon name="pause" className="size-4" /> : <Icon name="play" className="size-4 translate-x-px" />}
             </button>
             <button type="button" aria-label="הבא" onClick={() => send({ cmd: "next" })} className="grid size-9 place-items-center rounded-full hover:bg-rule/60">
-              ⏭
+              <Icon name="next" className="size-4" />
             </button>
           </div>
         </div>

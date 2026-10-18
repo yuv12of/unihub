@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Icon } from "@/components/Icon";
 
 /** A short getting-started checklist for new accounts; disappears when done or dismissed. */
 export function FirstSteps({ steps }: { steps: { label: string; href: string; done: boolean }[] }) {
@@ -32,19 +33,19 @@ export function FirstSteps({ steps }: { steps: { label: string; href: string; do
               localStorage.setItem("firststeps:hidden", "1");
             } catch {}
           }}
-          className="text-sm text-ink-soft hover:text-ink"
+          className="-m-2 grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink"
           aria-label="הסתרה"
         >
-          ✕
+          <Icon name="close" className="size-4" />
         </button>
       </div>
       <ol className="mt-3 space-y-2">
         {steps.map((s, i) => (
           <li key={s.href}>
             <Link href={s.href} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-bg ${s.done ? "text-ink-soft" : ""}`}>
-              <span className={`grid size-7 shrink-0 place-items-center rounded-full text-sm ${s.done ? "bg-highlight" : "border border-rule"}`}>{s.done ? "✓" : i + 1}</span>
+              <span className={`grid size-7 shrink-0 place-items-center rounded-full text-sm ${s.done ? "bg-highlight" : "border border-rule"}`}>{s.done ? <Icon name="check" className="size-4" /> : i + 1}</span>
               <span className={s.done ? "line-through" : "font-medium"}>{s.label}</span>
-              {!s.done && <span className="ms-auto text-ink-soft" aria-hidden>←</span>}
+              {!s.done && <Icon name="chevronLeft" className="ms-auto size-4 text-ink-soft" />}
             </Link>
           </li>
         ))}

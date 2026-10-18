@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 
 /** "Done today" card as an image, for WhatsApp status or a story. Drawn in the browser; nothing is uploaded. */
 export function ShareDay({ name, date, minutes, sessions, routines, streak }: { name: string; date: string; minutes: number; sessions: number; routines: number; streak: number }) {
@@ -70,7 +71,8 @@ export function ShareDay({ name, date, minutes, sessions, routines, streak }: { 
   };
   return (
     <button type="button" onClick={make} disabled={busy} className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
-      📸 שיתוף היום כתמונה
+      <Icon name="camera" className="me-1 size-4" />
+      שיתוף היום כתמונה
     </button>
   );
 }

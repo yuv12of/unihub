@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { spotifyDo } from "@/app/spotifyActions";
 import { embedUrl, playlistUrl } from "@/lib/focusMusic";
 import { PlaylistPicker, SpotifyControls, useChosenPlaylist, useSpotify } from "@/components/SpotifyPlayer";
+import { Icon } from "@/components/Icon";
 
 const read = (k: string) => {
   try {
@@ -91,7 +92,8 @@ export function FocusMusic({ running, over }: { running: boolean; over: boolean 
     return (
       <div className="mt-5 flex flex-col items-center gap-1.5 text-sm">
         <button type="button" onClick={() => setPicking(true)} className="text-ink-soft underline underline-offset-4 decoration-rule">
-          🎧 מוזיקה לריכוז
+          <Icon name="headphones" className="me-1 size-4" />
+          מוזיקה לריכוז
         </button>
         {sp?.enabled && (
           <a href="/api/spotify/login" className="text-xs text-ink-soft underline underline-offset-4 decoration-rule">

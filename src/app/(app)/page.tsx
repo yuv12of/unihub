@@ -25,6 +25,7 @@ import { FirstSteps } from "@/components/FirstSteps";
 import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
+import { Icon } from "@/components/Icon";
 import {
   addDays,
   allDeadlines,
@@ -153,7 +154,7 @@ async function Today() {
         <h1 className="font-display text-[2.75rem] leading-none sm:text-6xl">{formatHebrewDate(today, { day: "numeric", month: "long" })}</h1>
         {(academicToday.length > 0 || nextAcademic) && (
           <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
-            <span aria-hidden>🎓</span>
+            <Icon name="cap" className="size-4" />
             {academicToday.length > 0
               ? academicToday.map((a) => a.title).join(", ")
               : `${nextAcademic!.title} ${relativeDays(daysBetween(today, nextAcademic!.date))} (${formatHebrewDate(nextAcademic!.date, { day: "numeric", month: "numeric" })})`}
@@ -161,7 +162,7 @@ async function Today() {
         )}
         {(jToday?.holidays.length || jToday?.candles || jToday?.havdalah || jToday?.parasha || jNext || (jp.rest && jToday?.rest)) && (
           <p className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-surface px-3 py-1 text-sm text-ink-soft ring-1 ring-rule">
-            <span aria-hidden>✡️</span>
+            <span aria-hidden className="text-base leading-none">✡︎</span>
             {jToday?.holidays.length ? <span className="text-ink">{jToday.holidays.map((h) => h.title).join(", ")}</span> : null}
             {jToday?.parasha && <span>{jToday.parasha}</span>}
             {jToday?.candles && <span>הדלקת נרות {jToday.candles}</span>}
@@ -292,7 +293,7 @@ async function Today() {
           {plan.warnings.length > 0 && (
             <details className="group mt-3 text-sm">
               <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-                <span aria-hidden>⚠️</span>
+                <Icon name="alert" className="size-4 text-ink-soft" />
                 <span className="hl">
                   חסרות {minutesLabel(plan.warnings.reduce((n, w) => n + w.missingMinutes, 0))} לימוד לפני {plan.warnings.length}{" "}
                   {plan.warnings.length === 1 ? "מטלה" : "מטלות"}
@@ -315,7 +316,8 @@ async function Today() {
                             href={`mailto:?subject=${encodeURIComponent(`בקשת הארכה: ${w.title} (${w.courseCode})`)}&body=${encodeURIComponent(body)}`}
                             className="text-ink underline underline-offset-4 decoration-rule"
                           >
-                            ✉️ לבקש הארכה
+                            <Icon name="mail" className="me-1 size-4" />
+                            לבקש הארכה
                           </a>
                         </>
                       )}
@@ -464,9 +466,9 @@ function ExamCountdown({ today, upcoming, courses }: { today: string; upcoming: 
   if (upcoming.length === 0)
     return (
       <Link href="/settings#study" className="mb-6 flex items-center gap-2 rounded-lg border border-dashed border-rule px-4 py-2.5 text-sm text-ink-soft hover:border-ink-soft hover:text-ink">
-        <span aria-hidden>📅</span>
+        <Icon name="calendar" className="size-4" />
         <span className="flex-1">להוסיף מועדי בחינות לספירה לאחור</span>
-        <span aria-hidden>+</span>
+        <Icon name="plus" className="size-4" />
       </Link>
     );
   return (

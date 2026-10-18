@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { logStudy } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
+import { Icon } from "@/components/Icon";
 
 const KEY = "quicklog:last";
 const DURATIONS = [25, 45, 60, 90];
@@ -60,9 +61,9 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
         type="button"
         onClick={() => setOpen(true)}
         aria-label="רישום לימוד"
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem+var(--player-h,0px))] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-2xl text-bg shadow-lg lg:bottom-[calc(1.5rem+var(--player-h,0px))] lg:end-6"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem+var(--player-h,0px))] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-bg shadow-lg lg:bottom-[calc(1.5rem+var(--player-h,0px))] lg:end-6"
       >
-        <span aria-hidden>⏱</span>
+        <Icon name="timer" className="size-6" />
       </button>
       {open &&
         createPortal(
@@ -123,9 +124,10 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
                   setOpen(false);
                   setTimer(true);
                 }}
-                className="mt-4 w-full rounded-xl bg-ink py-3 font-medium text-bg"
+                className="mt-4 flex w-full items-center justify-center rounded-xl bg-ink py-3 font-medium text-bg"
               >
-                ▶ להתחיל טיימר במקום
+                <Icon name="play" className="me-1.5 size-4" />
+                להתחיל טיימר במקום
               </button>
               {msg && (
                 <p className="mt-3 text-center text-sm" aria-live="polite">

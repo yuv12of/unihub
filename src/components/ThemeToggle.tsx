@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { saveLook } from "@/app/act";
+import { Icon, type IconName } from "@/components/Icon";
 
 type Theme = "system" | "light" | "dark";
 const NEXT: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
 const LABEL: Record<Theme, string> = { system: "אוטומטי", light: "בהיר", dark: "כהה" };
-const ICON: Record<Theme, string> = { system: "◐", light: "☀︎", dark: "☾" };
+const ICON: Record<Theme, IconName> = { system: "auto", light: "sun", dark: "moon" };
 
 /** Light / dark / follow the device. Remembered in this browser. */
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
@@ -31,11 +32,11 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
     <button
       type="button"
       onClick={() => apply(NEXT[theme])}
-      className="text-ink-soft hover:text-ink"
+      className={`inline-flex items-center text-ink-soft hover:text-ink ${compact ? "size-9 justify-center rounded-full hover:bg-surface" : ""}`}
       aria-label={`ערכת צבעים: ${LABEL[theme]}`}
       title={`ערכת צבעים: ${LABEL[theme]}`}
     >
-      {ICON[theme]}
+      <Icon name={ICON[theme]} className="size-5" />
       {!compact && <span className="ms-1.5">{LABEL[theme]}</span>}
     </button>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { setDayOff } from "@/app/act";
+import { Icon } from "@/components/Icon";
 
 const REASONS = [
   ["sick", "🤒 חולה"],
@@ -23,8 +24,8 @@ export function DayOff({ date, isOff, sessionsToday = 0, routinesToday = 0 }: { 
   if (isOff)
     return (
       <div className="panel flex flex-wrap items-center gap-3 p-4">
-        <span className="text-2xl" aria-hidden>
-          🛋️
+        <span className="grid size-10 place-items-center rounded-full bg-bg text-ink-soft">
+          <Icon name="sofa" className="size-5" />
         </span>
         <p className="min-w-0 flex-1 text-sm">
           <b>היום יום מנוחה.</b>{" "}

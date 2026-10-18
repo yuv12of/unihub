@@ -20,6 +20,7 @@ import {
 } from "@/lib/routines";
 import type { Person, RoutineWithMembers } from "@/lib/userdata";
 import { Avatar } from "@/components/Avatar";
+import { Icon } from "@/components/Icon";
 
 type BoardRoutine = RoutineWithMembers & {
   progress: { done: number; target: number };
@@ -286,7 +287,7 @@ function RoutineCard({
                 {isDone ? "✓" : o?.start ? <span className="text-[10px] tabular-nums text-ink-soft">{o.start}</span> : ""}
                 {others.length > 0 && (
                   <span className="absolute -bottom-1 -end-1 grid size-4 place-items-center rounded-full bg-surface text-[9px] ring-1 ring-rule" aria-label="גם השותף/ה סימן/ה">
-                    👥
+                    <Icon name="users" className="size-2.5" />
                   </span>
                 )}
               </button>
@@ -339,8 +340,8 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
       <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-xl sm:rounded-2xl">
         <div className="flex items-center justify-between">
           <h2 className="section-title">{f.id ? "עריכת שגרה" : "שגרה חדשה"}</h2>
-          <button onClick={onClose} className="text-ink-soft hover:text-ink" aria-label="סגירה">
-            ✕
+          <button onClick={onClose} className="-m-2 grid size-9 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink" aria-label="סגירה">
+            <Icon name="close" className="size-4" />
           </button>
         </div>
 

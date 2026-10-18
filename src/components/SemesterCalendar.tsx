@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { addEvent, deleteEvent, setDayOff, setSessionStatus } from "@/app/act";
+import { Icon } from "@/components/Icon";
 
 export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
 
@@ -111,10 +112,10 @@ export function SemesterCalendar({
         <div className="flex flex-wrap items-center gap-2 border-b border-rule px-3 py-3 sm:px-5">
           <div className="flex items-center gap-1">
             <button type="button" onClick={() => move(-1)} className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg" aria-label="הקודם">
-              →
+              <Icon name="chevronRight" className="size-4" />
             </button>
             <button type="button" onClick={() => move(1)} className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg" aria-label="הבא">
-              ←
+              <Icon name="chevronLeft" className="size-4" />
             </button>
           </div>
           <h2 className="section-title">{title}</h2>

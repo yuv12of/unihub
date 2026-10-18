@@ -4,6 +4,7 @@ import { useEffect, useOptimistic, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { addStuck, endStudyLive, setSessionStatus, startStudyLive } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
+import { Icon } from "@/components/Icon";
 
 export function SessionToggle({
   sessionKey,
@@ -57,8 +58,9 @@ export function SessionToggle({
   if (hero)
     return (
       <span className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setTimer(true)} className="rounded-full bg-bg px-5 py-2.5 font-semibold text-ink">
-          ▶ להתחיל עכשיו
+        <button type="button" onClick={() => setTimer(true)} className="inline-flex items-center rounded-full bg-bg px-5 py-2.5 font-semibold text-ink">
+          <Icon name="play" className="me-1.5 size-4" />
+          להתחיל עכשיו
         </button>
         <button type="button" onClick={() => save("done")} className="rounded-full border border-bg/40 px-4 py-2.5 text-sm">
           כבר עשיתי
@@ -204,8 +206,9 @@ export function FocusTimer({
             onClick={() =>
               setState((s) => (s.since ? { acc: s.acc + Date.now() - s.since, since: null } : { acc: s.acc, since: Date.now() }))
             }
-            className="rounded-full border border-rule px-5 py-2.5 hover:border-ink"
+            className="inline-flex items-center rounded-full border border-rule px-5 py-2.5 hover:border-ink"
           >
+            <Icon name={state.since ? "pause" : "play"} className="me-1.5 size-4" />
             {state.since ? "השהיה" : "המשך"}
           </button>
         )}
@@ -249,7 +252,8 @@ function Stuck({ courseCode, title }: { courseCode: string | null; title: string
   if (!open)
     return (
       <button type="button" onClick={() => setOpen(true)} className="mt-4 text-sm text-ink-soft underline underline-offset-4 decoration-rule">
-        🤔 נתקעתי{saved ? ` (${saved} נשמרו)` : ""}
+        <Icon name="help" className="me-1 size-4" />
+        נתקעתי{saved ? ` (${saved} נשמרו)` : ""}
       </button>
     );
   return (

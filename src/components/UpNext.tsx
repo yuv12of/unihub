@@ -1,6 +1,7 @@
 import { SessionToggle } from "@/components/SessionToggle";
 import { ExamKit } from "@/components/ExamKit";
 import { minutesLabel, sessionKey, type Session } from "@/lib/planner";
+import { Icon } from "@/components/Icon";
 
 export interface UpNextItem {
   title: string;
@@ -65,16 +66,21 @@ export function UpNext({
       {(deadline || exam) && (
         <div className="space-y-1 border-t border-bg/15 bg-bg/5 px-5 py-3 text-sm">
           {exam && (
-            <p>
-              <span aria-hidden>📝</span> {exam.days === 0 ? "היום" : exam.days === 1 ? "מחר" : `בעוד ${exam.days} ימים`}: בחינה ב{exam.course}
+            <p className="flex items-baseline gap-2">
+              <Icon name="pencil" className="size-4 self-center opacity-75" />
+              <span>{exam.days === 0 ? "היום" : exam.days === 1 ? "מחר" : `בעוד ${exam.days} ימים`}: בחינה ב{exam.course}
               {exam.time ? ` ב־${exam.time}` : ""}
               {exam.days > 1 && <span className="opacity-75"> · תקופת מבחנים, התוכנית מתמקדת בקורס הזה</span>}
+              </span>
             </p>
           )}
           {deadline && (
-            <p>
-              <span aria-hidden>📌</span> ההגשה הבאה: {deadline.label},{" "}
-              <span className={deadline.urgent ? "font-semibold underline decoration-2 underline-offset-4" : ""}>{deadline.when}</span>
+            <p className="flex items-baseline gap-2">
+              <Icon name="pin" className="size-4 self-center opacity-75" />
+              <span>
+                ההגשה הבאה: {deadline.label},{" "}
+                <span className={deadline.urgent ? "font-semibold underline decoration-2 underline-offset-4" : ""}>{deadline.when}</span>
+              </span>
             </p>
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/Icon";
 
 /** Celebrates badges earned since the last visit on this device. */
 export function BadgeToast({ earned }: { earned: { id: string; emoji: string; title: string }[] }) {
@@ -28,8 +29,8 @@ export function BadgeToast({ earned }: { earned: { id: string; emoji: string; ti
           לכל התגים
         </Link>
       </div>
-      <button type="button" onClick={() => setFresh([])} className="text-ink-soft" aria-label="סגירה">
-        ✕
+      <button type="button" onClick={() => setFresh([])} className="-m-2 grid size-9 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink" aria-label="סגירה">
+        <Icon name="close" className="size-4" />
       </button>
     </div>
   );
