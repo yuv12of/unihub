@@ -460,9 +460,11 @@ async function saveRoutine_(input: RoutineInput) {
     const { error } = await supabase.from("routines").update(row).match({ id, user_id: userId });
     if (error) throw new Error(error.message);
   } else {
-    const { data, error } = await supabase.from("routines").insert(row).select("id").single();
+    // No "returning": the visibility rule can't see a row inserted in the same statement,
+    // so the id is made here and the insert doesn't read the row back.
+    id = crypto.randomUUID();
+    const { error } = await supabase.from("routines").insert({ ...row, id });
     if (error) throw new Error(error.message);
-    id = data.id as string;
   }
   if (input.share_with?.length) await supabase.rpc("share_routine", { p_routine: id, p_users: input.share_with });
   refresh();
