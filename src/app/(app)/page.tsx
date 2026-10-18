@@ -26,6 +26,7 @@ import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { Icon } from "@/components/Icon";
+import { continueChapter, getBooks } from "@/lib/books";
 import {
   addDays,
   allDeadlines,
@@ -76,8 +77,9 @@ async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
   // Everything in one round: the page waits for the slowest call, not for the sum of them.
-  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush] =
-    await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription()]);
+  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush, books] =
+    await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription(), getBooks()]);
+  const reading = continueChapter(books);
   const hidden = new Set(profile?.prefs?.hidden ?? []);
   const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
@@ -373,6 +375,18 @@ async function Today() {
 
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
         {show("exams") && <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />}
+        {reading && (
+          <Link href={`/books/${reading.book.id}?ch=${reading.chapter.idx}`} className="panel mb-6 flex items-center gap-3 px-4 py-3 hover:border-ink-soft">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full text-bg" style={{ background: themeOf(courses, reading.book.course_code).color }}>
+              <Icon name="book" className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs text-ink-soft">{reading.chapter.read_at ? "להמשיך לקרוא" : "לקריאה"} · {themeOf(courses, reading.book.course_code).short}</span>
+              <span className="block truncate font-medium">{reading.chapter.title}</span>
+            </span>
+            <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
+          </Link>
+        )}
         {show("standings") && <>
         <h2 id="courses-title" className="section-title mb-3">
           מצב בקורסים

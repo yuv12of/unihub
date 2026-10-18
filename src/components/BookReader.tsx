@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Icon } from "@/components/Icon";
+import { MathText } from "@/components/MathText";
 import { markChapterDone, savePlace, searchMyBooks, setQuestionStatus } from "@/app/act";
 import type { BookQuestion, SearchHit } from "@/lib/books";
 
@@ -170,7 +171,7 @@ function Summary({ chapter, cardCount, course }: { chapter: Props["chapter"]; ca
     <section className="panel p-5">
       <h2 className="section-title">על הפרק</h2>
       {chapter.summary ? (
-        <p className="mt-2 leading-relaxed">{chapter.summary}</p>
+        <p className="mt-2 leading-relaxed"><MathText text={chapter.summary} /></p>
       ) : (
         <p className="mt-2 text-sm text-ink-soft">הסיכום והשאלות של הפרק ייכתבו בסבב הבוקר הקרוב.</p>
       )}
@@ -179,7 +180,7 @@ function Summary({ chapter, cardCount, course }: { chapter: Props["chapter"]; ca
           {chapter.key_points.map((k, i) => (
             <li key={i} className="flex gap-2">
               <span className="mt-2 size-1.5 shrink-0 rounded-full bg-ink-soft" aria-hidden />
-              <span>{k}</span>
+              <span><MathText text={k} /></span>
             </li>
           ))}
         </ul>
@@ -236,16 +237,16 @@ function QuestionItem({ q, n, onPage }: { q: BookQuestion; n: number; onPage: (p
           </button>
         )}
       </div>
-      <p className="mt-1.5 whitespace-pre-line leading-relaxed">{q.prompt}</p>
+      <p className="mt-1.5 whitespace-pre-line leading-relaxed"><MathText text={q.prompt} /></p>
       {open !== "none" && (
         <div className="mt-3 space-y-2 border-t border-rule pt-3 text-sm">
           {q.hint && (
             <p className="flex gap-2">
               <Icon name="bulb" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-              <span className="whitespace-pre-line">{q.hint}</span>
+              <span className="whitespace-pre-line"><MathText text={q.hint} /></span>
             </p>
           )}
-          {open === "answer" && <p className="whitespace-pre-line leading-relaxed">{q.answer}</p>}
+          {open === "answer" && <p className="whitespace-pre-line leading-relaxed"><MathText text={q.answer} /></p>}
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
