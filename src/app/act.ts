@@ -5,6 +5,7 @@
  */
 import * as A from "@/app/actions";
 import type { Failed } from "@/app/actions";
+import * as B from "@/app/bookActions";
 
 function w<P extends unknown[], R>(f: (...a: P) => Promise<R>) {
   return async (...a: P): Promise<Exclude<R, Failed>> => {
@@ -70,3 +71,8 @@ export {
   findCommonSlots,
 } from "@/app/actions";
 export type * from "@/app/actions";
+
+export const savePlace = w(B.savePlace);
+export const markChapterDone = w(B.markChapterDone);
+export const setQuestionStatus = w(B.setQuestionStatus);
+export const searchMyBooks = w(B.searchMyBooks);

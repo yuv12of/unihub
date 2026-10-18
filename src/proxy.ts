@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
 
-const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/auth", "/family", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly"];
+const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/auth", "/family", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly", "/api/books"];
 
 /**
  * Refreshes the Supabase session and keeps the app private: anyone can sign in with Google,
@@ -52,5 +52,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|apple-touch-icon.png|icon-.*\\.png|manifest.webmanifest).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js|apple-touch-icon.png|icon-.*\\.png|manifest.webmanifest|pdf\\.worker\\.min\\.mjs|pdfjs/).*)"],
 };

@@ -4,6 +4,7 @@ import { deliverNotifications, sendPush, sendPushAsServer } from "@/lib/push";
 import { remindersFor } from "@/lib/reminders";
 import { syncDueGoogle } from "@/lib/googleCal";
 import { adminClient } from "@/lib/supabase/admin";
+import { backfillAttachmentText } from "@/lib/pdfText";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -26,6 +27,7 @@ export async function POST(req: Request) {
   const admin = adminClient();
   let others = 0;
   let google = 0;
+  let pdfs = 0;
   if (admin) {
     const { data: subs } = await admin.from("push_subscriptions").select("user_id, endpoint, p256dh, auth");
     const byUser = new Map<string, { endpoint: string; p256dh: string; auth: string }[]>();
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
     }
     sent += others + (await deliverNotifications());
     google = await syncDueGoogle(admin);
+    pdfs = await backfillAttachmentText(admin).catch(() => 0);
   }
-  return Response.json({ sent, others, google });
+  return Response.json({ sent, others, google, pdfs });
 }

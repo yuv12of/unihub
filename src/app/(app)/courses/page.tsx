@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { Gallery } from "@/components/Fold";
 import { connection } from "next/server";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
@@ -173,6 +174,9 @@ async function Courses() {
                   <p className="mb-2">הערכה מסכמת: {c.finalAssessment}</p>
                 )}
                 <div className="flex flex-wrap gap-4">
+                  <Link className={linkClass} href={`/books?course=${c.code}`}>
+                    ספרי הקורס
+                  </Link>
                   <a
                     className={linkClass}
                     href={
