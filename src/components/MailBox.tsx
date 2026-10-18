@@ -179,17 +179,23 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
 }
 
 /** Shows the original formatted email (images, links) safely; falls back to readable text. */
-function MailBody({ mail }: { mail: Mail }) {
-  const [html, setHtml] = useState<string | null>(mail.body_html ?? null);
+function MailBody({ mail: original }: { mail: Mail }) {
+  const [html, setHtml] = useState<string | null>(original.body_html ?? null);
+  const [loading, setLoading] = useState(original.body_html === undefined);
   const [mode, setMode] = useState<"html" | "text">("html");
+  // The list leaves body_html out (it can be large), so the open message loads it here.
+  const needsLoad = original.body_html === undefined;
   useEffect(() => {
-    if (mail.body_html !== undefined) return;
+    if (!needsLoad) return;
     let live = true;
-    mailHtml(mail.id).then((h) => live && setHtml(h), () => {});
+    mailHtml(original.id)
+      .then((h) => live && setHtml(h), () => {})
+      .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-  }, [mail.id, mail.body_html]);
+  }, [original.id, needsLoad]);
+  let mail = original;
   // Plain-text emails also arrive with a "html" copy that is just the text: no tags, so newlines
   // would collapse in the frame. Only real HTML gets the formatted view.
   mail = { ...mail, body_html: html && /<(html|body|div|p|br|table|span|a|img|font|b|strong)\b/i.test(html) ? html : null };
@@ -214,7 +220,9 @@ function MailBody({ mail }: { mail: Mail }) {
           </div>
         </div>
       )}
-      {mode === "html" && mail.body_html ? (
+      {loading ? (
+        <div className="h-40 animate-pulse rounded-lg bg-rule/50" aria-label="טוען את ההודעה" />
+      ) : mode === "html" && mail.body_html ? (
         <HtmlFrame html={mail.body_html} />
       ) : text ? (
         <div className="whitespace-pre-wrap text-[15px] leading-relaxed" dir="auto">
