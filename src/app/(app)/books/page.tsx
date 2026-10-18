@@ -84,6 +84,9 @@ async function Library({ searchParams }: { searchParams: PageProps<"/books">["se
 
 function BookCard({ book, color, course }: { book: Book; color: string; course: string }) {
   const done = book.chapters.filter((c) => c.done_at).length;
+  // Number chapters from 1; the front matter (when split off) gets a dot.
+  const front = book.chapters[0]?.title === "פתח דבר ותוכן";
+  const num = (idx: number) => (front ? (idx === 0 ? "·" : idx) : idx + 1);
   return (
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
@@ -106,7 +109,7 @@ function BookCard({ book, color, course }: { book: Book; color: string; course: 
           <li key={c.id}>
             <Link href={`/books/${book.id}?ch=${c.idx}`} className="flex items-center gap-3 px-4 py-3 hover:bg-bg">
               <span className={`grid size-7 shrink-0 place-items-center rounded-full text-xs tabular-nums ${c.done_at ? "bg-highlight text-highlight-ink" : "border border-rule"}`}>
-                {c.done_at ? <Icon name="check" className="size-3.5" /> : c.idx}
+                {c.done_at ? <Icon name="check" className="size-3.5" /> : num(c.idx)}
               </span>
               <span className="min-w-0 flex-1">
                 <span className={`block truncate ${c.done_at ? "text-ink-soft" : "font-medium"}`}>{c.title}</span>
