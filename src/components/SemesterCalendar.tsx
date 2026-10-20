@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { addEvent, deleteEvent, setDayOff, setSessionStatus } from "@/app/act";
+import {
+  addEvent,
+  deleteEvent,
+  setDayOff,
+  setSessionStatus,
+  updateEvent,
+} from "@/app/act";
 import { Icon } from "@/components/Icon";
 
-export type CalKind = "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
+export type CalKind =
+  "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
 
 export interface CalItem {
   date: string; // YYYY-MM-DD
@@ -22,30 +29,61 @@ export interface CalItem {
   holiday?: boolean;
   /** e.g. "with Dana", "invited by Noa" */
   note?: string;
+  /** my own event: can be dragged, resized and edited */
+  editable?: boolean;
+  /** raw fields for the editor (label may add the location) */
+  title?: string;
+  location?: string;
+  /** keeps the planner from placing study at this time */
+  blocks?: boolean;
 }
+
+/** What the editor opens with: a new event (a time range) or one of mine. */
+type EditorState =
+  | { mode: "new"; date: string; start: string; end: string }
+  | { mode: "edit"; item: CalItem };
+type Placement = { date: string; start: string; end: string };
 
 const WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 const fmt = (iso: string, o: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat("he-IL", { timeZone: "UTC", ...o }).format(new Date(iso + "T00:00:00Z"));
+  new Intl.DateTimeFormat("he-IL", { timeZone: "UTC", ...o }).format(
+    new Date(iso + "T00:00:00Z"),
+  );
 const addDays = (iso: string, n: number) => {
   const d = new Date(iso + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-const weekStart = (iso: string) => addDays(iso, -new Date(iso + "T00:00:00Z").getUTCDay());
+const weekStart = (iso: string) =>
+  addDays(iso, -new Date(iso + "T00:00:00Z").getUTCDay());
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const timed = (i: CalItem) => !!(i.start && i.end);
+const hhmm = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const SNAP = 15;
+const snap = (m: number) => Math.round(m / SNAP) * SNAP;
 
 function daysOfMonth(ym: string): (string | null)[] {
   const first = ym + "-01";
-  const cells: (string | null)[] = Array(new Date(first + "T00:00:00Z").getUTCDay()).fill(null);
+  const cells: (string | null)[] = Array(
+    new Date(first + "T00:00:00Z").getUTCDay(),
+  ).fill(null);
   for (let d = first; d.startsWith(ym); d = addDays(d, 1)) cells.push(d);
   while (cells.length % 7) cells.push(null);
   return cells;
 }
 
-const rank: Record<CalKind, number> = { academic: 0, exam: 1, due: 2, tutorial: 3, event: 4, study: 5, routine: 6 };
-const order = (a: CalItem, b: CalItem) => rank[a.kind] - rank[b.kind] || (a.start ?? "").localeCompare(b.start ?? "");
+const rank: Record<CalKind, number> = {
+  academic: 0,
+  exam: 1,
+  due: 2,
+  tutorial: 3,
+  event: 4,
+  study: 5,
+  routine: 6,
+};
+const order = (a: CalItem, b: CalItem) =>
+  rank[a.kind] - rank[b.kind] || (a.start ?? "").localeCompare(b.start ?? "");
 
 export function SemesterCalendar({
   items,
@@ -65,16 +103,67 @@ export function SemesterCalendar({
   people?: { id: string; name: string }[];
 }) {
   const [showRoutines, setShowRoutines] = useState(true);
+  // Moves shown right away, before the server answers. A fresh items list replaces them.
+  const [moved, setMoved] = useState<Map<string, Placement>>(new Map());
+  const [seenItems, setSeenItems] = useState(items);
+  if (seenItems !== items) {
+    setSeenItems(items);
+    setMoved(new Map());
+  }
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [toast, setToast] = useState<{
+    text: string;
+    undo?: () => void;
+  } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const place = (item: CalItem, to: Placement) => {
+    const id = item.eventId!;
+    const from = { date: item.date, start: item.start!, end: item.end! };
+    if (from.date === to.date && from.start === to.start && from.end === to.end)
+      return;
+    const go = (p: Placement, after?: () => void) => {
+      setMoved((m) => new Map(m).set(id, p));
+      updateEvent({ id, ...p })
+        .then(after)
+        .catch((e: Error) => {
+          setMoved((m) => {
+            const n = new Map(m);
+            n.delete(id);
+            return n;
+          });
+          setToast({ text: e.message || "השינוי לא נשמר" });
+        });
+    };
+    go(to, () =>
+      setToast({
+        text:
+          from.date === to.date && from.start === to.start
+            ? `המשך שונה: ${to.start}–${to.end}`
+            : `הוזז ל${fmt(to.date, { weekday: "long" })} ${to.start}`,
+        undo: () => go(from, () => setToast(null)),
+      }),
+    );
+  };
+
   const byDate = useMemo(() => {
     const m = new Map<string, CalItem[]>();
-    for (const it of items) {
+    for (const raw of items) {
+      const it =
+        raw.eventId && moved.has(raw.eventId)
+          ? { ...raw, ...moved.get(raw.eventId)! }
+          : raw;
       if (!showRoutines && it.kind === "routine") continue;
       if (!m.has(it.date)) m.set(it.date, []);
       m.get(it.date)!.push(it);
     }
     for (const l of m.values()) l.sort(order);
     return m;
-  }, [items, showRoutines]);
+  }, [items, showRoutines, moved]);
 
   const [view, setView] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState(today); // any day inside the shown week / month
@@ -87,7 +176,9 @@ export function SemesterCalendar({
       setSelected(next <= today && today < addDays(next, 7) ? today : next);
     } else {
       const [y, m] = anchor.slice(0, 7).split("-").map(Number);
-      const d = new Date(Date.UTC(y, m - 1 + dir, 1)).toISOString().slice(0, 10);
+      const d = new Date(Date.UTC(y, m - 1 + dir, 1))
+        .toISOString()
+        .slice(0, 10);
       setAnchor(d);
       setSelected(d.slice(0, 7) === today.slice(0, 7) ? today : d);
     }
@@ -111,10 +202,20 @@ export function SemesterCalendar({
       <div className="panel min-w-0 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-rule px-3 py-3 sm:px-5">
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => move(-1)} className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg" aria-label="הקודם">
+            <button
+              type="button"
+              onClick={() => move(-1)}
+              className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg"
+              aria-label="הקודם"
+            >
               <Icon name="chevronRight" className="size-4" />
             </button>
-            <button type="button" onClick={() => move(1)} className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg" aria-label="הבא">
+            <button
+              type="button"
+              onClick={() => move(1)}
+              className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg"
+              aria-label="הבא"
+            >
               <Icon name="chevronLeft" className="size-4" />
             </button>
           </div>
@@ -134,7 +235,11 @@ export function SemesterCalendar({
           >
             {showRoutines ? "✓ " : ""}שגרה
           </button>
-          <div className="flex rounded-lg border border-rule p-0.5 text-sm" role="tablist" aria-label="תצוגה">
+          <div
+            className="flex rounded-lg border border-rule p-0.5 text-sm"
+            role="tablist"
+            aria-label="תצוגה"
+          >
             {(["week", "month"] as const).map((v) => (
               <button
                 key={v}
@@ -151,15 +256,37 @@ export function SemesterCalendar({
         </div>
 
         {view === "month" ? (
-          <MonthGrid month={anchor.slice(0, 7)} byDate={byDate} today={today} selected={selected} onSelect={setSelected} />
+          <MonthGrid
+            month={anchor.slice(0, 7)}
+            byDate={byDate}
+            today={today}
+            selected={selected}
+            onSelect={setSelected}
+          />
         ) : (
-          <WeekGrid start={weekStart(anchor)} byDate={byDate} today={today} selected={selected} onSelect={setSelected} />
+          <WeekGrid
+            start={weekStart(anchor)}
+            byDate={byDate}
+            today={today}
+            selected={selected}
+            onSelect={setSelected}
+            editable={editable}
+            onPlace={place}
+            onEdit={(item) => setEditor({ mode: "edit", item })}
+            onCreate={(p) => {
+              setSelected(p.date);
+              setEditor({ mode: "new", ...p });
+            }}
+          />
         )}
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-rule px-4 py-3 text-xs text-ink-soft sm:px-5">
           {legend.map((l) => (
             <span key={l.label} className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full" style={{ background: l.color }} />
+              <span
+                className="size-2.5 rounded-full"
+                style={{ background: l.color }}
+              />
               {l.label}
             </span>
           ))}
@@ -170,7 +297,57 @@ export function SemesterCalendar({
         </div>
       </div>
 
-      <DayPanel date={selected} items={byDate.get(selected) ?? []} editable={editable} people={people} isOff={offDays.includes(selected)} today={today} />
+      <DayPanel
+        date={selected}
+        items={byDate.get(selected) ?? []}
+        editable={editable}
+        isOff={offDays.includes(selected)}
+        today={today}
+        onEdit={(item) => setEditor({ mode: "edit", item })}
+        onNew={() =>
+          setEditor({
+            mode: "new",
+            date: selected,
+            start: "18:00",
+            end: "19:00",
+          })
+        }
+      />
+
+      {editor && (
+        <EventEditor
+          state={editor}
+          people={people}
+          onClose={() => setEditor(null)}
+          onDone={(text) => setToast({ text })}
+        />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          className="fixed inset-x-0 bottom-24 z-50 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-4 rounded-xl bg-ink px-4 py-3 text-sm text-bg shadow-lg md:bottom-8"
+        >
+          <span>{toast.text}</span>
+          {toast.undo && (
+            <button
+              type="button"
+              onClick={toast.undo}
+              className="font-semibold underline underline-offset-4"
+            >
+              ביטול
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            aria-label="סגירה"
+            className="opacity-70 hover:opacity-100"
+          >
+            <Icon name="close" className="size-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -202,10 +379,18 @@ function MonthGrid({
       <div className="grid grid-cols-7">
         {daysOfMonth(month).map((d, i) => {
           const edge = (i + 1) % 7 === 0 ? "border-e-0" : "";
-          if (!d) return <div key={`e${i}`} className={`border-b border-e border-rule bg-bg/40 ${edge}`} />;
+          if (!d)
+            return (
+              <div
+                key={`e${i}`}
+                className={`border-b border-e border-rule bg-bg/40 ${edge}`}
+              />
+            );
           const list = byDate.get(d) ?? [];
           const marks = list.filter((x) => x.kind !== "study");
-          const study = list.filter((x) => x.kind === "study" && x.status !== "skipped");
+          const study = list.filter(
+            (x) => x.kind === "study" && x.status !== "skipped",
+          );
           const studyMin = study.reduce((s, x) => s + (x.minutes ?? 0), 0);
           const holiday = list.some((x) => x.holiday);
           return (
@@ -216,7 +401,11 @@ function MonthGrid({
               aria-pressed={d === selected}
               aria-label={`${fmt(d, { weekday: "long", day: "numeric", month: "long" })}${marks.length ? `, ${marks.map((m) => m.label).join(", ")}` : ""}`}
               className={`flex min-h-14 flex-col gap-1 border-b border-e border-rule p-1 text-start md:min-h-28 md:p-1.5 ${edge} ${
-                d === selected ? "bg-bg" : holiday ? "bg-bg/50 hover:bg-bg" : "hover:bg-bg/60"
+                d === selected
+                  ? "bg-bg"
+                  : holiday
+                    ? "bg-bg/50 hover:bg-bg"
+                    : "hover:bg-bg/60"
               } ${d < today ? "text-ink-soft" : ""}`}
             >
               <span
@@ -233,7 +422,11 @@ function MonthGrid({
                 {studyMin > 0 && (
                   <span className="flex items-center gap-1 whitespace-nowrap px-1 text-[11px] text-ink-soft">
                     {study.map((s, k) => (
-                      <span key={k} className="size-1.5 shrink-0 rounded-full" style={{ background: s.color }} />
+                      <span
+                        key={k}
+                        className="size-1.5 shrink-0 rounded-full"
+                        style={{ background: s.color }}
+                      />
                     ))}
                     <span className="truncate">לימוד {hours(studyMin)}</span>
                   </span>
@@ -243,11 +436,20 @@ function MonthGrid({
                 {marks.map((m, k) => (
                   <span
                     key={k}
-                    className={m.kind === "exam" ? "h-1.5 w-3 rounded-full" : "size-1.5 rounded-full"}
-                    style={{ background: m.done ? "transparent" : m.color, border: `1.5px solid ${m.color}` }}
+                    className={
+                      m.kind === "exam"
+                        ? "h-1.5 w-3 rounded-full"
+                        : "size-1.5 rounded-full"
+                    }
+                    style={{
+                      background: m.done ? "transparent" : m.color,
+                      border: `1.5px solid ${m.color}`,
+                    }}
                   />
                 ))}
-                {studyMin > 0 && <span className="h-0.5 w-full rounded bg-rule" />}
+                {studyMin > 0 && (
+                  <span className="h-0.5 w-full rounded bg-rule" />
+                )}
               </span>
             </button>
           );
@@ -261,42 +463,226 @@ function MonthGrid({
 
 const HOUR_PX = 46;
 
+interface Drag {
+  kind: "move" | "resize" | "create";
+  item?: CalItem;
+  x0: number;
+  y0: number;
+  /** minute under the pointer when it went down (create) or the item's own times (move/resize) */
+  anchor: number;
+  s0: number;
+  e0: number;
+  date: string;
+  s: number;
+  e: number;
+  active: boolean;
+}
+
 function WeekGrid({
   start,
   byDate,
   today,
   selected,
   onSelect,
+  editable,
+  onPlace,
+  onEdit,
+  onCreate,
 }: {
   start: string;
   byDate: Map<string, CalItem[]>;
   today: string;
   selected: string;
   onSelect: (d: string) => void;
+  editable: boolean;
+  onPlace: (item: CalItem, to: Placement) => void;
+  onEdit: (item: CalItem) => void;
+  onCreate: (p: Placement) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const all = days.flatMap((d) => byDate.get(d) ?? []);
   const timedItems = all.filter(timed);
-  const minH = Math.min(8, ...timedItems.map((i) => Math.floor(toMin(i.start!) / 60)));
-  const maxH = Math.max(22, ...timedItems.map((i) => Math.ceil(toMin(i.end!) / 60)));
+  const minH = Math.min(
+    8,
+    ...timedItems.map((i) => Math.floor(toMin(i.start!) / 60)),
+  );
+  const maxH = Math.max(
+    22,
+    ...timedItems.map((i) => Math.ceil(toMin(i.end!) / 60)),
+  );
   const hoursList = Array.from({ length: maxH - minH }, (_, i) => minH + i);
   const scroller = useRef<HTMLDivElement>(null);
-  const firstStudy = Math.min(...timedItems.map((i) => toMin(i.start!)), 17 * 60);
+  const firstStudy = Math.min(
+    ...timedItems.map((i) => toMin(i.start!)),
+    17 * 60,
+  );
   useEffect(() => {
-    if (scroller.current) scroller.current.scrollTop = Math.max(0, ((firstStudy - minH * 60) / 60 - 0.5) * HOUR_PX);
+    if (scroller.current)
+      scroller.current.scrollTop = Math.max(
+        0,
+        ((firstStudy - minH * 60) / 60 - 0.5) * HOUR_PX,
+      );
   }, [start, firstStudy, minH]);
+
+  // ---- drag: move / resize my events, drag on empty time to create ----
+  const cols = useRef<(HTMLDivElement | null)[]>([]);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const set = (d: Drag | null) => {
+    dragRef.current = d;
+    setDrag(d);
+  };
+  const lo = minH * 60;
+  const hi = Math.min(maxH * 60, 24 * 60 - 1);
+  const minuteAt = (y: number, col: HTMLDivElement) =>
+    lo + ((y - col.getBoundingClientRect().top) / HOUR_PX) * 60;
+  const dayAt = (x: number) => {
+    const i = cols.current.findIndex((c) => {
+      if (!c) return false;
+      const r = c.getBoundingClientRect();
+      return x >= r.left && x < r.right;
+    });
+    return i >= 0 ? days[i] : null;
+  };
+
+  const down = (
+    e: React.PointerEvent,
+    d: string,
+    kind: Drag["kind"],
+    item?: CalItem,
+  ) => {
+    if (!editable || e.button !== 0) return;
+    e.stopPropagation();
+    const col = cols.current[days.indexOf(d)];
+    if (!col) return;
+    if (kind === "create") {
+      // Touch: a tap creates (dragging stays scrolling). Mouse: press and drag to draw the range.
+      const m = Math.max(
+        lo,
+        Math.min(hi - 60, Math.floor(minuteAt(e.clientY, col) / 30) * 30),
+      );
+      set({
+        kind,
+        x0: e.clientX,
+        y0: e.clientY,
+        anchor: m,
+        s0: m,
+        e0: m + 60,
+        date: d,
+        s: m,
+        e: m + 60,
+        active: false,
+      });
+      if (e.pointerType === "mouse")
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      return;
+    }
+    const s0 = toMin(item!.start!);
+    const e0 = toMin(item!.end!);
+    set({
+      kind,
+      item,
+      x0: e.clientX,
+      y0: e.clientY,
+      anchor: s0,
+      s0,
+      e0,
+      date: d,
+      s: s0,
+      e: e0,
+      active: false,
+    });
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+  };
+
+  const moveTo = (e: React.PointerEvent) => {
+    const g = dragRef.current;
+    if (!g) return;
+    const far = Math.abs(e.clientX - g.x0) + Math.abs(e.clientY - g.y0) > 5;
+    if (!g.active && !far) return;
+    if (g.kind === "create" && e.pointerType !== "mouse") return set(null); // a touch that moves is a scroll
+    const delta = snap(((e.clientY - g.y0) / HOUR_PX) * 60);
+    let next: Drag;
+    if (g.kind === "move") {
+      const len = g.e0 - g.s0;
+      const s = Math.max(lo, Math.min(hi - len, g.s0 + delta));
+      next = {
+        ...g,
+        active: true,
+        date: dayAt(e.clientX) ?? g.date,
+        s,
+        e: s + len,
+      };
+    } else if (g.kind === "resize") {
+      next = {
+        ...g,
+        active: true,
+        e: Math.max(g.s0 + SNAP, Math.min(hi, snap(g.e0 + delta))),
+      };
+    } else {
+      const col = cols.current[days.indexOf(g.date)]!;
+      const m = Math.max(lo, Math.min(hi, snap(minuteAt(e.clientY, col))));
+      const s = Math.min(g.anchor, m);
+      next = {
+        ...g,
+        active: true,
+        s,
+        e: Math.max(s + SNAP, Math.max(g.anchor + SNAP, m)),
+      };
+    }
+    set(next);
+  };
+
+  // A drag that ends outside the grid (or after its block re-rendered elsewhere) still ends.
+  const upRef = useRef(() => {});
+  useEffect(() => {
+    if (!drag) return;
+    const end = () => upRef.current();
+    window.addEventListener("pointerup", end);
+    return () => window.removeEventListener("pointerup", end);
+  }, [drag]);
+
+  const up = () => {
+    const g = dragRef.current;
+    set(null);
+    if (!g) return;
+    if (g.kind === "create")
+      return onCreate({
+        date: g.date,
+        start: hhmm(g.s),
+        end: hhmm(Math.min(g.e, 24 * 60 - 1)),
+      });
+    if (!g.active) return onEdit(g.item!);
+    onPlace(g.item!, {
+      date: g.date,
+      start: hhmm(g.s),
+      end: hhmm(Math.min(g.e, 24 * 60 - 1)),
+    });
+  };
+  useEffect(() => {
+    upRef.current = up;
+  });
 
   return (
     <>
       {/* Phone: one row per day */}
       <ol className="divide-y divide-rule md:hidden">
-        {groupFree(days, (d) => (byDate.get(d) ?? []).length === 0 && d !== today && d !== selected).map((g) => {
+        {groupFree(
+          days,
+          (d) =>
+            (byDate.get(d) ?? []).length === 0 && d !== today && d !== selected,
+        ).map((g) => {
           if (Array.isArray(g))
             return (
               <li key={g[0]}>
-                <button type="button" onClick={() => onSelect(g[0])} className="flex w-full items-center gap-3 px-4 py-2 text-start text-sm text-ink-soft">
+                <button
+                  type="button"
+                  onClick={() => onSelect(g[0])}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-start text-sm text-ink-soft"
+                >
                   <span className="w-12 shrink-0 text-xs">
-                    {fmt(g[0], { weekday: "short" })}–{fmt(g[g.length - 1], { weekday: "short" })}
+                    {fmt(g[0], { weekday: "short" })}–
+                    {fmt(g[g.length - 1], { weekday: "short" })}
                   </span>
                   <span>{g.length} ימים פנויים</span>
                 </button>
@@ -312,7 +698,9 @@ function WeekGrid({
                 className={`flex w-full gap-3 px-4 py-3 text-start ${d === selected ? "bg-bg" : ""}`}
               >
                 <span className="w-12 shrink-0 leading-tight">
-                  <span className={`block text-xs ${d === today ? "font-semibold text-ink" : "text-ink-soft"}`}>
+                  <span
+                    className={`block text-xs ${d === today ? "font-semibold text-ink" : "text-ink-soft"}`}
+                  >
                     {fmt(d, { weekday: "short" })}
                   </span>
                   <span
@@ -324,10 +712,15 @@ function WeekGrid({
                   </span>
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  {list.length === 0 && <span className="pt-1 text-sm text-ink-soft">פנוי</span>}
+                  {list.length === 0 && (
+                    <span className="pt-1 text-sm text-ink-soft">פנוי</span>
+                  )}
                   {list.map((it, k) => (
                     <span key={k} className="flex items-center gap-2 text-sm">
-                      <span className="h-4 w-1 shrink-0 rounded-full" style={{ background: it.color }} />
+                      <span
+                        className="h-4 w-1 shrink-0 rounded-full"
+                        style={{ background: it.color }}
+                      />
                       <span
                         className={`min-w-0 flex-1 truncate ${it.status === "skipped" || it.done ? "line-through text-ink-soft" : ""} ${
                           it.kind === "exam" ? "font-semibold" : ""
@@ -336,7 +729,11 @@ function WeekGrid({
                         {it.status === "done" ? "✓ " : ""}
                         {it.label}
                       </span>
-                      {it.start && <span className="shrink-0 tabular-nums text-xs text-ink-soft">{it.start}</span>}
+                      {it.start && (
+                        <span className="shrink-0 tabular-nums text-xs text-ink-soft">
+                          {it.start}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </span>
@@ -357,7 +754,9 @@ function WeekGrid({
               onClick={() => onSelect(d)}
               className={`border-s border-rule py-2 text-center ${d === selected ? "bg-bg" : "hover:bg-bg/60"}`}
             >
-              <div className="text-xs text-ink-soft">{fmt(d, { weekday: "short" })}</div>
+              <div className="text-xs text-ink-soft">
+                {fmt(d, { weekday: "short" })}
+              </div>
               <div
                 className={`mx-auto mt-0.5 grid size-7 place-items-center rounded-full text-sm tabular-nums ${
                   d === today ? "bg-ink font-semibold text-bg" : ""
@@ -371,12 +770,19 @@ function WeekGrid({
 
         {/* all-day row */}
         <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-rule">
-          <div className="py-1.5 text-center text-[11px] text-ink-soft">כל היום</div>
+          <div className="py-1.5 text-center text-[11px] text-ink-soft">
+            כל היום
+          </div>
           {days.map((d) => (
-            <div key={d} className="flex min-h-9 flex-col gap-1 border-s border-rule p-1">
-              {(byDate.get(d) ?? []).filter((x) => !timed(x)).map((it, k) => (
-                <Chip key={k} item={it} onClick={() => onSelect(d)} />
-              ))}
+            <div
+              key={d}
+              className="flex min-h-9 flex-col gap-1 border-s border-rule p-1"
+            >
+              {(byDate.get(d) ?? [])
+                .filter((x) => !timed(x))
+                .map((it, k) => (
+                  <Chip key={k} item={it} onClick={() => onSelect(d)} />
+                ))}
             </div>
           ))}
         </div>
@@ -385,63 +791,145 @@ function WeekGrid({
           <div className="relative grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
             <div>
               {hoursList.map((h) => (
-                <div key={h} className="relative text-center text-[11px] text-ink-soft tabular-nums" style={{ height: HOUR_PX }}>
-                  <span className="relative -top-2">{String(h).padStart(2, "0")}:00</span>
+                <div
+                  key={h}
+                  className="relative text-center text-[11px] text-ink-soft tabular-nums"
+                  style={{ height: HOUR_PX }}
+                >
+                  <span className="relative -top-2">
+                    {String(h).padStart(2, "0")}:00
+                  </span>
                 </div>
               ))}
             </div>
-            {days.map((d) => (
+            {days.map((d, di) => (
               <div
                 key={d}
-                className={`relative border-s border-rule ${d === selected ? "bg-bg/60" : ""}`}
-                onClick={() => onSelect(d)}
+                ref={(el) => {
+                  cols.current[di] = el;
+                }}
+                className={`relative border-s border-rule ${d === selected ? "bg-bg/60" : ""} ${editable ? "cursor-cell" : ""}`}
+                onClick={() => !editable && onSelect(d)}
+                onPointerDown={(e) =>
+                  editable ? down(e, d, "create") : undefined
+                }
+                onPointerMove={moveTo}
+                onPointerUp={up}
+                onPointerCancel={() => set(null)}
               >
                 {hoursList.map((h) => (
-                  <div key={h} className="border-t border-rule/70" style={{ height: HOUR_PX }} />
+                  <div
+                    key={h}
+                    className="pointer-events-none border-t border-rule/70"
+                    style={{ height: HOUR_PX }}
+                  />
                 ))}
                 {(() => {
-                  const list = (byDate.get(d) ?? []).filter(timed);
+                  // The dragged event is drawn where it would land (maybe in another day's column).
+                  const dragged = drag?.active && drag.item ? drag.item : null;
+                  const list = (byDate.get(d) ?? []).filter(
+                    (x) => timed(x) && x !== dragged,
+                  );
+                  if (dragged && drag!.date === d)
+                    list.push({
+                      ...dragged,
+                      date: d,
+                      start: hhmm(drag!.s),
+                      end: hhmm(drag!.e),
+                    });
                   const lay = columns(list);
                   return list.map((it, k) => {
-                  const top = ((toMin(it.start!) - minH * 60) / 60) * HOUR_PX;
-                  const { col, cols } = lay.get(it)!;
-                  const height = Math.max(20, ((toMin(it.end!) - toMin(it.start!)) / 60) * HOUR_PX - 2);
-                  const faded = it.status === "skipped";
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelect(d);
-                      }}
-                      className={`absolute overflow-hidden rounded-md px-1.5 py-1 text-start text-[11px] leading-tight ${
-                        faded ? "opacity-40" : ""
-                      }`}
-                      style={{
-                        top,
-                        height,
-                        insetInlineStart: `calc(${(col / cols) * 100}% + 2px)`,
-                        width: `calc(${100 / cols}% - 4px)`,
-                        background:
-                          it.kind === "study" || it.kind === "routine"
-                            ? `color-mix(in srgb, ${it.color} ${it.kind === "routine" ? 10 : 16}%, var(--surface))`
-                            : `color-mix(in srgb, ${it.color} 85%, black)`,
-                        color: it.kind === "study" || it.kind === "routine" ? "var(--ink)" : "white",
-                        borderInlineStart: `3px solid ${it.color}`,
-                      }}
-                    >
-                      <span className={`block font-medium ${faded || (it.kind === "routine" && it.done) ? "line-through" : ""}`}>
-                        {it.status === "done" || (it.kind === "routine" && it.done) ? "✓ " : ""}
-                        {it.label}
-                      </span>
-                      <span className="block opacity-75 tabular-nums">
-                        {it.start}–{it.end}
-                      </span>
-                    </button>
-                  );
+                    const top = ((toMin(it.start!) - minH * 60) / 60) * HOUR_PX;
+                    const { col, cols: n } = lay.get(it)!;
+                    const height = Math.max(
+                      20,
+                      ((toMin(it.end!) - toMin(it.start!)) / 60) * HOUR_PX - 2,
+                    );
+                    const faded = it.status === "skipped";
+                    const isDragged = dragged && it.eventId === dragged.eventId;
+                    const mine = editable && it.editable;
+                    return (
+                      <div
+                        key={k}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${it.label}, ${it.start}–${it.end}${mine ? ". גררו כדי להזיז, Enter לעריכה" : ""}`}
+                        onPointerDown={(e) =>
+                          mine ? down(e, d, "move", it) : e.stopPropagation()
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!mine) onSelect(d);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          if (mine) onEdit(it);
+                          else onSelect(d);
+                        }}
+                        className={`group absolute select-none overflow-hidden rounded-md px-1.5 py-1 text-start text-[11px] leading-tight focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink ${
+                          faded ? "opacity-40" : ""
+                        } ${mine ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-pointer"} ${isDragged ? "z-20 shadow-lg ring-2 ring-ink/40" : ""}`}
+                        style={{
+                          top,
+                          height,
+                          insetInlineStart: `calc(${(col / n) * 100}% + 2px)`,
+                          width: isDragged
+                            ? "calc(100% - 4px)"
+                            : `calc(${100 / n}% - 4px)`,
+                          background:
+                            it.kind === "study" || it.kind === "routine"
+                              ? `color-mix(in srgb, ${it.color} ${it.kind === "routine" ? 10 : 16}%, var(--surface))`
+                              : `color-mix(in srgb, ${it.color} 85%, black)`,
+                          color:
+                            it.kind === "study" || it.kind === "routine"
+                              ? "var(--ink)"
+                              : "white",
+                          borderInlineStart: `3px solid ${it.color}`,
+                        }}
+                      >
+                        <span
+                          className={`block font-medium ${faded || (it.kind === "routine" && it.done) ? "line-through" : ""}`}
+                        >
+                          {it.status === "done" ||
+                          (it.kind === "routine" && it.done)
+                            ? "✓ "
+                            : ""}
+                          {it.label}
+                        </span>
+                        <span className="block opacity-75 tabular-nums">
+                          {it.start}–{it.end}
+                        </span>
+                        {mine && (
+                          <span
+                            aria-hidden
+                            onPointerDown={(e) =>
+                              down(e, d, "resize", isDragged ? dragged! : it)
+                            }
+                            className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize touch-none"
+                          >
+                            <span className="mx-auto mt-0.5 block h-0.5 w-6 rounded-full bg-current opacity-0 transition-opacity group-hover:opacity-60" />
+                          </span>
+                        )}
+                      </div>
+                    );
                   });
                 })()}
+                {drag?.kind === "create" && drag.date === d && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0.5 z-10 rounded-md border-2 border-dashed border-ink/60 bg-ink/10 px-1.5 py-1 text-[11px] tabular-nums"
+                    style={{
+                      top: ((drag.s - lo) / 60) * HOUR_PX,
+                      height: Math.max(
+                        18,
+                        ((drag.e - drag.s) / 60) * HOUR_PX - 2,
+                      ),
+                    }}
+                  >
+                    אירוע חדש · {hhmm(drag.s)}–{hhmm(Math.min(drag.e, 1439))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -452,7 +940,10 @@ function WeekGrid({
 }
 
 /** Runs of 2+ free days become one entry (an array); other days stay as they are. */
-function groupFree(days: string[], free: (d: string) => boolean): (string | string[])[] {
+function groupFree(
+  days: string[],
+  free: (d: string) => boolean,
+): (string | string[])[] {
   const out: (string | string[])[] = [];
   let run: string[] = [];
   const flush = () => {
@@ -474,7 +965,10 @@ function groupFree(days: string[], free: (d: string) => boolean): (string | stri
 /** Overlapping timed items share the width: each gets a column inside its overlap group. */
 function columns(list: CalItem[]) {
   const out = new Map<CalItem, { col: number; cols: number }>();
-  const sorted = [...list].sort((a, b) => toMin(a.start!) - toMin(b.start!) || toMin(b.end!) - toMin(a.end!));
+  const sorted = [...list].sort(
+    (a, b) =>
+      toMin(a.start!) - toMin(b.start!) || toMin(b.end!) - toMin(a.end!),
+  );
   let group: CalItem[] = [];
   let groupEnd = -1;
   let colEnds: number[] = [];
@@ -500,9 +994,24 @@ function columns(list: CalItem[]) {
 
 /* ---------- Day panel (details + planner actions) ---------- */
 
-function DayPanel({ date, items, editable, people, isOff, today }: { date: string; items: CalItem[]; editable: boolean; people: { id: string; name: string }[]; isOff: boolean; today: string }) {
+function DayPanel({
+  date,
+  items,
+  editable,
+  isOff,
+  today,
+  onEdit,
+  onNew,
+}: {
+  date: string;
+  items: CalItem[];
+  editable: boolean;
+  isOff: boolean;
+  today: string;
+  onEdit: (item: CalItem) => void;
+  onNew: () => void;
+}) {
   const [pending, start] = useTransition();
-  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const run = (fn: () => Promise<void>) =>
@@ -510,23 +1019,35 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
       setError(null);
       try {
         await fn();
-      } catch {
-        setError("השמירה נכשלה. נסו שוב.");
+      } catch (e) {
+        setError((e as Error).message || "השמירה נכשלה. נסו שוב.");
       }
     });
 
   return (
-    <aside className={`panel self-start p-5 ${pending ? "opacity-70" : ""}`} aria-live="polite">
-      <h3 className="font-semibold">{fmt(date, { weekday: "long", day: "numeric", month: "long" })}</h3>
-      {isOff && <p className="mt-1 text-sm">🛋️ יום מנוחה: בלי לימוד, והרצפים נשמרים.</p>}
+    <aside
+      className={`panel self-start p-5 ${pending ? "opacity-70" : ""}`}
+      aria-live="polite"
+    >
+      <h3 className="font-semibold">
+        {fmt(date, { weekday: "long", day: "numeric", month: "long" })}
+      </h3>
+      {isOff && (
+        <p className="mt-1 text-sm">יום מנוחה: בלי לימוד, והרצפים נשמרים.</p>
+      )}
 
       {items.length === 0 ? (
-        <p className="mt-2 text-sm text-ink-soft">אין הגשות, בחינות או לימוד מתוכנן.</p>
+        <p className="mt-2 text-sm text-ink-soft">
+          אין הגשות, בחינות או לימוד מתוכנן.
+        </p>
       ) : (
         <ul className="mt-3 space-y-3">
           {items.map((it, k) => (
             <li key={k} className="flex gap-3">
-              <span className="mt-1 h-4 w-1 shrink-0 rounded-full" style={{ background: it.color }} />
+              <span
+                className="mt-1 h-4 w-1 shrink-0 rounded-full"
+                style={{ background: it.color }}
+              />
               <div className="min-w-0 flex-1">
                 <div
                   className={`${it.done || it.status === "skipped" ? "line-through text-ink-soft" : ""} ${
@@ -548,7 +1069,9 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
                     {it.status ? (
                       <button
                         type="button"
-                        onClick={() => run(() => setSessionStatus(it.sessionKey!, null))}
+                        onClick={() =>
+                          run(() => setSessionStatus(it.sessionKey!, null))
+                        }
                         className="rounded-full border border-rule px-2.5 py-1 text-ink-soft hover:border-ink"
                       >
                         ביטול סימון
@@ -557,14 +1080,26 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
                       <>
                         <button
                           type="button"
-                          onClick={() => run(() => setSessionStatus(it.sessionKey!, "done", it.minutes))}
+                          onClick={() =>
+                            run(() =>
+                              setSessionStatus(
+                                it.sessionKey!,
+                                "done",
+                                it.minutes,
+                              ),
+                            )
+                          }
                           className="rounded-full border border-rule px-2.5 py-1 hover:border-ink"
                         >
                           בוצע
                         </button>
                         <button
                           type="button"
-                          onClick={() => run(() => setSessionStatus(it.sessionKey!, "skipped"))}
+                          onClick={() =>
+                            run(() =>
+                              setSessionStatus(it.sessionKey!, "skipped"),
+                            )
+                          }
                           className="rounded-full border border-rule px-2.5 py-1 text-ink-soft hover:border-ink"
                         >
                           דילוג
@@ -573,14 +1108,24 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
                     )}
                   </div>
                 )}
-                {editable && it.deletable && it.eventId && (
-                  <button
-                    type="button"
-                    onClick={() => run(() => deleteEvent(it.eventId!))}
-                    className="mt-1 text-xs text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
-                  >
-                    מחיקה
-                  </button>
+                {editable && it.editable && it.eventId && (
+                  <div className="mt-1.5 flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(it)}
+                      className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 hover:border-ink"
+                    >
+                      <Icon name="pencil" className="size-3" />
+                      עריכה
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => run(() => deleteEvent(it.eventId!))}
+                      className="rounded-full border border-rule px-2.5 py-1 text-ink-soft hover:border-ink"
+                    >
+                      מחיקה
+                    </button>
+                  </div>
                 )}
               </div>
             </li>
@@ -590,78 +1135,27 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
 
       {editable && (
         <div className="mt-5 border-t border-rule pt-4">
-          {adding ? (
-            <form
-              className="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                run(async () => {
-                  await addEvent({
-                    date,
-                    title: String(f.get("title") ?? ""),
-                    start: String(f.get("start") ?? ""),
-                    end: String(f.get("end") ?? ""),
-                    invite: f.getAll("invite").map(String),
-                  });
-                  setAdding(false);
-                });
-              }}
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <button
+              type="button"
+              onClick={onNew}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3.5 py-2 text-sm font-medium text-bg"
             >
-              <input
-                name="title"
-                required
-                maxLength={200}
-                placeholder="מה מתוכנן? (עבודה, אימון, מפגש…)"
-                className="w-full rounded-lg border border-rule bg-surface px-3 py-2"
-                aria-label="שם האירוע"
-              />
-              <div className="flex items-center gap-2 text-sm">
-                <input name="start" type="time" required defaultValue="18:00" dir="ltr" className="rounded-lg border border-rule bg-surface px-2 py-1.5" aria-label="שעת התחלה" />
-                <span className="text-ink-soft">עד</span>
-                <input name="end" type="time" required defaultValue="19:00" dir="ltr" className="rounded-lg border border-rule bg-surface px-2 py-1.5" aria-label="שעת סיום" />
-              </div>
-              {people.length > 0 && (
-                <fieldset className="text-sm">
-                  <legend className="text-ink-soft">להזמין</legend>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {people.map((p) => (
-                      <label key={p.id} className="flex items-center gap-1.5">
-                        <input type="checkbox" name="invite" value={p.id} className="size-4" />
-                        {p.name.split(" ")[0]}
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              )}
-              <div className="flex gap-2">
-                <button className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-bg">הוספה</button>
-                <button type="button" onClick={() => setAdding(false)} className="px-3 py-2 text-sm text-ink-soft">
-                  ביטול
-                </button>
-              </div>
-              <p className="text-xs text-ink-soft">התוכנית לא תשבץ לימוד בזמן הזה.</p>
-            </form>
-          ) : (
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              <Icon name="plus" className="size-4" />
+              אירוע חדש
+            </button>
+            {date >= today && (
               <button
                 type="button"
-                onClick={() => setAdding(true)}
+                onClick={() =>
+                  run(() => setDayOff(date, isOff ? null : "other"))
+                }
                 className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
               >
-                הוספת אירוע ליום הזה
+                {isOff ? "ביטול יום המנוחה" : "יום מנוחה / מילואים"}
               </button>
-              {date >= today && (
-                <button
-                  type="button"
-                  onClick={() => run(() => setDayOff(date, isOff ? null : "other"))}
-                  className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
-                >
-                  {isOff ? "ביטול יום המנוחה" : "יום מנוחה / מילואים"}
-                </button>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           {error && (
             <p role="alert" className="mt-2 text-sm">
               <span className="hl">{error}</span>
@@ -673,11 +1167,266 @@ function DayPanel({ date, items, editable, people, isOff, today }: { date: strin
   );
 }
 
+/* ---------- Event editor (new event or one of mine) ---------- */
+
+function EventEditor({
+  state,
+  people,
+  onClose,
+  onDone,
+}: {
+  state: EditorState;
+  people: { id: string; name: string }[];
+  onClose: () => void;
+  onDone: (text: string) => void;
+}) {
+  const item = state.mode === "edit" ? state.item : null;
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [startT, setStartT] = useState(
+    item?.start ?? (state.mode === "new" ? state.start : "18:00"),
+  );
+  const [endT, setEndT] = useState(
+    item?.end ?? (state.mode === "new" ? state.end : "19:00"),
+  );
+  const titleRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!item) titleRef.current?.focus();
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [item]);
+
+  // Changing the start keeps the length, like Google Calendar.
+  const changeStart = (v: string) => {
+    if (v && startT && endT) {
+      const len = toMin(endT) - toMin(startT);
+      const e = Math.min(toMin(v) + Math.max(len, SNAP), 24 * 60 - 1);
+      setEndT(hhmm(e));
+    }
+    setStartT(v);
+  };
+
+  const run = (fn: () => Promise<void>, done: string) =>
+    start(async () => {
+      setError(null);
+      try {
+        await fn();
+        onDone(done);
+        onClose();
+      } catch (e) {
+        setError((e as Error).message || "השמירה נכשלה. נסו שוב.");
+      }
+    });
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-0 sm:items-center sm:p-4"
+      onPointerDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-editor-title"
+        className={`panel w-full max-w-md rounded-b-none p-5 sm:rounded-b-[inherit] ${pending ? "opacity-70" : ""}`}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          const title = String(f.get("title") ?? "");
+          const date = String(f.get("date") ?? "");
+          const location = String(f.get("location") ?? "");
+          const blocks = f.get("blocks") === "on";
+          if (endT <= startT)
+            return setError("שעת הסיום צריכה להיות אחרי שעת ההתחלה");
+          if (item)
+            run(
+              () =>
+                updateEvent({
+                  id: item.eventId!,
+                  title,
+                  date,
+                  start: startT,
+                  end: endT,
+                  location,
+                  blocks,
+                }),
+              "האירוע עודכן",
+            );
+          else
+            run(
+              () =>
+                addEvent({
+                  title,
+                  date,
+                  start: startT,
+                  end: endT,
+                  location,
+                  blocks,
+                  invite: f.getAll("invite").map(String),
+                }),
+              "האירוע נוסף",
+            );
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="event-editor-title" className="section-title">
+            {item ? "עריכת אירוע" : "אירוע חדש"}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="סגירה"
+            className="rounded-lg p-1.5 text-ink-soft hover:bg-bg hover:text-ink"
+          >
+            <Icon name="close" className="size-4" />
+          </button>
+        </div>
+
+        <input
+          ref={titleRef}
+          name="title"
+          required
+          maxLength={200}
+          defaultValue={item?.title ?? ""}
+          placeholder="הוספת כותרת"
+          aria-label="כותרת"
+          className="mt-4 w-full border-b-2 border-rule bg-transparent pb-1.5 text-lg outline-none focus:border-ink"
+        />
+
+        <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-3 text-sm">
+          <Icon name="calendar" className="size-4 text-ink-soft" />
+          <div className="flex flex-col items-start gap-2">
+            <input
+              name="date"
+              type="date"
+              required
+              dir="ltr"
+              defaultValue={
+                item?.date ?? (state.mode === "new" ? state.date : "")
+              }
+              aria-label="תאריך"
+              className="rounded-lg border border-rule bg-surface px-2 py-1.5"
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                required
+                step={300}
+                dir="ltr"
+                value={startT}
+                onChange={(e) => changeStart(e.target.value)}
+                aria-label="שעת התחלה"
+                className="rounded-lg border border-rule bg-surface px-2 py-1.5"
+              />
+              <span className="text-ink-soft">עד</span>
+              <input
+                type="time"
+                required
+                step={300}
+                dir="ltr"
+                value={endT}
+                onChange={(e) => setEndT(e.target.value)}
+                aria-label="שעת סיום"
+                className="rounded-lg border border-rule bg-surface px-2 py-1.5"
+              />
+            </div>
+          </div>
+
+          <Icon name="pin" className="size-4 text-ink-soft" />
+          <input
+            name="location"
+            maxLength={200}
+            defaultValue={item?.location ?? ""}
+            placeholder="מיקום או קישור (לא חובה)"
+            aria-label="מיקום"
+            className="w-full rounded-lg border border-rule bg-surface px-3 py-1.5"
+          />
+
+          <Icon name="cap" className="size-4 text-ink-soft" />
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="blocks"
+              defaultChecked={item?.blocks ?? true}
+              className="size-4"
+            />
+            לא לשבץ לימוד בזמן הזה
+          </label>
+
+          {!item && people.length > 0 && (
+            <>
+              <Icon name="users" className="size-4 self-start text-ink-soft" />
+              <fieldset>
+                <legend className="text-ink-soft">להזמין</legend>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                  {people.map((p) => (
+                    <label key={p.id} className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        name="invite"
+                        value={p.id}
+                        className="size-4"
+                      />
+                      {p.name.split(" ")[0]}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-3 text-sm">
+            <span className="hl">{error}</span>
+          </p>
+        )}
+
+        <div className="mt-5 flex items-center gap-2">
+          {item && (
+            <button
+              type="button"
+              onClick={() =>
+                run(() => deleteEvent(item.eventId!), "האירוע נמחק")
+              }
+              className="me-auto rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-bg hover:text-ink"
+            >
+              מחיקה
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className={`${item ? "" : "ms-auto"} rounded-lg px-3 py-2 text-sm text-ink-soft hover:text-ink`}
+          >
+            ביטול
+          </button>
+          <button
+            disabled={pending}
+            className="rounded-lg bg-ink px-5 py-2 text-sm font-medium text-bg"
+          >
+            שמירה
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function Chip({ item, onClick }: { item: CalItem; onClick?: () => void }) {
-  const base = "block w-full rounded px-1.5 py-0.5 text-start text-[11px] leading-tight";
+  const base =
+    "block w-full rounded px-1.5 py-0.5 text-start text-[11px] leading-tight";
   if (item.kind === "exam")
     return (
-      <span onClick={onClick} className={`${base} font-semibold text-white`} style={{ background: item.color }}>
+      <span
+        onClick={onClick}
+        className={`${base} font-semibold text-white`}
+        style={{ background: item.color }}
+      >
         {item.label}
       </span>
     );

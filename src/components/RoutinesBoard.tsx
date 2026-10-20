@@ -217,7 +217,7 @@ function RoutineCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="font-medium">{r.title}</div>
-          <div className="text-sm text-ink-soft">{describe(r)}</div>
+          <div className="text-sm text-ink-soft">{describe(r)}{r.starts_on && r.starts_on > today ? ` · מתחיל ב־${Number(r.starts_on.slice(8))}.${Number(r.starts_on.slice(5, 7))}` : ""}</div>
           {partners.length > 0 && (
             <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-soft">
               ביחד עם

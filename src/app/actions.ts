@@ -134,13 +134,13 @@ async function setSessionStatus_(key: string, status: "done" | "skipped" | null,
   refresh();
 }
 
-async function addEvent_(input: { date: string; start: string; end: string; title: string; invite?: string[] }) {
+async function addEvent_(input: { date: string; start: string; end: string; title: string; location?: string; blocks?: boolean; invite?: string[] }) {
   notifyNow();
   const { supabase, userId } = await requireUser();
   const title = input.title.trim();
   if (!DATE.test(input.date) || !TIME.test(input.start) || !TIME.test(input.end) || input.end <= input.start)
-    throw new Error("Bad time");
-  if (!title || title.length > 200) throw new Error("Bad title");
+    throw new Error("שעות לא תקינות");
+  if (!title || title.length > 200) throw new Error("חסר שם לאירוע");
   const { data, error } = await supabase
     .from("user_events")
     .insert({
@@ -149,13 +149,42 @@ async function addEvent_(input: { date: string; start: string; end: string; titl
       start_time: input.start,
       end_time: input.end,
       title,
-      kind: "custom",
+      location: input.location?.trim().slice(0, 200) || null,
+      // "custom" blocks study time; "other" is shown but the plan can use the time
+      kind: input.blocks === false ? "other" : "custom",
       source: "manual",
     })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
   if (input.invite?.length) await supabase.rpc("invite_to_event", { p_event: data.id, p_users: input.invite });
+  refresh();
+}
+
+/** Move, resize or edit one of my own events (the calendar's drag and edit). Synced events stay read-only. */
+async function updateEvent_(input: { id: string; date?: string; start?: string; end?: string; title?: string; location?: string | null; blocks?: boolean }) {
+  notifyNow();
+  const { supabase, userId } = await requireUser();
+  const { data: ev } = await supabase
+    .from("user_events")
+    .select("date, start_time, end_time")
+    .match({ id: input.id, user_id: userId, source: "manual" })
+    .maybeSingle();
+  if (!ev) throw new Error("אפשר לערוך רק אירועים שהוספת בעצמך");
+  const date = input.date ?? ev.date;
+  const start = input.start ?? ev.start_time;
+  const end = input.end ?? ev.end_time;
+  if (!DATE.test(date) || !start || !end || !TIME.test(start) || !TIME.test(end) || end <= start) throw new Error("שעות לא תקינות");
+  const row: Record<string, unknown> = { date, start_time: start, end_time: end };
+  if (input.title !== undefined) {
+    const title = input.title.trim();
+    if (!title || title.length > 200) throw new Error("חסר שם לאירוע");
+    row.title = title;
+  }
+  if (input.location !== undefined) row.location = input.location?.trim().slice(0, 200) || null;
+  if (input.blocks !== undefined) row.kind = input.blocks ? "custom" : "other";
+  const { error } = await supabase.from("user_events").update(row).match({ id: input.id, user_id: userId, source: "manual" });
+  if (error) throw new Error(error.message);
   refresh();
 }
 
@@ -853,6 +882,9 @@ export async function setSessionStatus(...a: Parameters<typeof setSessionStatus_
 }
 export async function addEvent(...a: Parameters<typeof addEvent_>) {
   return guarded(() => addEvent_(...a));
+}
+export async function updateEvent(...a: Parameters<typeof updateEvent_>) {
+  return guarded(() => updateEvent_(...a));
 }
 export async function ensurePushKey(...a: Parameters<typeof ensurePushKey_>) {
   return guarded(() => ensurePushKey_(...a));

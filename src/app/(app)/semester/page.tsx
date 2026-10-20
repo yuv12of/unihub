@@ -18,7 +18,7 @@ export default function SemesterPage() {
     <>
       <h1 className="font-display text-4xl">לוח שנה</h1>
       <p className="mt-2 text-ink-soft">
-        הגשות, בחינות, הלוח האקדמי ומפגשי הלימוד שלך. לחצו על יום כדי לסמן מפגש כבוצע או להוסיף אירוע.
+        הגשות, בחינות, הלוח האקדמי ומפגשי הלימוד שלך. לחצו על שעה פנויה כדי להוסיף אירוע, וגררו אירוע כדי להזיז אותו או את הקצה התחתון שלו כדי לשנות משך.
       </p>
       <Suspense fallback={<div className="mt-8 h-[36rem] animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Semester />
@@ -89,6 +89,10 @@ async function Semester() {
       end: ev.end_time ?? undefined,
       eventId: ev.id,
       deletable: ev.source === "manual" && !ev.invited_by,
+      editable: ev.source === "manual" && !ev.invited_by,
+      title: ev.title,
+      location: ev.location ?? undefined,
+      blocks: ev.kind === "custom",
       ...(ev.source === "google" && { note: "מיומן Google" }),
     });
   }

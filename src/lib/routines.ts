@@ -30,6 +30,8 @@ export interface Routine {
   time_window: TimeWindow;
   blocks_study: boolean;
   active: boolean;
+  /** first date the routine applies (null = always) */
+  starts_on?: string | null;
 }
 
 export interface RoutineLog {
@@ -83,6 +85,8 @@ const weekday = (iso: string) => new Date(iso + "T00:00:00Z").getUTCDay();
 export const weekStart = (iso: string) => addDays(iso, -weekday(iso));
 
 const timed = (r: Routine) => !!r.start_time && r.minutes > 0;
+/** Whether a routine has started by a date. */
+export const startedBy = (r: Pick<Routine, "starts_on">, date: string) => !r.starts_on || r.starts_on <= date;
 export const emojiOf = (r: Pick<Routine, "emoji" | "category">) => r.emoji || CATEGORY[r.category].emoji;
 
 /** When the day starts and ends, from a fixed sleep routine (bedtime + length). Default 07:00–23:00. */
@@ -100,7 +104,7 @@ export function routineBusy(routines: Routine[], from: string, to: string): Busy
   for (const r of routines) {
     if (!r.active || r.mode !== "fixed" || !timed(r) || !r.blocks_study) continue;
     for (let d = addDays(from, -1); d <= to; d = addDays(d, 1)) {
-      if (!r.days.includes(weekday(d))) continue;
+      if (!r.days.includes(weekday(d)) || !startedBy(r, d)) continue;
       const s = toMin(r.start_time!);
       const e = s + r.minutes;
       if (d >= from) out.push({ date: d, start: toHHMM(s), end: e >= 1440 ? "23:59" : toHHMM(e) });
@@ -172,7 +176,7 @@ export function expandRoutines({
   // Fixed routines.
   for (const r of active.filter((x) => x.mode === "fixed"))
     for (let d = from; d <= to; d = addDays(d, 1))
-      if (r.days.includes(weekday(d)) && (!off.has(d) || doneSet.has(`${r.id}|${d}`) || r.category === "sleep" || r.category === "meal"))
+      if (r.days.includes(weekday(d)) && startedBy(r, d) && (!off.has(d) || doneSet.has(`${r.id}|${d}`) || r.category === "sleep" || r.category === "meal"))
         occ.push(make(r, d, timed(r) ? toMin(r.start_time!) : null, false));
 
   // Flexible routines, week by week.
@@ -186,7 +190,7 @@ export function expandRoutines({
     for (let ws = weekStart(from); ws <= to; ws = addDays(ws, 7)) {
       const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
       const doneDays = days.filter((d) => doneSet.has(`${r.id}|${d}`));
-      const open = days.filter((d) => d >= today && !doneSet.has(`${r.id}|${d}`) && !off.has(d));
+      const open = days.filter((d) => d >= today && startedBy(r, d) && !doneSet.has(`${r.id}|${d}`) && !off.has(d));
       // A rough day lowers the week's goal instead of breaking it.
       const weekGoal = Math.max(0, goal - days.filter((d) => off.has(d)).length);
       const chosen = spread(open, Math.max(0, weekGoal - doneDays.length));
