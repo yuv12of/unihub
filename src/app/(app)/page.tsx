@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import { sleepInFor } from "@/lib/sleepIn";
+import { SleepInCard } from "@/components/SleepInCard";
 import Link from "next/link";
 import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
@@ -150,6 +152,7 @@ async function Today() {
         ? { title: eventNext.title, start: eventNext.start_time!, end: eventNext.end_time, color: eventNext.course_code ? themeOf(courses, eventNext.course_code).color : "var(--ink-soft)", place: eventNext.location }
         : null;
   const tomorrowFirst = plan.sessions.find((x) => x.date === addDays(today, 1));
+  const sleepIn = sleepInFor({ today, routines, plan, events, courses, exams, offDays });
   const examSoon = upcomingExams.find((e) => daysBetween(today, e.date) <= 14);
 
   return (
@@ -213,6 +216,8 @@ async function Today() {
             }
           />
         )}
+
+        {supabaseEnabled && sleepIn && <SleepInCard s={sleepIn} />}
 
         {supabaseEnabled && show("quickadd") && <QuickAdd today={today} people={connected} />}
 

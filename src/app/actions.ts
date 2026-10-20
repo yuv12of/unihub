@@ -1,5 +1,6 @@
 "use server";
 
+import { SLEEP_IN_TITLE } from "@/lib/sleepIn";
 import { cleanRepeat, daysBetween, repeatDates, type Repeat } from "@/lib/repeat";
 import { refresh } from "next/cache";
 import { after } from "next/server";
@@ -351,6 +352,22 @@ async function deleteEvent_(
       .match({ series_id: ev.series_id, ...own });
     if (scope === "following") q = q.gte("date", ev.date);
     const { error } = await q;
+    if (error) throw new Error(error.message);
+  }
+  refresh();
+}
+
+/** Accept or cancel tomorrow's sleep-in (an event over the first hour of the morning). */
+async function setSleepIn_(date: string, from: string | null, until: string | null) {
+  notifyNow();
+  const { supabase, userId } = await requireUser();
+  if (!DATE.test(date)) throw new Error("תאריך לא תקין");
+  await supabase.from("user_events").delete().match({ user_id: userId, date, title: SLEEP_IN_TITLE, source: "manual" });
+  if (from && until) {
+    if (!TIME.test(from) || !TIME.test(until) || until <= from) throw new Error("שעות לא תקינות");
+    const { error } = await supabase
+      .from("user_events")
+      .insert({ user_id: userId, date, start_time: from, end_time: until, title: SLEEP_IN_TITLE, kind: "custom", source: "manual" });
     if (error) throw new Error(error.message);
   }
   refresh();
@@ -1047,6 +1064,9 @@ export async function addEvent(...a: Parameters<typeof addEvent_>) {
 }
 export async function updateEvent(...a: Parameters<typeof updateEvent_>) {
   return guarded(() => updateEvent_(...a));
+}
+export async function setSleepIn(...a: Parameters<typeof setSleepIn_>) {
+  return guarded(() => setSleepIn_(...a));
 }
 export async function deleteEvent(...a: Parameters<typeof deleteEvent_>) {
   return guarded(() => deleteEvent_(...a));

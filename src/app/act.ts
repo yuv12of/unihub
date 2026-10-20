@@ -19,6 +19,7 @@ export const setSessionStatus = w(A.setSessionStatus);
 export const addEvent = w(A.addEvent);
 export const updateEvent = w(A.updateEvent);
 export const deleteEvent = w(A.deleteEvent);
+export const setSleepIn = w(A.setSleepIn);
 export const ensurePushKey = w(A.ensurePushKey);
 export const savePushSubscription = w(A.savePushSubscription);
 export const sendTestPush = w(A.sendTestPush);

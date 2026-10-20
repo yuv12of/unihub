@@ -2,6 +2,7 @@
 import type { PushItem } from "@/lib/push";
 import type { buildFromFeed } from "@/lib/privateFeed";
 import { occurrencesFor } from "@/lib/planfor";
+import { sleepInFor } from "@/lib/sleepIn";
 import { sessionKey } from "@/lib/planner";
 import { progressKey } from "@/lib/progress";
 import { addDays, allDeadlines, typeLabel, themeOf } from "@/lib/semester";
@@ -58,7 +59,15 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
         ev ? `${ev.start_time} ${ev.title}` : "",
         first ? `${first.start} ${first.title}${count > 1 ? ` (+${count - 1})` : ""}` : "",
       ].filter(Boolean);
-      if (parts.length)
+      const sleep = sleepInFor({ today: now.date, routines, plan, events: feed.events, courses, exams: data.exams ?? [], offDays });
+      if (sleep && !sleep.accepted)
+        due.push({
+          key: `sleepin|${tomorrow}`,
+          title: "מחר אפשר לישון שעה יותר 😴",
+          body: `${sleep.reason}. ההשכמה יכולה לזוז ל־\u2066${sleep.until}\u2069. לאשר ב־Unihub.`,
+          url: "/",
+        });
+      else if (parts.length)
         due.push({ key: `tmr|${tomorrow}`, title: "מחר אצלך 🗓️", body: `${parts.join(" · ")}. רוצה להזיז משהו?`, url: "/semester" });
     }
   }

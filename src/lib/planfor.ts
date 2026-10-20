@@ -1,6 +1,7 @@
 import { buildPlan, type Busy, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { coursesFor, type ProgressMap } from "@/lib/progress";
 import { addDays, type Course } from "@/lib/semester";
+import { shiftBusy, shiftOccurrences, sleepInShifts } from "@/lib/sleepIn";
 import { expandRoutines, routineBusy, type Occurrence, type Routine, type RoutineLog } from "@/lib/routines";
 
 interface EventLike {
@@ -9,6 +10,8 @@ interface EventLike {
   end_time: string | null;
   kind: string;
   cancelled?: boolean;
+  title?: string;
+  source?: string;
 }
 
 export function busyFromEvents(events: EventLike[]): Busy[] {
@@ -50,7 +53,8 @@ export function planFor({
     prefs,
     progress,
     exams,
-    busy: [...extraBusy, ...busyFromEvents(events), ...routineBusy(routines, today, addDays(today, 240))],
+    // A sleep-in pushes the morning routines it covers to right after it.
+    busy: [...extraBusy, ...busyFromEvents(events), ...shiftBusy(routineBusy(routines, today, addDays(today, 240)), sleepInShifts(events))],
     courses: coursesFor(progress, courses),
     doneMinutes: Object.fromEntries(rows.filter((r) => r.status === "done" && r.minutes).map((r) => [r.session_key, r.minutes!])),
     skipped: new Set(rows.filter((r) => r.status === "skipped").map((r) => r.session_key)),
@@ -83,5 +87,5 @@ export function occurrencesFor({
     ...events.filter((e) => e.start_time && e.end_time && e.kind !== "other" && !e.cancelled).map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! })),
     ...plan.sessions.map((s) => ({ date: s.date, start: s.start, end: s.end })),
   ];
-  return expandRoutines({ routines, logs, from, to, today, taken, offDays });
+  return shiftOccurrences(expandRoutines({ routines, logs, from, to, today, taken, offDays }), sleepInShifts(events));
 }
