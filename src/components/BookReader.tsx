@@ -19,7 +19,7 @@ interface ChapterLite {
 }
 
 interface Props {
-  book: { id: string; title: string; course: string; courseName: string; color: string };
+  book: { id: string; title: string; course: string; courseName: string; color: string; forumHref?: string | null };
   chapters: ChapterLite[];
   chapter: ChapterLite & { url: string | null; summary: string | null; key_points: string[] | null; firstBookPage: number };
   initialPage: number;
@@ -152,7 +152,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
 
         <aside className={`space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto ${side === "read" ? "hidden lg:block" : ""}`}>
           <div className={side === "questions" ? "hidden lg:block" : ""}>
-            <Summary chapter={chapter} cardCount={cardCount} course={book.course} />
+            <Summary chapter={chapter} cardCount={cardCount} course={book.course} forumHref={book.forumHref ?? null} />
           </div>
           <div className={side === "summary" ? "hidden lg:block" : ""}>
             <Questions questions={questions} onPage={toPage} />
@@ -166,7 +166,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
   );
 }
 
-function Summary({ chapter, cardCount, course }: { chapter: Props["chapter"]; cardCount: number; course: string }) {
+function Summary({ chapter, cardCount, course, forumHref }: { chapter: Props["chapter"]; cardCount: number; course: string; forumHref: string | null }) {
   return (
     <section className="panel p-5">
       <h2 className="section-title">על הפרק</h2>
@@ -190,6 +190,12 @@ function Summary({ chapter, cardCount, course }: { chapter: Props["chapter"]; ca
           <Icon name="list" className="size-4" />
           {cardCount} כרטיסיות מהפרק בתרגול
         </Link>
+      )}
+      {forumHref && (
+        <a href={forumHref} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
+          <Icon name="help" className="size-4" />
+          שאלה על הפרק? לפורומי הקורס
+        </a>
       )}
     </section>
   );

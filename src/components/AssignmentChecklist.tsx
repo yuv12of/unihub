@@ -1,5 +1,8 @@
 "use client";
 
+import { ReadChips } from "@/components/ReadChips";
+import type { ReadingItem } from "@/lib/readings";
+
 import { useOptimistic, useState, useTransition } from "react";
 import { saveProgress, saveReview } from "@/app/act";
 import type { Progress, Status } from "@/lib/progress";
@@ -14,6 +17,10 @@ export interface ChecklistItem {
   /** minutes logged on this assignment's study sessions */
   spent?: number;
   review?: { minutes_spent: number | null; difficulty: number | null; hard: string | null } | null;
+  /** the assignment's material, linked to the user's books */
+  reading?: ReadingItem | null;
+  /** course forum posts that mention this assignment */
+  forum?: { topic: string; href: string }[];
 }
 
 type Patch = { n: string; progress: Progress };
@@ -95,6 +102,24 @@ export function AssignmentChecklist({
               )
             )}
           </div>
+          {it.reading && !done && !skipped && (
+            <div className="ms-8 mb-1 text-xs text-ink-soft">
+              חומר: {it.reading.label}
+              {it.reading.estimated ? " (הערכה, יתעדכן כשהמטלה תיפתח)" : ""}
+              <ReadChips links={it.reading.links} className="mt-1" />
+            </div>
+          )}
+          {it.forum && it.forum.length > 0 && (
+            <ul className="ms-8 mb-1 space-y-0.5 text-xs">
+              {it.forum.map((f, i) => (
+                <li key={i}>
+                  <a href={f.href} className="text-ink-soft underline decoration-rule underline-offset-2 hover:text-ink">
+                    בפורום: {f.topic}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
           {it.review && (it.review.minutes_spent || it.review.difficulty) ? (
             <p className="ms-8 text-xs text-ink-soft">
               {it.review.minutes_spent ? `⏱ ${Math.round(it.review.minutes_spent / 6) / 10} ש׳` : ""}

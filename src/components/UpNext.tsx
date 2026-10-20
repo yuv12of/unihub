@@ -3,6 +3,8 @@ import { SessionToggle } from "@/components/SessionToggle";
 import { ExamKit } from "@/components/ExamKit";
 import { minutesLabel, sessionKey, type Session } from "@/lib/planner";
 import { Icon } from "@/components/Icon";
+import { ReadChips } from "@/components/ReadChips";
+import type { ReadingItem } from "@/lib/readings";
 
 export interface UpNextItem {
   title: string;
@@ -24,6 +26,7 @@ export function UpNext({
   deadline,
   exam,
   reading,
+  prep,
 }: {
   nowMin: number;
   item: UpNextItem | null;
@@ -32,6 +35,8 @@ export function UpNext({
   deadline: { label: string; when: string; urgent: boolean } | null;
   exam: { course: string; days: number; time: string | null } | null;
   reading?: { href: string; title: string; lastPage: number | null } | null;
+  /** before a tutorial: that week's chapters */
+  prep?: ReadingItem | null;
 }) {
   const live = item && toMin(item.start) <= nowMin;
   const inMin = item ? toMin(item.start) - nowMin : 0;
@@ -51,6 +56,12 @@ export function UpNext({
             {item.session && (
               <div className="mt-4">
                 <SessionToggle hero sessionKey={sessionKey(item.session)} status={status} minutes={item.session.minutes} title={item.session.title} courseCode={item.session.courseCode} />
+              </div>
+            )}
+            {prep && prep.links.length > 0 && (
+              <div className="mt-3 text-sm">
+                <p className="opacity-75">לקראת המפגש: {prep.label}</p>
+                <ReadChips links={prep.links} className="mt-1.5 [&_a]:border-bg/30 [&_a]:text-bg [&_span]:text-bg/80" />
               </div>
             )}
             {reading && (

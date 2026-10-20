@@ -10,6 +10,9 @@ import { AddCourse, CourseLook } from "@/components/CourseManager";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { getCourses, getFriendView, getNotes, getPeople, getReviews, getSpentByAssignment, getStuck } from "@/lib/userdata";
 import { StuckList } from "@/components/StuckList";
+import { getBooks } from "@/lib/books";
+import { getReadings } from "@/lib/readings";
+import { getForumPosts } from "@/lib/forum";
 import { Avatar } from "@/components/Avatar";
 import {
   formatHebrewDate,
@@ -45,7 +48,7 @@ const linkClass = "underline underline-offset-4 decoration-rule hover:text-ink";
 async function Courses() {
   await connection();
   const today = todayInIsrael();
-  const [progress, notes, base, reviews, spent, stuck, people] = await Promise.all([
+  const [progress, notes, base, reviews, spent, stuck, people, books, forum] = await Promise.all([
     getProgress(),
     getNotes(),
     getCourses(),
@@ -53,7 +56,10 @@ async function Courses() {
     getSpentByAssignment(),
     getStuck(),
     getPeople(),
+    getBooks(),
+    getForumPosts(),
   ]);
+  const plans = await getReadings(books);
   // Course rooms: friends I follow who take the same course (and what they've submitted, if they share it).
   const following = people.filter((p) => p.i_follow === "accepted");
   const views = await Promise.all(following.map((p) => getFriendView(p.id)));
@@ -116,6 +122,8 @@ async function Courses() {
                   editable={supabaseEnabled}
                   items={c.assignments.map((a) => ({
                     n: a.n,
+                    reading: plans.assignments[c.code]?.[a.n] ?? null,
+                    forum: forum.filter((f) => f.courseCode === c.code && f.assignment === a.n).slice(0, 3).map((f) => ({ topic: f.topic, href: `/mail?open=${f.mailId}` })),
                     label: `${typeLabel[a.type]} ${a.n}`,
                     due:
                       formatHebrewDate(a.due, {
@@ -141,6 +149,8 @@ async function Courses() {
                   const p = progress[progressKey(c.code, a.n)];
                   return {
                     n: a.n,
+                    reading: plans.assignments[c.code]?.[a.n] ?? null,
+                    forum: forum.filter((f) => f.courseCode === c.code && f.assignment === a.n).slice(0, 3).map((f) => ({ topic: f.topic, href: `/mail?open=${f.mailId}` })),
                     label: `${typeLabel[a.type]} ${a.n}`,
                     weight: a.weight,
                     grade: p?.status === "submitted" ? (p.grade ?? null) : null,
@@ -172,6 +182,29 @@ async function Courses() {
                 )}
                 {c.finalAssessment && (
                   <p className="mb-2">הערכה מסכמת: {c.finalAssessment}</p>
+                )}
+                {forum.some((f) => f.courseCode === c.code) && (
+                  <details className="mb-3">
+                    <summary className="cursor-pointer font-medium text-ink">
+                      מהפורומים ({forum.filter((f) => f.courseCode === c.code).length})
+                      {forum.some((f) => f.courseCode === c.code && !f.isRead) && <span className="ms-2 inline-block size-2 rounded-full bg-ink align-middle" aria-label="יש חדשים" />}
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {forum
+                        .filter((f) => f.courseCode === c.code)
+                        .slice(0, 6)
+                        .map((f) => (
+                          <li key={f.mailId}>
+                            <Link href={`/mail?open=${f.mailId}`} className="block hover:text-ink">
+                              <span className={`block ${f.isRead ? "" : "font-medium text-ink"}`}>{f.topic}</span>
+                              <span className="block text-xs">
+                                {f.forum} · {f.author ?? ""} · {formatHebrewDate(f.at.slice(0, 10), { day: "numeric", month: "numeric" })}
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
                 )}
                 <div className="flex flex-wrap gap-4">
                   <Link className={linkClass} href={`/books?course=${c.code}`}>

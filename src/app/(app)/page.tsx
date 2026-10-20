@@ -27,6 +27,9 @@ import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { Icon } from "@/components/Icon";
 import { getBooks, readingByCourse, type Reading } from "@/lib/books";
+import { getReadings, weekFor, type ReadingItem } from "@/lib/readings";
+import { ReadChips } from "@/components/ReadChips";
+import { getForumPosts } from "@/lib/forum";
 import {
   addDays,
   allDeadlines,
@@ -80,6 +83,9 @@ async function Today() {
   const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush, books] =
     await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription(), getBooks()]);
   const reading = readingByCourse(books);
+  const [plans, forum] = await Promise.all([getReadings(books), getForumPosts()]);
+  const forumNew = forum.filter((f) => !f.isRead && daysBetween(f.at.slice(0, 10), today) <= 14).slice(0, 4);
+  const weekOf = (code: string | null | undefined, date: string) => (code ? weekFor(plans.weeks[code], date) : null);
   const hidden = new Set(profile?.prefs?.hidden ?? []);
   const show = (k: string) => !hidden.has(k);
   const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
@@ -187,6 +193,7 @@ async function Today() {
             nowMin={nowMin}
             item={upNext}
             reading={upNext?.session?.courseCode ? reading[upNext.session.courseCode] ?? null : null}
+            prep={!upNext?.session && eventNext?.kind === "tutorial" && upNext ? weekOf(eventNext.course_code, today) : null}
             status={upNext?.session ? status[sessionKey(upNext.session)] : undefined}
             tomorrow={tomorrowFirst}
             deadline={
@@ -235,13 +242,37 @@ async function Today() {
 
         {updates.length > 0 && <UpdatesList updates={updates} />}
 
+        {show("forums") && forumNew.length > 0 && (
+          <div>
+            <h2 className="section-title mb-3">חדש בפורומים</h2>
+            <ul className="panel divide-y divide-rule overflow-hidden">
+              {forumNew.map((f) => (
+                <li key={f.mailId}>
+                  <Link href={`/mail?open=${f.mailId}`} className="flex items-start gap-3 px-4 py-3 hover:bg-bg">
+                    <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: themeOf(courses, f.courseCode).color }} aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{f.topic}</span>
+                      <span className="block text-xs text-ink-soft">
+                        {themeOf(courses, f.courseCode).short} · {f.forum}
+                        {f.author ? ` · ${f.author}` : ""}
+                        {f.assignment ? ` · על מטלה ${f.assignment}` : ""}
+                      </span>
+                      {f.text && <span className="mt-1 line-clamp-2 block text-sm text-ink-soft">{f.text}</span>}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div>
           <h2 className="section-title mb-3">התוכנית להיום</h2>
           <div className="panel overflow-hidden">
             {todayEvents.length > 0 && (
               <ul className="divide-y divide-rule border-b border-rule bg-bg/40">
                 {todayEvents.map((e) => (
-                  <li key={e.id} className={`flex items-center gap-4 px-4 py-2.5 text-sm sm:px-5 ${e.cancelled ? "text-ink-soft line-through" : ""}`}>
+                  <li key={e.id} className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm sm:px-5 ${e.cancelled ? "text-ink-soft line-through" : ""}`}>
                     <span className="w-11 shrink-0 text-center tabular-nums font-medium">{e.start_time ?? "כל היום"}</span>
                     <span
                       className="h-6 w-1 shrink-0 rounded-full"
@@ -254,12 +285,18 @@ async function Today() {
                       {e.location && <span className="text-ink-soft"> · {e.location}</span>}
                     </span>
                     {e.end_time && <span className="shrink-0 text-xs text-ink-soft">עד {e.end_time}</span>}
+                    {e.kind === "tutorial" && !e.cancelled && weekOf(e.course_code, e.date)?.links.length ? (
+                      <span className="basis-full ps-[3.75rem] text-xs text-ink-soft">
+                        לקראת המפגש: {weekOf(e.course_code, e.date)!.label}
+                        <ReadChips links={weekOf(e.course_code, e.date)!.links} className="mt-1" />
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             )}
             {todaySessions.length ? (
-              <SessionList sessions={todaySessions} status={status} courses={courses} reading={reading} />
+              <SessionList sessions={todaySessions} status={status} courses={courses} reading={reading} assignmentPlans={plans.assignments} />
             ) : (
               <p className="px-5 py-5 text-ink-soft">
                 {week.length
@@ -376,28 +413,35 @@ async function Today() {
 
       <section aria-labelledby="courses-title" className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-2">
         {show("exams") && <ExamCountdown today={today} upcoming={upcomingExams} courses={courses} />}
-        {show("reading") && Object.keys(reading).length > 0 && (
+        {show("reading") && courses.some((c) => plans.weeks[c.code] || reading[c.code]) && (
           <div className="mb-6">
-            <h2 className="section-title mb-3">לקריאה</h2>
+            <h2 className="section-title mb-3">לקריאה השבוע</h2>
             <ul className="panel divide-y divide-rule overflow-hidden">
               {courses
-                .filter((c) => reading[c.code])
+                .filter((c) => plans.weeks[c.code] || reading[c.code])
                 .map((c) => {
+                  const w = weekOf(c.code, today);
                   const r = reading[c.code];
+                  const before = w?.starts && w.starts > today;
                   return (
-                    <li key={c.code}>
-                      <Link href={r.href} className="flex items-center gap-3 px-4 py-3 hover:bg-bg">
-                        <span className="shrink-0" style={{ color: themeOf(courses, c.code).color }}>
-                          <Icon name="book" className="size-4" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{r.title}</span>
-                          <span className="block text-xs text-ink-soft">
-                            {themeOf(courses, c.code).short} · {r.lastPage ? `עצרתם בעמ׳ ${r.lastPage} מתוך ${r.pages}` : `${r.pages} עמ׳`}
+                    <li key={c.code} className="px-4 py-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="size-2 shrink-0 self-center rounded-full" style={{ background: themeOf(courses, c.code).color }} aria-hidden />
+                        <span className="font-medium">{themeOf(courses, c.code).short}</span>
+                        {w && (
+                          <span className="min-w-0 truncate text-sm text-ink-soft">
+                            {before ? `שבוע ${w.ref} (מ־${formatHebrewDate(w.starts!, { day: "numeric", month: "numeric" })})` : `שבוע ${w.ref}`}: {w.label}
+                            {w.estimated ? " · הצעה" : ""}
                           </span>
-                        </span>
-                        <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
-                      </Link>
+                        )}
+                      </div>
+                      {w && <ReadChips links={w.links} className="mt-2" />}
+                      {r?.lastPage && (
+                        <Link href={r.href} className="mt-2 flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
+                          <Icon name="bookmark" className="size-3.5" />
+                          להמשיך: {r.title}, עמ׳ {r.lastPage}
+                        </Link>
+                      )}
                     </li>
                   );
                 })}
@@ -468,7 +512,7 @@ function groupByDay(sessions: Session[]): [string, Session[]][] {
   return [...m];
 }
 
-function SessionList({ sessions, status, courses, reading }: { sessions: Session[]; status: Record<string, "done" | "skipped">; courses: Course[]; reading: Record<string, Reading> }) {
+function SessionList({ sessions, status, courses, reading, assignmentPlans }: { sessions: Session[]; status: Record<string, "done" | "skipped">; courses: Course[]; reading: Record<string, Reading>; assignmentPlans: Record<string, Record<string, ReadingItem>> }) {
   return (
     <ol className="divide-y divide-rule">
       {sessions.map((x) => (
@@ -483,7 +527,9 @@ function SessionList({ sessions, status, courses, reading }: { sessions: Session
             <div className="text-xs text-ink-soft">
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
             </div>
-            {x.courseCode && reading[x.courseCode] && (
+            {x.kind === "assignment" && x.ref && assignmentPlans[x.courseCode]?.[x.ref.replace(/^a/, "")] ? (
+              <ReadChips links={assignmentPlans[x.courseCode][x.ref.replace(/^a/, "")].links} className="mt-1" />
+            ) : x.courseCode && reading[x.courseCode] && (
               <Link href={reading[x.courseCode].href} className="mt-0.5 flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
                 <Icon name="book" className="size-3.5 shrink-0" />
                 <span className="truncate underline decoration-rule underline-offset-2">{reading[x.courseCode].title}</span>
