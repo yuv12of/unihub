@@ -18,7 +18,7 @@ export default function SemesterPage() {
     <>
       <h1 className="font-display text-4xl">לוח שנה</h1>
       <p className="mt-2 text-ink-soft">
-        הגשות, בחינות, הלוח האקדמי ומפגשי הלימוד שלך. לחצו על שעה פנויה כדי להוסיף אירוע, וגררו אירוע כדי להזיז אותו או את הקצה התחתון שלו כדי לשנות משך.
+        הגשות, בחינות, הלוח האקדמי ומפגשי הלימוד שלך. לחצו על שעה פנויה (או על שורת ״כל היום״) כדי להוסיף אירוע, גם חוזר. גררו אירוע כדי להזיז אותו, או את הקצה התחתון שלו כדי לשנות משך.
       </p>
       <Suspense fallback={<div className="mt-8 h-[36rem] animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Semester />
@@ -93,6 +93,8 @@ async function Semester() {
       title: ev.title,
       location: ev.location ?? undefined,
       blocks: ev.kind === "custom",
+      seriesId: ev.series_id ?? undefined,
+      repeat: ev.repeat ?? undefined,
       ...(ev.source === "google" && { note: "מיומן Google" }),
     });
   }
@@ -128,6 +130,7 @@ async function Semester() {
         editable={supabaseEnabled}
         people={connected.map((p) => ({ id: p.id, name: p.name }))}
         offDays={manualOff}
+        repeatUntil={courses.flatMap((c) => c.assignments.map((a) => a.due)).sort().at(-1) ?? addDays(today, 90)}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
       />
       {exams.length === 0 && (

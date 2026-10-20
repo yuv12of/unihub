@@ -18,6 +18,7 @@ function w<P extends unknown[], R>(f: (...a: P) => Promise<R>) {
 export const setSessionStatus = w(A.setSessionStatus);
 export const addEvent = w(A.addEvent);
 export const updateEvent = w(A.updateEvent);
+export const deleteEvent = w(A.deleteEvent);
 export const ensurePushKey = w(A.ensurePushKey);
 export const savePushSubscription = w(A.savePushSubscription);
 export const sendTestPush = w(A.sendTestPush);
@@ -52,7 +53,6 @@ export {
   savePrefs,
   saveExams,
   resetFeed,
-  deleteEvent,
   markMailRead,
   resetIngestToken,
   removePushSubscription,

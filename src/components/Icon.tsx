@@ -69,6 +69,7 @@ const PATHS = {
       <path d="M12 6.5h.01" />
     </>
   ),
+  repeat: <path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H20M17 3l3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H4M7 21l-3-3 3-3" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,

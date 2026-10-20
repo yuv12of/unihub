@@ -116,6 +116,9 @@ export interface UserEvent {
   location: string | null;
   source: string;
   cancelled: boolean;
+  /** repeating events: one row per date sharing this id and rule */
+  series_id?: string | null;
+  repeat?: import("@/lib/repeat").Repeat | null;
   user_id?: string;
   /** set when this is someone else's event I was invited to */
   invited_by?: string;
@@ -123,7 +126,7 @@ export interface UserEvent {
   guests?: { invitee: string; status: "pending" | "accepted" | "declined" }[];
 }
 
-const EVENT_COLS = "id, user_id, date, start_time, end_time, title, kind, course_code, location, source, cancelled";
+const EVENT_COLS = "id, user_id, date, start_time, end_time, title, kind, course_code, location, source, cancelled, series_id, repeat";
 
 /** My own events (with who I invited) plus events I accepted an invitation to. */
 export const getEvents = cache(async (): Promise<UserEvent[]> => {

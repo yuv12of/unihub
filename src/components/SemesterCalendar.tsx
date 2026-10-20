@@ -9,6 +9,7 @@ import {
   updateEvent,
 } from "@/app/act";
 import { Icon } from "@/components/Icon";
+import { describeRepeat, type Repeat } from "@/lib/repeat";
 
 export type CalKind =
   "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
@@ -36,11 +37,20 @@ export interface CalItem {
   location?: string;
   /** keeps the planner from placing study at this time */
   blocks?: boolean;
+  /** repeating event */
+  seriesId?: string;
+  repeat?: Repeat;
 }
 
 /** What the editor opens with: a new event (a time range) or one of mine. */
 type EditorState =
-  | { mode: "new"; date: string; start: string; end: string }
+  | {
+      mode: "new";
+      date: string;
+      start?: string;
+      end?: string;
+      allDay?: boolean;
+    }
   | { mode: "edit"; item: CalItem };
 type Placement = { date: string; start: string; end: string };
 
@@ -92,7 +102,10 @@ export function SemesterCalendar({
   editable,
   people = [],
   offDays = [],
+  repeatUntil,
 }: {
+  /** default last date for a repeating event (the semester's end) */
+  repeatUntil: string;
   /** rough days / days off */
   offDays?: string[];
   items: CalItem[];
@@ -142,9 +155,10 @@ export function SemesterCalendar({
     go(to, () =>
       setToast({
         text:
-          from.date === to.date && from.start === to.start
+          (from.date === to.date && from.start === to.start
             ? `המשך שונה: ${to.start}–${to.end}`
-            : `הוזז ל${fmt(to.date, { weekday: "long" })} ${to.start}`,
+            : `הוזז ל${fmt(to.date, { weekday: "long" })} ${to.start}`) +
+          (item.seriesId ? " (רק המופע הזה)" : ""),
         undo: () => go(from, () => setToast(null)),
       }),
     );
@@ -318,6 +332,7 @@ export function SemesterCalendar({
         <EventEditor
           state={editor}
           people={people}
+          repeatUntil={repeatUntil}
           onClose={() => setEditor(null)}
           onDone={(text) => setToast({ text })}
         />
@@ -497,7 +512,12 @@ function WeekGrid({
   editable: boolean;
   onPlace: (item: CalItem, to: Placement) => void;
   onEdit: (item: CalItem) => void;
-  onCreate: (p: Placement) => void;
+  onCreate: (p: {
+    date: string;
+    start?: string;
+    end?: string;
+    allDay?: boolean;
+  }) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const all = days.flatMap((d) => byDate.get(d) ?? []);
@@ -776,12 +796,24 @@ function WeekGrid({
           {days.map((d) => (
             <div
               key={d}
-              className="flex min-h-9 flex-col gap-1 border-s border-rule p-1"
+              className={`flex min-h-9 flex-col gap-1 border-s border-rule p-1 ${editable ? "cursor-cell" : ""}`}
+              onClick={() =>
+                editable ? onCreate({ date: d, allDay: true }) : onSelect(d)
+              }
+              title={editable ? "אירוע של כל היום" : undefined}
             >
               {(byDate.get(d) ?? [])
                 .filter((x) => !timed(x))
                 .map((it, k) => (
-                  <Chip key={k} item={it} onClick={() => onSelect(d)} />
+                  <Chip
+                    key={k}
+                    item={it}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (editable && it.editable) onEdit(it);
+                      else onSelect(d);
+                    }}
+                  />
                 ))}
             </div>
           ))}
@@ -1120,7 +1152,11 @@ function DayPanel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => run(() => deleteEvent(it.eventId!))}
+                      onClick={() =>
+                        it.seriesId
+                          ? onEdit(it)
+                          : run(() => deleteEvent(it.eventId!))
+                      }
                       className="rounded-full border border-rule px-2.5 py-1 text-ink-soft hover:border-ink"
                     >
                       מחיקה
@@ -1172,23 +1208,39 @@ function DayPanel({
 function EventEditor({
   state,
   people,
+  repeatUntil,
   onClose,
   onDone,
 }: {
   state: EditorState;
   people: { id: string; name: string }[];
+  repeatUntil: string;
   onClose: () => void;
   onDone: (text: string) => void;
 }) {
   const item = state.mode === "edit" ? state.item : null;
+  const inSeries = !!item?.seriesId;
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [date, setDate] = useState(
+    item?.date ?? (state.mode === "new" ? state.date : ""),
+  );
+  const [allDay, setAllDay] = useState(
+    item ? !item.start : state.mode === "new" && !!state.allDay,
+  );
   const [startT, setStartT] = useState(
-    item?.start ?? (state.mode === "new" ? state.start : "18:00"),
+    item?.start ??
+      (state.mode === "new" && state.start ? state.start : "18:00"),
   );
   const [endT, setEndT] = useState(
-    item?.end ?? (state.mode === "new" ? state.end : "19:00"),
+    item?.end ?? (state.mode === "new" && state.end ? state.end : "19:00"),
   );
+  const [freq, setFreq] = useState<
+    "none" | "daily" | "weekdays" | "weekly" | "biweekly" | "monthly"
+  >("none");
+  const [days, setDays] = useState<number[]>([]);
+  const [until, setUntil] = useState(repeatUntil);
+  const [scope, setScope] = useState<"this" | "following" | "all">("this");
   const titleRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef(onClose);
   useEffect(() => {
@@ -1201,15 +1253,30 @@ function EventEditor({
     return () => window.removeEventListener("keydown", esc);
   }, [item]);
 
+  const weekdayOf = (iso: string) =>
+    iso ? new Date(iso + "T00:00:00Z").getUTCDay() : 0;
+  const pickedDays = days.length ? days : [weekdayOf(date)];
+
   // Changing the start keeps the length, like Google Calendar.
   const changeStart = (v: string) => {
     if (v && startT && endT) {
       const len = toMin(endT) - toMin(startT);
-      const e = Math.min(toMin(v) + Math.max(len, SNAP), 24 * 60 - 1);
-      setEndT(hhmm(e));
+      setEndT(hhmm(Math.min(toMin(v) + Math.max(len, SNAP), 24 * 60 - 1)));
     }
     setStartT(v);
   };
+
+  const repeat: Repeat | null =
+    freq === "none"
+      ? null
+      : freq === "weekly" || freq === "biweekly"
+        ? {
+            freq: "weekly",
+            every: freq === "biweekly" ? 2 : 1,
+            days: pickedDays,
+            until,
+          }
+        : { freq, until };
 
   const run = (fn: () => Promise<void>, done: string) =>
     start(async () => {
@@ -1223,6 +1290,14 @@ function EventEditor({
       }
     });
 
+  const scopeWord =
+    scope === "all"
+      ? " (כל הסדרה)"
+      : scope === "following"
+        ? " (מכאן והלאה)"
+        : "";
+  const field = "rounded-lg border border-rule bg-surface px-2 py-1.5";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-0 sm:items-center sm:p-4"
@@ -1232,16 +1307,22 @@ function EventEditor({
         role="dialog"
         aria-modal="true"
         aria-labelledby="event-editor-title"
-        className={`panel w-full max-w-md rounded-b-none p-5 sm:rounded-b-[inherit] ${pending ? "opacity-70" : ""}`}
+        className={`panel max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-b-none p-5 sm:rounded-b-[inherit] ${pending ? "opacity-70" : ""}`}
         onSubmit={(e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
           const title = String(f.get("title") ?? "");
-          const date = String(f.get("date") ?? "");
           const location = String(f.get("location") ?? "");
-          const blocks = f.get("blocks") === "on";
-          if (endT <= startT)
+          const blocks = !allDay && f.get("blocks") === "on";
+          if (!allDay && endT <= startT)
             return setError("שעת הסיום צריכה להיות אחרי שעת ההתחלה");
+          if (repeat && until <= date)
+            return setError(
+              "תאריך הסיום של החזרה צריך להיות אחרי תאריך האירוע",
+            );
+          const times = allDay
+            ? { allDay: true }
+            : { allDay: false, start: startT, end: endT };
           if (item)
             run(
               () =>
@@ -1249,12 +1330,13 @@ function EventEditor({
                   id: item.eventId!,
                   title,
                   date,
-                  start: startT,
-                  end: endT,
+                  ...times,
                   location,
                   blocks,
+                  scope,
+                  repeat: inSeries ? null : repeat,
                 }),
-              "האירוע עודכן",
+              `האירוע עודכן${scopeWord}`,
             );
           else
             run(
@@ -1262,13 +1344,13 @@ function EventEditor({
                 addEvent({
                   title,
                   date,
-                  start: startT,
-                  end: endT,
+                  ...times,
                   location,
                   blocks,
+                  repeat,
                   invite: f.getAll("invite").map(String),
                 }),
-              "האירוע נוסף",
+              repeat ? "האירועים החוזרים נוספו" : "האירוע נוסף",
             );
         }}
       >
@@ -1298,43 +1380,128 @@ function EventEditor({
         />
 
         <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-3 text-sm">
-          <Icon name="calendar" className="size-4 text-ink-soft" />
+          <Icon
+            name="calendar"
+            className="size-4 self-start mt-2 text-ink-soft"
+          />
           <div className="flex flex-col items-start gap-2">
-            <input
-              name="date"
-              type="date"
-              required
-              dir="ltr"
-              defaultValue={
-                item?.date ?? (state.mode === "new" ? state.date : "")
-              }
-              aria-label="תאריך"
-              className="rounded-lg border border-rule bg-surface px-2 py-1.5"
-            />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <input
-                type="time"
+                type="date"
                 required
-                step={300}
                 dir="ltr"
-                value={startT}
-                onChange={(e) => changeStart(e.target.value)}
-                aria-label="שעת התחלה"
-                className="rounded-lg border border-rule bg-surface px-2 py-1.5"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                aria-label="תאריך"
+                className={field}
               />
-              <span className="text-ink-soft">עד</span>
-              <input
-                type="time"
-                required
-                step={300}
-                dir="ltr"
-                value={endT}
-                onChange={(e) => setEndT(e.target.value)}
-                aria-label="שעת סיום"
-                className="rounded-lg border border-rule bg-surface px-2 py-1.5"
-              />
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={allDay}
+                  onChange={(e) => setAllDay(e.target.checked)}
+                  className="size-4"
+                />
+                כל היום
+              </label>
             </div>
+            {!allDay && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="time"
+                  required
+                  step={300}
+                  dir="ltr"
+                  value={startT}
+                  onChange={(e) => changeStart(e.target.value)}
+                  aria-label="שעת התחלה"
+                  className={field}
+                />
+                <span className="text-ink-soft">עד</span>
+                <input
+                  type="time"
+                  required
+                  step={300}
+                  dir="ltr"
+                  value={endT}
+                  onChange={(e) => setEndT(e.target.value)}
+                  aria-label="שעת סיום"
+                  className={field}
+                />
+              </div>
+            )}
           </div>
+
+          <Icon
+            name="shuffle"
+            className="size-4 self-start mt-2 text-ink-soft"
+          />
+          {inSeries ? (
+            <p className="py-1.5 text-ink-soft">
+              {item!.repeat ? describeRepeat(item!.repeat) : "אירוע חוזר"}
+            </p>
+          ) : (
+            <div className="flex flex-col items-start gap-2">
+              <select
+                value={freq}
+                onChange={(e) => setFreq(e.target.value as typeof freq)}
+                aria-label="חזרה"
+                className={field}
+              >
+                <option value="none">לא חוזר</option>
+                <option value="daily">כל יום</option>
+                <option value="weekdays">בימים א׳–ה׳</option>
+                <option value="weekly">כל שבוע</option>
+                <option value="biweekly">כל שבועיים</option>
+                <option value="monthly">
+                  כל חודש (ב־{date ? Number(date.slice(8)) : "…"} בחודש)
+                </option>
+              </select>
+              {(freq === "weekly" || freq === "biweekly") && (
+                <div
+                  className="flex gap-1"
+                  role="group"
+                  aria-label="ימים בשבוע"
+                >
+                  {["א", "ב", "ג", "ד", "ה", "ו", "ש"].map((l, d) => {
+                    const on = pickedDays.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() =>
+                          setDays(
+                            on
+                              ? pickedDays.filter((x) => x !== d)
+                              : [...pickedDays, d].sort(),
+                          )
+                        }
+                        className={`grid size-8 place-items-center rounded-full border text-xs ${on ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft hover:border-ink"}`}
+                      >
+                        {l}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {freq !== "none" && (
+                <label className="flex items-center gap-2">
+                  <span className="text-ink-soft">עד</span>
+                  <input
+                    type="date"
+                    required
+                    dir="ltr"
+                    value={until}
+                    min={date}
+                    onChange={(e) => setUntil(e.target.value)}
+                    aria-label="חוזר עד"
+                    className={field}
+                  />
+                </label>
+              )}
+            </div>
+          )}
 
           <Icon name="pin" className="size-4 text-ink-soft" />
           <input
@@ -1346,16 +1513,20 @@ function EventEditor({
             className="w-full rounded-lg border border-rule bg-surface px-3 py-1.5"
           />
 
-          <Icon name="cap" className="size-4 text-ink-soft" />
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="blocks"
-              defaultChecked={item?.blocks ?? true}
-              className="size-4"
-            />
-            לא לשבץ לימוד בזמן הזה
-          </label>
+          {!allDay && (
+            <>
+              <Icon name="cap" className="size-4 text-ink-soft" />
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="blocks"
+                  defaultChecked={item?.blocks ?? true}
+                  className="size-4"
+                />
+                לא לשבץ לימוד בזמן הזה
+              </label>
+            </>
+          )}
 
           {!item && people.length > 0 && (
             <>
@@ -1380,6 +1551,41 @@ function EventEditor({
           )}
         </div>
 
+        {inSeries && (
+          <fieldset className="mt-4 rounded-lg border border-rule p-3 text-sm">
+            <legend className="px-1 text-ink-soft">
+              השינוי או המחיקה חלים על
+            </legend>
+            <div className="flex flex-col gap-1.5">
+              {(
+                [
+                  ["this", "רק האירוע הזה"],
+                  ["following", "האירוע הזה וכל הבאים"],
+                  ["all", "כל האירועים בסדרה"],
+                ] as const
+              ).map(([v, l]) => (
+                <label key={v} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="scope"
+                    checked={scope === v}
+                    onChange={() => setScope(v)}
+                    className="size-4"
+                  />
+                  {l}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        {allDay && (
+          <p className="mt-3 text-xs text-ink-soft">
+            אירוע של כל היום לא עוצר את תוכנית הלימוד. ליום בלי לימוד יש ״יום
+            מנוחה״.
+          </p>
+        )}
+
         {error && (
           <p role="alert" className="mt-3 text-sm">
             <span className="hl">{error}</span>
@@ -1391,7 +1597,7 @@ function EventEditor({
             <button
               type="button"
               onClick={() =>
-                run(() => deleteEvent(item.eventId!), "האירוע נמחק")
+                run(() => deleteEvent(item.eventId!, scope), `נמחק${scopeWord}`)
               }
               className="me-auto rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-bg hover:text-ink"
             >
@@ -1417,7 +1623,13 @@ function EventEditor({
   );
 }
 
-function Chip({ item, onClick }: { item: CalItem; onClick?: () => void }) {
+function Chip({
+  item,
+  onClick,
+}: {
+  item: CalItem;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
   const base =
     "block w-full rounded px-1.5 py-0.5 text-start text-[11px] leading-tight";
   if (item.kind === "exam")

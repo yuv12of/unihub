@@ -1,5 +1,6 @@
 "use server";
 
+import { cleanRepeat, daysBetween, repeatDates, type Repeat } from "@/lib/repeat";
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import { deliverNotifications } from "@/lib/push";
@@ -134,63 +135,224 @@ async function setSessionStatus_(key: string, status: "done" | "skipped" | null,
   refresh();
 }
 
-async function addEvent_(input: { date: string; start: string; end: string; title: string; location?: string; blocks?: boolean; invite?: string[] }) {
+type EventTimes = {
+  allDay?: boolean;
+  start?: string | null;
+  end?: string | null;
+};
+
+/** Times of an event: both null for all-day, else a valid start < end. */
+function eventTimes(t: EventTimes): {
+  start_time: string | null;
+  end_time: string | null;
+} {
+  if (t.allDay) return { start_time: null, end_time: null };
+  if (
+    !t.start ||
+    !t.end ||
+    !TIME.test(t.start) ||
+    !TIME.test(t.end) ||
+    t.end <= t.start
+  )
+    throw new Error("שעות לא תקינות");
+  return { start_time: t.start, end_time: t.end };
+}
+const eventTitle = (raw: string) => {
+  const title = raw.trim();
+  if (!title || title.length > 200) throw new Error("חסר שם לאירוע");
+  return title;
+};
+
+async function addEvent_(input: {
+  date: string;
+  start?: string | null;
+  end?: string | null;
+  allDay?: boolean;
+  title: string;
+  location?: string;
+  blocks?: boolean;
+  repeat?: Repeat | null;
+  invite?: string[];
+}) {
   notifyNow();
   const { supabase, userId } = await requireUser();
-  const title = input.title.trim();
-  if (!DATE.test(input.date) || !TIME.test(input.start) || !TIME.test(input.end) || input.end <= input.start)
-    throw new Error("שעות לא תקינות");
-  if (!title || title.length > 200) throw new Error("חסר שם לאירוע");
-  const { data, error } = await supabase
-    .from("user_events")
-    .insert({
-      user_id: userId,
-      date: input.date,
-      start_time: input.start,
-      end_time: input.end,
-      title,
-      location: input.location?.trim().slice(0, 200) || null,
-      // "custom" blocks study time; "other" is shown but the plan can use the time
-      kind: input.blocks === false ? "other" : "custom",
-      source: "manual",
-    })
-    .select("id")
-    .single();
+  if (!DATE.test(input.date)) throw new Error("תאריך לא תקין");
+  const repeat = cleanRepeat(input.repeat, input.date);
+  const seriesId = repeat ? crypto.randomUUID() : null;
+  const base = {
+    user_id: userId,
+    ...eventTimes(input),
+    title: eventTitle(input.title),
+    location: input.location?.trim().slice(0, 200) || null,
+    // "custom" blocks study time (an all-day one blocks the whole day); "other" is shown but the plan can use the time
+    kind: input.blocks === false ? "other" : "custom",
+    source: "manual",
+    series_id: seriesId,
+    repeat,
+  };
+  const dates = repeat ? repeatDates(input.date, repeat) : [input.date];
+  const rows = dates.map((date) => ({
+    ...base,
+    id: crypto.randomUUID(),
+    date,
+  }));
+  const { error } = await supabase.from("user_events").insert(rows);
   if (error) throw new Error(error.message);
-  if (input.invite?.length) await supabase.rpc("invite_to_event", { p_event: data.id, p_users: input.invite });
+  if (input.invite?.length)
+    for (let i = 0; i < rows.length; i += 20)
+      await Promise.all(
+        rows
+          .slice(i, i + 20)
+          .map((r) =>
+            supabase.rpc("invite_to_event", {
+              p_event: r.id,
+              p_users: input.invite,
+            }),
+          ),
+      );
   refresh();
 }
 
-/** Move, resize or edit one of my own events (the calendar's drag and edit). Synced events stay read-only. */
-async function updateEvent_(input: { id: string; date?: string; start?: string; end?: string; title?: string; location?: string | null; blocks?: boolean }) {
+/**
+ * Move, resize or edit one of my own events (the calendar's drag and edit). Synced events stay read-only.
+ * In a series, scope says which dates change: this one, this and the following ones, or all of them.
+ * A single event given a repeat rule becomes the first date of a new series.
+ */
+async function updateEvent_(input: {
+  id: string;
+  date?: string;
+  start?: string | null;
+  end?: string | null;
+  allDay?: boolean;
+  title?: string;
+  location?: string | null;
+  blocks?: boolean;
+  repeat?: Repeat | null;
+  scope?: "this" | "following" | "all";
+}) {
   notifyNow();
   const { supabase, userId } = await requireUser();
+  const own = { user_id: userId, source: "manual" };
   const { data: ev } = await supabase
     .from("user_events")
-    .select("date, start_time, end_time")
-    .match({ id: input.id, user_id: userId, source: "manual" })
+    .select("date, start_time, end_time, title, location, kind, series_id")
+    .match({ id: input.id, ...own })
     .maybeSingle();
   if (!ev) throw new Error("אפשר לערוך רק אירועים שהוספת בעצמך");
   const date = input.date ?? ev.date;
-  const start = input.start ?? ev.start_time;
-  const end = input.end ?? ev.end_time;
-  if (!DATE.test(date) || !start || !end || !TIME.test(start) || !TIME.test(end) || end <= start) throw new Error("שעות לא תקינות");
-  const row: Record<string, unknown> = { date, start_time: start, end_time: end };
-  if (input.title !== undefined) {
-    const title = input.title.trim();
-    if (!title || title.length > 200) throw new Error("חסר שם לאירוע");
-    row.title = title;
+  if (!DATE.test(date)) throw new Error("תאריך לא תקין");
+  const allDay = input.allDay ?? (input.start === undefined && !ev.start_time);
+  const fields: Record<string, unknown> = eventTimes({
+    allDay,
+    start: input.start ?? ev.start_time,
+    end: input.end ?? ev.end_time,
+  });
+  if (input.title !== undefined) fields.title = eventTitle(input.title);
+  if (input.location !== undefined)
+    fields.location = input.location?.trim().slice(0, 200) || null;
+  if (input.blocks !== undefined)
+    fields.kind = input.blocks ? "custom" : "other";
+
+  const scope = ev.series_id ? (input.scope ?? "this") : "this";
+  if (scope === "this") {
+    const repeat = !ev.series_id ? cleanRepeat(input.repeat, date) : null;
+    const seriesId = repeat ? crypto.randomUUID() : ev.series_id;
+    const { error } = await supabase
+      .from("user_events")
+      .update({
+        ...fields,
+        date,
+        ...(repeat && { series_id: seriesId, repeat }),
+      })
+      .match({ id: input.id, ...own });
+    if (error) throw new Error(error.message);
+    if (repeat) {
+      const next = repeatDates(date, repeat).slice(1);
+      const { data: cur } = await supabase
+        .from("user_events")
+        .select("title, location, kind, start_time, end_time")
+        .eq("id", input.id)
+        .single();
+      const rows = next.map((d) => ({
+        ...cur,
+        ...own,
+        id: crypto.randomUUID(),
+        date: d,
+        series_id: seriesId,
+        repeat,
+      }));
+      if (rows.length) {
+        const { error: e2 } = await supabase.from("user_events").insert(rows);
+        if (e2) throw new Error(e2.message);
+      }
+    }
+  } else {
+    // A whole series (or its tail): same times and details, dates shifted by the same number of days.
+    let q = supabase
+      .from("user_events")
+      .select("id, date")
+      .match({ series_id: ev.series_id, ...own });
+    if (scope === "following") q = q.gte("date", ev.date);
+    const { data: rows } = await q;
+    const shift = daysBetween(ev.date, date);
+    if (shift === 0) {
+      let u = supabase
+        .from("user_events")
+        .update(fields)
+        .match({ series_id: ev.series_id, ...own });
+      if (scope === "following") u = u.gte("date", ev.date);
+      const { error } = await u;
+      if (error) throw new Error(error.message);
+    } else {
+      const shifted = (rows ?? []).map((r) => {
+        const d = new Date(r.date + "T00:00:00Z");
+        d.setUTCDate(d.getUTCDate() + shift);
+        return { id: r.id, date: d.toISOString().slice(0, 10) };
+      });
+      for (let i = 0; i < shifted.length; i += 25) {
+        const res = await Promise.all(
+          shifted.slice(i, i + 25).map((r) =>
+            supabase
+              .from("user_events")
+              .update({ ...fields, date: r.date })
+              .match({ id: r.id, ...own }),
+          ),
+        );
+        const bad = res.find((r) => r.error);
+        if (bad?.error) throw new Error(bad.error.message);
+      }
+    }
   }
-  if (input.location !== undefined) row.location = input.location?.trim().slice(0, 200) || null;
-  if (input.blocks !== undefined) row.kind = input.blocks ? "custom" : "other";
-  const { error } = await supabase.from("user_events").update(row).match({ id: input.id, user_id: userId, source: "manual" });
-  if (error) throw new Error(error.message);
   refresh();
 }
 
-export async function deleteEvent(id: string) {
+/** Deletes one of my events; in a series, just this date, this and the following ones, or all. */
+async function deleteEvent_(
+  id: string,
+  scope: "this" | "following" | "all" = "this",
+) {
   const { supabase, userId } = await requireUser();
-  await supabase.from("user_events").delete().match({ id, user_id: userId, source: "manual" });
+  const own = { user_id: userId, source: "manual" };
+  const { data: ev } = await supabase
+    .from("user_events")
+    .select("date, series_id")
+    .match({ id, ...own })
+    .maybeSingle();
+  if (!ev) return;
+  if (scope === "this" || !ev.series_id)
+    await supabase
+      .from("user_events")
+      .delete()
+      .match({ id, ...own });
+  else {
+    let q = supabase
+      .from("user_events")
+      .delete()
+      .match({ series_id: ev.series_id, ...own });
+    if (scope === "following") q = q.gte("date", ev.date);
+    const { error } = await q;
+    if (error) throw new Error(error.message);
+  }
   refresh();
 }
 
@@ -885,6 +1047,9 @@ export async function addEvent(...a: Parameters<typeof addEvent_>) {
 }
 export async function updateEvent(...a: Parameters<typeof updateEvent_>) {
   return guarded(() => updateEvent_(...a));
+}
+export async function deleteEvent(...a: Parameters<typeof deleteEvent_>) {
+  return guarded(() => deleteEvent_(...a));
 }
 export async function ensurePushKey(...a: Parameters<typeof ensurePushKey_>) {
   return guarded(() => ensurePushKey_(...a));
