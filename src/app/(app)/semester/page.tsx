@@ -111,7 +111,8 @@ async function Semester() {
       color: CATEGORY[o.category].color,
       label: `${o.emoji} ${o.title}`,
       start: o.start ?? undefined,
-      end: o.start && o.end && o.end > o.start ? o.end : undefined,
+      // A routine running to midnight (23:15–00:00) ends at "24:00" so it stays a timed block in time order.
+      end: o.start && o.end ? (o.end > o.start ? o.end : "24:00") : undefined,
       done: o.done,
     });
   }

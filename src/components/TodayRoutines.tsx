@@ -38,7 +38,9 @@ export function TodayRoutines({ items, date }: { items: Occurrence[]; date: stri
             >
               {o.done ? "✓" : ""}
             </button>
-            <span className="w-11 shrink-0 text-sm tabular-nums text-ink-soft">{o.start ?? ""}</span>
+            <bdi dir="ltr" className="w-[5.5rem] shrink-0 text-end text-sm tabular-nums text-ink-soft">
+              {o.start ? `${o.start}–${o.end && o.end !== o.start ? o.end : ""}` : "בלי שעה"}
+            </bdi>
             <span className={`min-w-0 flex-1 truncate ${o.done ? "text-ink-soft line-through" : ""}`}>
               {o.emoji} {o.title}
             </span>

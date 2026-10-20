@@ -71,6 +71,8 @@ const weekStart = (iso: string) =>
   addDays(iso, -new Date(iso + "T00:00:00Z").getUTCDay());
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const timed = (i: CalItem) => !!(i.start && i.end);
+/** "24:00" (runs to midnight) reads as 00:00. */
+const clock = (t?: string) => (t === "24:00" ? "00:00" : (t ?? ""));
 const hhmm = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const SNAP = 15;
@@ -96,7 +98,7 @@ const rank: Record<CalKind, number> = {
   routine: 6,
 };
 /** All-day items first (deadlines and exams on top), then the day in time order. */
-const order = (a: CalItem, b: CalItem) => {
+export const order = (a: CalItem, b: CalItem) => {
   const ta = timed(a);
   const tb = timed(b);
   if (ta !== tb) return ta ? 1 : -1;
@@ -832,7 +834,7 @@ function WeekGrid({
                         dir="ltr"
                         className="w-[4.75rem] shrink-0 text-end tabular-nums text-xs text-ink-soft"
                       >
-                        {timed(it) ? `${it.start}–${it.end}` : it.start ? it.start : it.kind === "routine" ? "בלי שעה" : "כל היום"}
+                        {timed(it) ? `${it.start}–${clock(it.end)}` : it.start ? it.start : it.kind === "routine" ? "בלי שעה" : "כל היום"}
                       </span>
                       <span
                         className={`h-4 w-1 shrink-0 rounded-full ${it.optional ? "opacity-50" : ""}`}
@@ -1023,7 +1025,7 @@ function WeekGrid({
                           {it.label}
                         </span>
                         <span className="block opacity-75 tabular-nums">
-                          <bdi dir="ltr">{it.start}–{it.end}</bdi>
+                          <bdi dir="ltr">{it.start}–{clock(it.end)}</bdi>
                         </span>
                         {mine && (
                           <span
@@ -1184,7 +1186,7 @@ function DayPanel({
                 </div>
                 {(it.start || it.note) && (
                   <div className="text-xs text-ink-soft tabular-nums">
-                    {it.start && <bdi dir="ltr">{it.start}{it.end ? `–${it.end}` : ""}</bdi>}
+                    {it.start && <bdi dir="ltr">{it.start}{it.end ? `–${clock(it.end)}` : ""}</bdi>}
                     {it.note ? `${it.start ? " · " : ""}${it.note}` : ""}
                   </div>
                 )}
