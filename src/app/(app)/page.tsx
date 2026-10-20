@@ -29,6 +29,7 @@ import { Icon } from "@/components/Icon";
 import { getBooks, readingByCourse, type Reading } from "@/lib/books";
 import { getReadings, weekFor, type ReadingItem } from "@/lib/readings";
 import { ReadChips } from "@/components/ReadChips";
+import { MathText } from "@/components/MathText";
 import { getForumPosts } from "@/lib/forum";
 import {
   addDays,
@@ -287,7 +288,7 @@ async function Today() {
                     {e.end_time && <span className="shrink-0 text-xs text-ink-soft">עד {e.end_time}</span>}
                     {e.kind === "tutorial" && !e.cancelled && weekOf(e.course_code, e.date)?.links.length ? (
                       <span className="basis-full ps-[3.75rem] text-xs text-ink-soft">
-                        לקראת המפגש: {weekOf(e.course_code, e.date)!.label}
+                        לקראת המפגש: <MathText text={weekOf(e.course_code, e.date)!.label} />
                         <ReadChips links={weekOf(e.course_code, e.date)!.links} className="mt-1" />
                       </span>
                     ) : null}
@@ -430,7 +431,7 @@ async function Today() {
                         <span className="font-medium">{themeOf(courses, c.code).short}</span>
                         {w && (
                           <span className="min-w-0 truncate text-sm text-ink-soft">
-                            {before ? `שבוע ${w.ref} (מ־${formatHebrewDate(w.starts!, { day: "numeric", month: "numeric" })})` : `שבוע ${w.ref}`}: {w.label}
+                            {before ? `שבוע ${w.ref} (מ־${formatHebrewDate(w.starts!, { day: "numeric", month: "numeric" })})` : `שבוע ${w.ref}`}: <MathText text={w.label} />
                             {w.estimated ? " · הצעה" : ""}
                           </span>
                         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { ReadChips } from "@/components/ReadChips";
+import { MathText } from "@/components/MathText";
 import type { ReadingItem } from "@/lib/readings";
 
 import { useOptimistic, useState, useTransition } from "react";
@@ -104,7 +105,7 @@ export function AssignmentChecklist({
           </div>
           {it.reading && !done && !skipped && (
             <div className="ms-8 mb-1 text-xs text-ink-soft">
-              חומר: {it.reading.label}
+              חומר: <MathText text={it.reading.label} />
               {it.reading.estimated ? " (הערכה, יתעדכן כשהמטלה תיפתח)" : ""}
               <ReadChips links={it.reading.links} className="mt-1" />
             </div>

@@ -4,6 +4,7 @@ import { ExamKit } from "@/components/ExamKit";
 import { minutesLabel, sessionKey, type Session } from "@/lib/planner";
 import { Icon } from "@/components/Icon";
 import { ReadChips } from "@/components/ReadChips";
+import { MathText } from "@/components/MathText";
 import type { ReadingItem } from "@/lib/readings";
 
 export interface UpNextItem {
@@ -60,7 +61,7 @@ export function UpNext({
             )}
             {prep && prep.links.length > 0 && (
               <div className="mt-3 text-sm">
-                <p className="opacity-75">לקראת המפגש: {prep.label}</p>
+                <p className="opacity-75">לקראת המפגש: <MathText text={prep.label} /></p>
                 <ReadChips links={prep.links} className="mt-1.5 [&_a]:border-bg/30 [&_a]:text-bg [&_span]:text-bg/80" />
               </div>
             )}
