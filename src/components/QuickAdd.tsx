@@ -73,7 +73,7 @@ export function QuickAdd({ today, people }: { today: string; people: { id: strin
         ) : p ? (
           <>
             <b className="text-ink">{p.title}</b> · {p.dateLabel}
-            {p.start ? ` · ${p.start}–${p.end}` : " · כל היום"}
+            {p.start ? ` · \u2066${p.start}–${p.end}\u2069` : " · כל היום"}
             {p.invite.length > 0 && ` · עם ${p.invite.map((i) => i.name).join(", ")}`}
             {p.unknown.length > 0 && <span className="hl"> · לא מצאתי: {p.unknown.join(", ")}</span>}
           </>

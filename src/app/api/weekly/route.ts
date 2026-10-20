@@ -101,7 +101,7 @@ export async function POST(req: Request) {
                 row(
                   e.course_code ? themeOf(courses, e.course_code).hex : GREY,
                   (e.cancelled ? "<s>" : "") + esc(e.title) + (e.cancelled ? "</s> (בוטל)" : ""),
-                  `${formatHebrewDate(e.date, { weekday: "long", day: "numeric", month: "numeric" })}${e.start_time ? ` · ${e.start_time}–${e.end_time ?? ""}` : ""}`,
+                  `${formatHebrewDate(e.date, { weekday: "long", day: "numeric", month: "numeric" })}${e.start_time ? ` · \u2066${e.start_time}–${e.end_time ?? ""}\u2069` : ""}`,
                 ),
               ),
             ])

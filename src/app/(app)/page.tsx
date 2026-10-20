@@ -317,11 +317,11 @@ async function Today() {
                         {formatHebrewDate(day, { weekday: "short" })} {formatHebrewDate(day, { day: "numeric", month: "numeric" })}
                       </span>
                       <span className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
-                        {list.map((x) => (
+                        {[...list].sort((a, b) => a.start.localeCompare(b.start)).map((x) => (
                           <span key={x.start} className="flex items-center gap-2">
                             <span className="size-2 shrink-0 rounded-full" style={{ background: themeOf(courses, x.courseCode).color }} />
                             <span className="truncate">{x.title}</span>
-                            <span className="ms-auto shrink-0 tabular-nums text-ink-soft">{x.start}</span>
+                            <bdi dir="ltr" className="ms-auto shrink-0 tabular-nums text-ink-soft">{x.start}–{x.end}</bdi>
                           </span>
                         ))}
                       </span>

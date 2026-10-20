@@ -95,8 +95,14 @@ const rank: Record<CalKind, number> = {
   study: 5,
   routine: 6,
 };
-const order = (a: CalItem, b: CalItem) =>
-  rank[a.kind] - rank[b.kind] || (a.start ?? "").localeCompare(b.start ?? "");
+/** All-day items first (deadlines and exams on top), then the day in time order. */
+const order = (a: CalItem, b: CalItem) => {
+  const ta = timed(a);
+  const tb = timed(b);
+  if (ta !== tb) return ta ? 1 : -1;
+  if (!ta) return rank[a.kind] - rank[b.kind] || a.label.localeCompare(b.label);
+  return a.start!.localeCompare(b.start!) || a.end!.localeCompare(b.end!) || rank[a.kind] - rank[b.kind];
+};
 
 export function SemesterCalendar({
   items,
@@ -162,7 +168,7 @@ export function SemesterCalendar({
       setToast({
         text:
           (from.date === to.date && from.start === to.start
-            ? `המשך שונה: ${to.start}–${to.end}`
+            ? `המשך שונה: \u2066${to.start}–${to.end}\u2069`
             : `הוזז ל${fmt(to.date, { weekday: "long" })} ${to.start}`) +
           (item.seriesId ? " (רק המופע הזה)" : ""),
         undo: () => go(from, () => setToast(null)),
@@ -823,7 +829,13 @@ function WeekGrid({
                   {list.map((it, k) => (
                     <span key={k} className="flex items-center gap-2 text-sm">
                       <span
-                        className="h-4 w-1 shrink-0 rounded-full"
+                        dir="ltr"
+                        className="w-[4.75rem] shrink-0 text-end tabular-nums text-xs text-ink-soft"
+                      >
+                        {timed(it) ? `${it.start}–${it.end}` : it.start ? it.start : it.kind === "routine" ? "בלי שעה" : "כל היום"}
+                      </span>
+                      <span
+                        className={`h-4 w-1 shrink-0 rounded-full ${it.optional ? "opacity-50" : ""}`}
                         style={{ background: it.color }}
                       />
                       <span
@@ -834,11 +846,6 @@ function WeekGrid({
                         {it.status === "done" ? "✓ " : ""}
                         {it.label}
                       </span>
-                      {it.start && (
-                        <span className="shrink-0 tabular-nums text-xs text-ink-soft">
-                          {it.start}
-                        </span>
-                      )}
                     </span>
                   ))}
                 </span>
@@ -1016,7 +1023,7 @@ function WeekGrid({
                           {it.label}
                         </span>
                         <span className="block opacity-75 tabular-nums">
-                          {it.start}–{it.end}
+                          <bdi dir="ltr">{it.start}–{it.end}</bdi>
                         </span>
                         {mine && (
                           <span
@@ -1045,7 +1052,7 @@ function WeekGrid({
                       ),
                     }}
                   >
-                    אירוע חדש · {hhmm(drag.s)}–{hhmm(Math.min(drag.e, 1439))}
+                    אירוע חדש · <bdi dir="ltr">{hhmm(drag.s)}–{hhmm(Math.min(drag.e, 1439))}</bdi>
                   </div>
                 )}
               </div>
@@ -1177,8 +1184,7 @@ function DayPanel({
                 </div>
                 {(it.start || it.note) && (
                   <div className="text-xs text-ink-soft tabular-nums">
-                    {it.start}
-                    {it.end ? `–${it.end}` : ""}
+                    {it.start && <bdi dir="ltr">{it.start}{it.end ? `–${it.end}` : ""}</bdi>}
                     {it.note ? `${it.start ? " · " : ""}${it.note}` : ""}
                   </div>
                 )}

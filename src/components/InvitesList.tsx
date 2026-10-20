@@ -20,7 +20,7 @@ export function InvitesList({ invites, names = {} }: { invites: Invite[]; names?
               <div className="font-medium">{i.event.title}</div>
               <div className="text-sm text-ink-soft">
                 {when(i.event.date)}
-                {i.event.start_time ? `, ${i.event.start_time}–${i.event.end_time ?? ""}` : ""}
+                {i.event.start_time ? `, \u2066${i.event.start_time}–${i.event.end_time ?? ""}\u2069` : ""}
                 {i.event.location ? ` · ${i.event.location}` : ""}
                 {names[i.inviter] ? ` · מאת ${names[i.inviter].name}` : ""}
               </div>

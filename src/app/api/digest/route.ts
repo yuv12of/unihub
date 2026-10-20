@@ -42,12 +42,12 @@ export async function POST(req: Request) {
       html: row(
         e.course_code ? themeOf(courses, e.course_code).hex : "#5d6880",
         (e.cancelled ? "<s>" : "") + esc(e.title) + (e.cancelled ? "</s> (בוטל)" : ""),
-        e.start_time ? `${e.start_time}–${e.end_time ?? ""}${e.location ? ` · ${esc(e.location)}` : ""}` : "כל היום",
+        e.start_time ? `\u2066${e.start_time}–${e.end_time ?? ""}\u2069${e.location ? ` · ${esc(e.location)}` : ""}` : "כל היום",
       ),
     })),
     ...todays.map((s) => ({
       t: s.start,
-      html: row(themeOf(courses, s.courseCode).hex, esc(s.title), `${s.start}–${s.end} · ${minutesLabel(s.minutes)}`),
+      html: row(themeOf(courses, s.courseCode).hex, esc(s.title), `\u2066${s.start}–${s.end}\u2069 · ${minutesLabel(s.minutes)}`),
     })),
   ].sort((a, b) => a.t.localeCompare(b.t));
   parts.push(section("היום", timeline.length ? table(timeline.map((x) => x.html)) : `<p style="color:#5d6880">אין לימוד או מפגשים מתוכננים להיום.</p>`));

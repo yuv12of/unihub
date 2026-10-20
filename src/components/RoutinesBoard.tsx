@@ -282,7 +282,7 @@ function RoutineCard({
                 }}
                 aria-pressed={isDone}
                 aria-label={`${DAY_LETTERS[i]}׳${o?.start ? ` ${o.start}` : ""}${isDone ? ", בוצע" : ""}`}
-                title={o?.start ? `${o.start}–${o.end}` : undefined}
+                title={o?.start ? `\u2066${o.start}–${o.end}\u2069` : undefined}
               >
                 {isDone ? "✓" : o?.start ? <span className="text-[10px] tabular-nums text-ink-soft">{o.start}</span> : ""}
                 {others.length > 0 && (

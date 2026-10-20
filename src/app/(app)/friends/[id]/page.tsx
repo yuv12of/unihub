@@ -133,7 +133,7 @@ async function Friend({ params }: { params: PageProps<"/friends/[id]">["params"]
                         list.map((b, k) => (
                           <span key={k} className="truncate">
                             <span className="tabular-nums text-ink-soft">
-                              {b.start}–{b.end}
+                              <bdi dir="ltr">{b.start}–{b.end}</bdi>
                             </span>{" "}
                             {b.title}
                           </span>

@@ -254,7 +254,7 @@ export const timesAWeek = (n: number) =>
 export function describe(r: Routine): string {
   const len = r.minutes ? (r.minutes % 60 === 0 ? `${r.minutes / 60} ש׳` : `${r.minutes} דק׳`) : "בלי זמן קבוע";
   if (r.category === "sleep" && r.start_time && r.minutes)
-    return `${r.start_time}–${toHHMM(toMin(r.start_time) + r.minutes)}`;
+    return `\u2066${r.start_time}–${toHHMM(toMin(r.start_time) + r.minutes)}\u2069`;
   if (r.mode === "flexible")
     return `${timesAWeek(r.per_week ?? 1)} · ${len}${r.minutes ? ` · ${WINDOWS[r.time_window].label}` : ""}`;
   const days = r.days.length === 7 ? "כל יום" : [...r.days].sort().map((d) => DAY_LETTERS[d] + "׳").join(" ");
