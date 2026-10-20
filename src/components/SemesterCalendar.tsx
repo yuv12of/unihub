@@ -10,6 +10,7 @@ import {
 } from "@/app/act";
 import { Icon } from "@/components/Icon";
 import { describeRepeat, type Repeat } from "@/lib/repeat";
+import { hoursLabel, weekBalance, type WeekBalance } from "@/lib/weekBalance";
 
 export type CalKind =
   "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
@@ -103,9 +104,12 @@ export function SemesterCalendar({
   people = [],
   offDays = [],
   repeatUntil,
+  balance,
 }: {
   /** default last date for a repeating event (the semester's end) */
   repeatUntil: string;
+  /** for the week's free time vs study goal strip */
+  balance?: { studied: Record<string, number>; goal: number | null; wake: number; bed: number; nowMin: number };
   /** rough days / days off */
   offDays?: string[];
   items: CalItem[];
@@ -211,6 +215,23 @@ export function SemesterCalendar({
           return `${fmt(s, { day: "numeric", month: "short" })} – ${fmt(e, { day: "numeric", month: "short", year: "numeric" })}`;
         })();
 
+  const week =
+    view === "week" && balance
+      ? weekBalance({
+          days: Array.from({ length: 7 }, (_, i) => addDays(weekStart(anchor), i)),
+          blocksOn: (d) =>
+            (byDate.get(d) ?? [])
+              .filter(timed)
+              .map((i) => ({ start: i.start!, end: i.end!, kind: i.kind, minutes: i.minutes, status: i.status })),
+          today,
+          nowMin: balance.nowMin,
+          wake: balance.wake,
+          bed: balance.bed,
+          studied: balance.studied,
+          goal: balance.goal,
+        })
+      : null;
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
       <div className="panel min-w-0 overflow-hidden">
@@ -268,6 +289,8 @@ export function SemesterCalendar({
             ))}
           </div>
         </div>
+
+        {week && <WeekBalanceStrip b={week} />}
 
         {view === "month" ? (
           <MonthGrid
@@ -363,6 +386,66 @@ export function SemesterCalendar({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------- Week balance ---------- */
+
+function WeekBalanceStrip({ b }: { b: WeekBalance }) {
+  const target = b.goal ?? 0;
+  const scale = Math.max(target, b.done + b.planned, 1);
+  const pct = (m: number) => `${(Math.min(m, scale) / scale) * 100}%`;
+  let verdict: string;
+  if (b.past) verdict = b.goal ? (b.done >= b.goal ? "עמדת ביעד השבוע" : `${hoursLabel(b.goal - b.done)} מתחת ליעד`) : "";
+  else if (!b.goal) verdict = "";
+  else if (b.gap === 0) verdict = "התוכנית מגיעה ליעד";
+  else if (b.free >= b.gap) verdict = `חסרות ${hoursLabel(b.gap)} ליעד, ויש מספיק זמן פנוי`;
+  else verdict = `חסרות ${hoursLabel(b.gap)} ליעד, ואין מספיק זמן פנוי`;
+  const short = !b.past && !!b.goal && b.gap > b.free;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-rule px-4 py-3 text-sm sm:px-5" aria-live="polite">
+      {!b.past && (
+        <div className="flex items-baseline gap-2">
+          <span className="font-display text-2xl tabular-nums">{hoursLabel(b.free)}</span>
+          <span className="text-ink-soft">פנויות עד סוף השבוע</span>
+        </div>
+      )}
+      <div className="min-w-56 flex-1">
+        <div className="flex flex-wrap justify-between gap-x-3 text-xs text-ink-soft">
+          <span>
+            <span className="font-medium text-ink">{hoursLabel(b.done)}</span> לימוד בוצע
+            {!b.past && (
+              <>
+                {" "}+ <span className="font-medium text-ink">{hoursLabel(b.planned)}</span> מתוכנן
+              </>
+            )}
+          </span>
+          {b.goal ? (
+            <span>יעד {hoursLabel(b.goal)}</span>
+          ) : (
+            <a href="/profile" className="underline decoration-rule underline-offset-4 hover:text-ink">
+              הגדרת יעד שבועי
+            </a>
+          )}
+        </div>
+        <div className="relative mt-1.5 flex h-2 overflow-hidden rounded-full bg-rule/70" role="img" aria-label={`בוצע ${hoursLabel(b.done)}, מתוכנן ${hoursLabel(b.planned)}${b.goal ? `, יעד ${hoursLabel(b.goal)}` : ""}`}>
+          <span className="h-full bg-ink" style={{ width: pct(b.done) }} />
+          {!b.past && (
+            <span
+              className="h-full"
+              style={{
+                width: pct(b.planned),
+                background: "repeating-linear-gradient(-45deg, var(--ink) 0 3px, transparent 3px 6px)",
+                opacity: 0.45,
+              }}
+            />
+          )}
+          {b.goal ? <span className="absolute inset-y-0 w-0.5 bg-ink" style={{ insetInlineStart: pct(b.goal) }} /> : null}
+        </div>
+        {verdict && <div className={`mt-1 text-xs ${short ? "font-medium text-ink" : "text-ink-soft"}`}>{short ? <span className="hl">{verdict}</span> : verdict}</div>}
+      </div>
     </div>
   );
 }

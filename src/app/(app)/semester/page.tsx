@@ -4,9 +4,9 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { SemesterCalendar, type CalItem } from "@/components/SemesterCalendar";
 import { progressKey } from "@/lib/progress";
-import { getNames, getPeople, getUserPlan } from "@/lib/userdata";
+import { getMyProfile, getMyStudyDays, getNames, getPeople, getUserPlan } from "@/lib/userdata";
 import { occurrencesFor } from "@/lib/planfor";
-import { CATEGORY } from "@/lib/routines";
+import { awakeWindow, CATEGORY } from "@/lib/routines";
 import { addDays } from "@/lib/semester";
 import { sessionKey } from "@/lib/planner";
 import { academicByDay } from "@/lib/academic";
@@ -31,6 +31,9 @@ async function Semester() {
   await connection();
   const today = todayInIsrael();
   const [{ progress, exams, plan, events, status, courses, routines, logs, offDays, manualOff, prefs }, people] = await Promise.all([getUserPlan(today), getPeople()]);
+  const [studied, me] = await Promise.all([getMyStudyDays(), getMyProfile()]);
+  const { wake, bed } = awakeWindow(routines);
+  const [nh, nm] = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()).split(":").map(Number);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted");
   const names = await getNames([...events.flatMap((e) => (e.guests ?? []).map((g) => g.invitee)), ...events.map((e) => e.invited_by ?? "").filter(Boolean)]);
 
@@ -130,6 +133,7 @@ async function Semester() {
         editable={supabaseEnabled}
         people={connected.map((p) => ({ id: p.id, name: p.name }))}
         offDays={manualOff}
+        balance={{ studied, goal: me?.weekly_goal_minutes ?? null, wake, bed, nowMin: nh * 60 + nm }}
         repeatUntil={courses.flatMap((c) => c.assignments.map((a) => a.due)).sort().at(-1) ?? addDays(today, 90)}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
       />
