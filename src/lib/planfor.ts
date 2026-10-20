@@ -79,7 +79,8 @@ export function occurrencesFor({
   to: string;
 }): Occurrence[] {
   const taken = [
-    ...events.filter((e) => e.start_time && e.end_time && !e.cancelled).map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! })),
+    // Optional slots (kind "other", e.g. phone tutoring hours) stay free for routines too.
+    ...events.filter((e) => e.start_time && e.end_time && e.kind !== "other" && !e.cancelled).map((e) => ({ date: e.date, start: e.start_time!, end: e.end_time! })),
     ...plan.sessions.map((s) => ({ date: s.date, start: s.start, end: s.end })),
   ];
   return expandRoutines({ routines, logs, from, to, today, taken, offDays });

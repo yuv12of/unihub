@@ -38,6 +38,8 @@ export interface CalItem {
   location?: string;
   /** keeps the planner from placing study at this time */
   blocks?: boolean;
+  /** an optional slot (phone tutoring hours): shown, but the time still counts as free */
+  optional?: boolean;
   /** repeating event */
   seriesId?: string;
   repeat?: Repeat;
@@ -221,7 +223,7 @@ export function SemesterCalendar({
           days: Array.from({ length: 7 }, (_, i) => addDays(weekStart(anchor), i)),
           blocksOn: (d) =>
             (byDate.get(d) ?? [])
-              .filter(timed)
+              .filter((i) => timed(i) && !i.optional)
               .map((i) => ({ start: i.start!, end: i.end!, kind: i.kind, minutes: i.minutes, status: i.status })),
           today,
           nowMin: balance.nowMin,
@@ -993,14 +995,15 @@ function WeekGrid({
                             ? "calc(100% - 4px)"
                             : `calc(${100 / n}% - 4px)`,
                           background:
-                            it.kind === "study" || it.kind === "routine"
-                              ? `color-mix(in srgb, ${it.color} ${it.kind === "routine" ? 10 : 16}%, var(--surface))`
+                            it.kind === "study" || it.kind === "routine" || it.optional
+                              ? `color-mix(in srgb, ${it.color} ${it.kind === "study" ? 16 : 10}%, var(--surface))`
                               : `color-mix(in srgb, ${it.color} 85%, black)`,
                           color:
-                            it.kind === "study" || it.kind === "routine"
+                            it.kind === "study" || it.kind === "routine" || it.optional
                               ? "var(--ink)"
                               : "white",
-                          borderInlineStart: `3px solid ${it.color}`,
+                          borderInlineStart: `3px ${it.optional ? "dashed" : "solid"} ${it.color}`,
+                          ...(it.optional && { outline: `1px dashed color-mix(in srgb, ${it.color} 50%, transparent)`, outlineOffset: -1, opacity: 0.8 }),
                         }}
                       >
                         <span

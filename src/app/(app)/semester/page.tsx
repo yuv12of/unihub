@@ -81,7 +81,8 @@ async function Semester() {
       date: ev.date,
       kind: ev.kind === "tutorial" ? "tutorial" : "event",
       color: ev.course_code ? themeOf(courses, ev.course_code).color : "var(--ink-soft)",
-      label: (ev.cancelled ? "בוטל: " : "") + (ev.location ? `${ev.title} (${ev.location})` : ev.title),
+      label: (ev.cancelled ? "בוטל: " : "") + (ev.location ? `${ev.title} (${ev.location})` : ev.title) + (ev.kind === "other" && ev.source !== "manual" && ev.start_time && ev.end_time ? " · לא חובה" : ""),
+      optional: ev.kind === "other" && ev.source !== "manual",
       done: ev.cancelled,
       note: ev.invited_by
         ? `הזמנה מ${names[ev.invited_by]?.name ?? "חבר/ה"}`
