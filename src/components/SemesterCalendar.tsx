@@ -1433,7 +1433,7 @@ function EventEditor({
           </div>
 
           <Icon
-            name="shuffle"
+            name="repeat"
             className="size-4 self-start mt-2 text-ink-soft"
           />
           {inSeries ? (
