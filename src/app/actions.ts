@@ -1,5 +1,6 @@
 "use server";
 
+import type { RoutineOverride } from "@/lib/routines";
 import { SLEEP_IN_TITLE } from "@/lib/sleepIn";
 import { cleanRepeat, daysBetween, repeatDates, type Repeat } from "@/lib/repeat";
 import { refresh } from "next/cache";
@@ -678,6 +679,63 @@ async function saveRoutine_(input: RoutineInput) {
   refresh();
 }
 
+/**
+ * Change one occurrence of my routine (move, resize, skip) or undo that change (ov = null).
+ * Old entries (over a month ago) are dropped on the way.
+ */
+async function setRoutineOccurrence_(id: string, key: string, ov: RoutineOverride | null) {
+  notifyNow();
+  const { supabase, userId } = await requireUser();
+  if (!DATE.test(key)) throw new Error("תאריך לא תקין");
+  const { data: r } = await supabase.from("routines").select("overrides, mode").match({ id, user_id: userId }).maybeSingle();
+  if (!r) throw new Error("אפשר לשנות רק שגרות שלך");
+  let clean: RoutineOverride | null = null;
+  if (ov) {
+    clean = {};
+    if (ov.skip) clean.skip = true;
+    else {
+      if (ov.start !== undefined) {
+        if (ov.start !== null && !TIME.test(ov.start)) throw new Error("שעה לא תקינה");
+        clean.start = ov.start;
+      }
+      if (ov.minutes !== undefined) clean.minutes = Math.max(5, Math.min(900, Math.round(ov.minutes)));
+      if (ov.date && ov.date !== key) {
+        if (!DATE.test(ov.date) || Math.abs(daysBetween(key, ov.date)) > 6) throw new Error("אפשר להזיז מופע עד שבוע קדימה או אחורה");
+        clean.date = ov.date;
+      }
+    }
+  }
+  const cutoff = new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10);
+  const next: Record<string, RoutineOverride> = {};
+  for (const [k, v] of Object.entries((r.overrides ?? {}) as Record<string, RoutineOverride>)) if (k >= cutoff && k !== key) next[k] = v;
+  if (clean) next[key] = clean;
+  const { error } = await supabase.from("routines").update({ overrides: next }).match({ id, user_id: userId });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
+/** Change the routine itself from the calendar: time and length (fixed) or length (flexible). */
+async function setRoutineTiming_(id: string, input: { start?: string | null; minutes?: number }, clearKey?: string) {
+  notifyNow();
+  const { supabase, userId } = await requireUser();
+  const { data: r } = await supabase.from("routines").select("mode, overrides").match({ id, user_id: userId }).maybeSingle();
+  if (!r) throw new Error("אפשר לשנות רק שגרות שלך");
+  const row: Record<string, unknown> = {};
+  if (input.minutes !== undefined) row.minutes = Math.max(0, Math.min(900, Math.round(input.minutes)));
+  if (input.start !== undefined && r.mode === "fixed") {
+    if (input.start !== null && !TIME.test(input.start)) throw new Error("שעה לא תקינה");
+    row.start_time = input.start;
+  }
+  if (clearKey && r.overrides && clearKey in (r.overrides as object)) {
+    const next = { ...(r.overrides as Record<string, RoutineOverride>) };
+    delete next[clearKey];
+    row.overrides = next;
+  }
+  const { error } = await supabase.from("routines").update(row).match({ id, user_id: userId });
+  if (error) throw new Error(error.message);
+  refresh();
+}
+
 export async function deleteRoutine(id: string) {
   const { supabase, userId } = await requireUser();
   await supabase.from("routines").delete().match({ id, user_id: userId });
@@ -965,6 +1023,18 @@ async function saveProfile_(input: ProfileInput) {
     })
     .eq("id", userId);
   if (error) throw new Error(error.message);
+  // The planner reads the goal from study prefs (they travel with the private feed too).
+  const { data: had } = await supabase.from("study_prefs").update({ weekly_goal_minutes: goal }).eq("user_id", userId).select("user_id");
+  if (!had?.length) {
+    const { defaultPrefs } = await import("@/lib/planner");
+    await supabase.from("study_prefs").insert({
+      user_id: userId,
+      availability: defaultPrefs.availability,
+      session_minutes: defaultPrefs.session_minutes,
+      fill_routine: defaultPrefs.fill_routine,
+      weekly_goal_minutes: goal,
+    });
+  }
   refresh();
 }
 
@@ -1064,6 +1134,12 @@ export async function addEvent(...a: Parameters<typeof addEvent_>) {
 }
 export async function updateEvent(...a: Parameters<typeof updateEvent_>) {
   return guarded(() => updateEvent_(...a));
+}
+export async function setRoutineOccurrence(...a: Parameters<typeof setRoutineOccurrence_>) {
+  return guarded(() => setRoutineOccurrence_(...a));
+}
+export async function setRoutineTiming(...a: Parameters<typeof setRoutineTiming_>) {
+  return guarded(() => setRoutineTiming_(...a));
 }
 export async function setSleepIn(...a: Parameters<typeof setSleepIn_>) {
   return guarded(() => setSleepIn_(...a));

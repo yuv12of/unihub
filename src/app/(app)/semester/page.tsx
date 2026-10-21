@@ -102,6 +102,7 @@ async function Semester() {
       ...(ev.source === "google" && { note: "מיומן Google" }),
     });
   }
+  const mineIds = new Set(routines.filter((r) => r.user_id === me?.id).map((r) => r.id));
   // Routines: four weeks back to ten weeks ahead (sleep stays out of the calendar).
   for (const o of occurrencesFor({ routines, logs, events, plan, today, from: addDays(today, -28), to: addDays(today, 70), offDays })) {
     if (o.category === "sleep") continue;
@@ -114,6 +115,14 @@ async function Semester() {
       // A routine running to midnight (23:15–00:00) ends at "24:00" so it stays a timed block in time order.
       end: o.start && o.end ? (o.end > o.start ? o.end : "24:00") : undefined,
       done: o.done,
+      routine: {
+        id: o.routineId,
+        key: o.key,
+        flexible: o.flexible,
+        mine: !!me && mineIds.has(o.routineId),
+        moved: !!o.moved,
+        title: o.title,
+      },
     });
   }
   const jp = jewishPrefs(prefs.jewish);

@@ -23,6 +23,8 @@ export interface StudyPrefs {
   availability: Availability;
   session_minutes: number;
   fill_routine: boolean;
+  /** study hours a week to aim for: routine study fills each week up to it (null = one session a day) */
+  weekly_goal_minutes?: number | null;
   /** Hebcal settings (see lib/hebcal) */
   jewish?: import("@/lib/hebcal").JewishPrefs | null;
 }
@@ -217,6 +219,26 @@ export function buildPlan({
   const routineLoad = new Map<string, number>(courses.map((c) => [c.code, 0]));
   const examDays = new Set(exams.map((e) => e.date));
 
+  // Weekly goal: study minutes per week (Sunday start), counting what was already done this week.
+  const goal = prefs.weekly_goal_minutes && prefs.weekly_goal_minutes > 0 ? prefs.weekly_goal_minutes : null;
+  const weekOf = (d: string) => addDays(d, -weekday(d));
+  const weekMinutes = new Map<string, number>();
+  for (const [key, min] of Object.entries(doneMinutes)) {
+    const date = key.split("|")[0];
+    if (date < today && date >= weekOf(today) && min) weekMinutes.set(weekOf(today), (weekMinutes.get(weekOf(today)) ?? 0) + min);
+  }
+  const studyDay = (d: string) => {
+    const slot = prefs.availability[String(weekday(d))];
+    return !!slot && slot.minutes >= MIN_CHUNK && !examDays.has(d) && !off.has(d);
+  };
+  /** This day's share of what the week still needs. */
+  const shareFor = (d: string) => {
+    if (!goal) return 0;
+    let left = 0;
+    for (let x = d; x <= addDays(weekOf(d), 6); x = addDays(x, 1)) if (studyDay(x)) left++;
+    return left ? Math.ceil(Math.max(0, goal - (weekMinutes.get(weekOf(d)) ?? 0)) / left) : 0;
+  };
+
   for (let day = today; day <= horizon; day = addDays(day, 1)) {
     const slot = prefs.availability[String(weekday(day))];
     if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day) || off.has(day)) continue;
@@ -234,6 +256,8 @@ export function buildPlan({
     const freeNow = () => segments.reduce((m, [a, z]) => Math.max(m, z - a), 0);
     let capacity = freeNow();
     const usedToday = new Set<Task>();
+    const share = shareFor(day);
+    let placedToday = 0;
 
     const place = (minutes: number, courseCode: string, kind: SessionKind, title: string, ref: string) => {
       const seg = segments.find(([a, z]) => z - a >= Math.min(minutes, MIN_CHUNK))!;
@@ -243,7 +267,10 @@ export function buildPlan({
       capacity = freeNow();
       sessions.push(s);
       // Skipped: it stays visible (so it can be undone), but its work is placed again on another day.
-      return skipped.has(sessionKey(s)) ? 0 : len;
+      if (skipped.has(sessionKey(s))) return 0;
+      placedToday += len;
+      weekMinutes.set(weekOf(day), (weekMinutes.get(weekOf(day)) ?? 0) + len);
+      return len;
     };
 
     // 1 + 2: deadline-driven work, earliest deadline first, one session per task per day
@@ -274,10 +301,20 @@ export function buildPlan({
           if (!used) break;
         }
       } else {
-        const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
-        if (code) {
-          const used = place(Math.min(prefs.session_minutes, capacity), code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, "routine");
-          routineLoad.set(code, (routineLoad.get(code) ?? 0) + used);
+        // With a weekly goal: keep adding sessions (rotating courses) until today's share of the goal
+        // is planned. Without one: a single session.
+        const perCourse = new Map<string, number>();
+        for (let k = 0; capacity >= MIN_CHUNK && k < 8; k++) {
+          if (goal ? placedToday >= share : k > 0) break;
+          const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
+          if (!code) break;
+          const n = (perCourse.get(code) ?? 0) + 1;
+          perCourse.set(code, n);
+          const want = goal ? Math.max(MIN_CHUNK, Math.min(prefs.session_minutes, share - placedToday)) : prefs.session_minutes;
+          const len = Math.min(want, capacity);
+          const used = place(len, code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, n === 1 ? "routine" : `routine${n}`);
+          // a skipped session still took its slot; count it so the rotation moves on
+          routineLoad.set(code, (routineLoad.get(code) ?? 0) + (used || len));
         }
       }
     }

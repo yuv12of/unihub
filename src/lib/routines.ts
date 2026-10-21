@@ -32,6 +32,19 @@ export interface Routine {
   active: boolean;
   /** first date the routine applies (null = always) */
   starts_on?: string | null;
+  /**
+   * One-off changes by date. Fixed routines: keyed by the occurrence's own date; `date` moves it to
+   * another day. Flexible routines: keyed by the day it happens (a pinned placement), or skip.
+   */
+  overrides?: Record<string, RoutineOverride> | null;
+}
+
+export interface RoutineOverride {
+  start?: string | null;
+  minutes?: number;
+  /** fixed routines: the day it moves to */
+  date?: string;
+  skip?: boolean;
 }
 
 export interface RoutineLog {
@@ -51,6 +64,10 @@ export interface Occurrence {
   minutes: number;
   done: boolean;
   flexible: boolean;
+  /** the override key for this occurrence (its original date) */
+  key: string;
+  /** changed just this once */
+  moved?: boolean;
 }
 
 export const CATEGORY: Record<RoutineCategory, { label: string; emoji: string; color: string }> = {
@@ -102,13 +119,30 @@ export function awakeWindow(routines: Routine[]): { wake: number; bed: number } 
 export function routineBusy(routines: Routine[], from: string, to: string): Busy[] {
   const out: Busy[] = [];
   for (const r of routines) {
-    if (!r.active || r.mode !== "fixed" || !timed(r) || !r.blocks_study) continue;
-    for (let d = addDays(from, -1); d <= to; d = addDays(d, 1)) {
+    if (!r.active || !r.blocks_study) continue;
+    if (r.mode === "flexible") {
+      // pinned one-off placements block study like fixed ones
+      for (const [d, ov] of Object.entries(r.overrides ?? {}))
+        if (!ov.skip && ov.start && d >= from && d <= to) {
+          const s = toMin(ov.start);
+          const e = s + (ov.minutes ?? r.minutes);
+          out.push({ date: d, start: toHHMM(s), end: e >= 1440 ? "23:59" : toHHMM(e) });
+        }
+      continue;
+    }
+    if (r.mode !== "fixed") continue;
+    for (let d = addDays(from, -8); d <= addDays(to, 7); d = addDays(d, 1)) {
       if (!r.days.includes(weekday(d)) || !startedBy(r, d)) continue;
-      const s = toMin(r.start_time!);
-      const e = s + r.minutes;
-      if (d >= from) out.push({ date: d, start: toHHMM(s), end: e >= 1440 ? "23:59" : toHHMM(e) });
-      if (e > 1440 && addDays(d, 1) <= to) out.push({ date: addDays(d, 1), start: "00:00", end: toHHMM(e - 1440) });
+      const ov = r.overrides?.[d];
+      if (ov?.skip) continue;
+      const startT = ov?.start !== undefined ? ov.start : r.start_time;
+      const len = ov?.minutes ?? r.minutes;
+      if (!startT || !len) continue;
+      const day = ov?.date ?? d;
+      const s = toMin(startT);
+      const e = s + len;
+      if (day >= from && day <= to) out.push({ date: day, start: toHHMM(s), end: e >= 1440 ? "23:59" : toHHMM(e) });
+      if (e > 1440 && addDays(day, 1) >= from && addDays(day, 1) <= to) out.push({ date: addDays(day, 1), start: "00:00", end: toHHMM(e - 1440) });
     }
   }
   return out;
@@ -160,24 +194,34 @@ export function expandRoutines({
   const active = routines.filter((r) => r.active);
   const doneSet = new Set(logs.map((l) => `${l.routine_id}|${l.date}`));
   const occ: Occurrence[] = [];
-  const make = (r: Routine, date: string, start: number | null, flexible: boolean): Occurrence => ({
+  const make = (r: Routine, date: string, start: number | null, flexible: boolean, key = date, minutes = r.minutes, moved = false): Occurrence => ({
     routineId: r.id,
     title: r.title,
     emoji: emojiOf(r),
     category: r.category,
     date,
     start: start == null ? null : toHHMM(start),
-    end: start == null ? null : toHHMM(start + r.minutes),
-    minutes: r.minutes,
+    end: start == null ? null : toHHMM(start + minutes),
+    minutes,
     done: doneSet.has(`${r.id}|${date}`),
     flexible,
+    key,
+    moved,
   });
 
-  // Fixed routines.
+  // Fixed routines (a one-off change can move an occurrence to a nearby day, so look a week around).
   for (const r of active.filter((x) => x.mode === "fixed"))
-    for (let d = from; d <= to; d = addDays(d, 1))
-      if (r.days.includes(weekday(d)) && startedBy(r, d) && (!off.has(d) || doneSet.has(`${r.id}|${d}`) || r.category === "sleep" || r.category === "meal"))
-        occ.push(make(r, d, timed(r) ? toMin(r.start_time!) : null, false));
+    for (let d = addDays(from, -7); d <= addDays(to, 7); d = addDays(d, 1)) {
+      if (!r.days.includes(weekday(d)) || !startedBy(r, d)) continue;
+      const ov = r.overrides?.[d];
+      if (ov?.skip) continue;
+      const day = ov?.date ?? d;
+      if (day < from || day > to) continue;
+      if (off.has(day) && !doneSet.has(`${r.id}|${day}`) && r.category !== "sleep" && r.category !== "meal") continue;
+      const startT = ov?.start !== undefined ? ov.start : r.start_time;
+      const len = ov?.minutes ?? r.minutes;
+      occ.push(make(r, day, startT && len > 0 ? toMin(startT) : null, false, d, len, !!ov));
+    }
 
   // Flexible routines, week by week.
   const { wake, bed } = awakeWindow(active);
@@ -189,21 +233,28 @@ export function expandRoutines({
     const goal = r.per_week ?? 1;
     for (let ws = weekStart(from); ws <= to; ws = addDays(ws, 7)) {
       const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
-      const doneDays = days.filter((d) => doneSet.has(`${r.id}|${d}`));
-      const open = days.filter((d) => d >= today && startedBy(r, d) && !doneSet.has(`${r.id}|${d}`) && !off.has(d));
+      const ov = r.overrides ?? {};
+      const pinned = days.filter((d) => ov[d] && !ov[d].skip && startedBy(r, d));
+      const doneDays = days.filter((d) => doneSet.has(`${r.id}|${d}`) && !pinned.includes(d));
+      const open = days.filter(
+        (d) => d >= today && startedBy(r, d) && !doneSet.has(`${r.id}|${d}`) && !off.has(d) && !ov[d],
+      );
       // A rough day lowers the week's goal instead of breaking it.
       const weekGoal = Math.max(0, goal - days.filter((d) => off.has(d)).length);
-      const chosen = spread(open, Math.max(0, weekGoal - doneDays.length));
-      for (const d of [...doneDays, ...chosen].sort()) {
+      const chosen = spread(open, Math.max(0, weekGoal - doneDays.length - pinned.length));
+      for (const d of [...pinned, ...doneDays, ...chosen].sort()) {
         if (d < from || d > to) continue;
-        let start: number | null = null;
-        if (timed(r) || r.minutes > 0) {
+        const pin = pinned.includes(d) ? ov[d] : null;
+        const len = pin?.minutes ?? r.minutes;
+        let start: number | null = pin?.start ? toMin(pin.start) : null;
+        if (start == null && len > 0) {
           const w = WINDOWS[r.time_window];
           const lo = Math.max(toMin(w.from), wake + 30);
           const hi = Math.min(toMin(w.to), bed - 15);
-          start = findSlot(takenOn(d), lo, hi, r.minutes);
+          // its own window first, then anywhere in the waking day, so it always gets a time
+          start = findSlot(takenOn(d), lo, hi, len) ?? findSlot(takenOn(d), wake + 30, bed - 15, len);
         }
-        occ.push(make(r, d, start, true));
+        occ.push(make(r, d, start, true, d, len, !!pin));
       }
     }
   }

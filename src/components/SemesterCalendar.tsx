@@ -5,6 +5,8 @@ import {
   addEvent,
   deleteEvent,
   setDayOff,
+  setRoutineOccurrence,
+  setRoutineTiming,
   setSessionStatus,
   updateEvent,
 } from "@/app/act";
@@ -38,6 +40,8 @@ export interface CalItem {
   location?: string;
   /** keeps the planner from placing study at this time */
   blocks?: boolean;
+  /** a routine occurrence: which routine, its override key, and whether I may change it */
+  routine?: { id: string; key: string; flexible: boolean; mine: boolean; moved: boolean; title: string };
   /** an optional slot (phone tutoring hours): shown, but the time still counts as free */
   optional?: boolean;
   /** repeating event */
@@ -54,8 +58,12 @@ type EditorState =
       end?: string;
       allDay?: boolean;
     }
-  | { mode: "edit"; item: CalItem };
+  | { mode: "edit"; item: CalItem }
+  | { mode: "routine"; item: CalItem };
 type Placement = { date: string; start: string; end: string };
+/** Identity of a movable item (own event or routine occurrence). */
+const itemId = (i: CalItem) => i.eventId ?? (i.routine ? `r:${i.routine.id}:${i.routine.key}` : undefined);
+const canEdit = (i: CalItem) => !!(i.editable || i.routine?.mine);
 
 const WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 const fmt = (iso: string, o: Intl.DateTimeFormatOptions) =>
@@ -106,6 +114,25 @@ export const order = (a: CalItem, b: CalItem) => {
   return a.start!.localeCompare(b.start!) || a.end!.localeCompare(b.end!) || rank[a.kind] - rank[b.kind];
 };
 
+/** Saves a dragged routine occurrence as a one-off change (undo puts back what was there). */
+async function saveRoutineMove(item: CalItem, p: Placement, undo: boolean) {
+  const r = item.routine!;
+  const minutes = toMin(p.end) - toMin(p.start);
+  if (undo && !r.moved) {
+    // it wasn't changed before: drop the one-off change(s)
+    await setRoutineOccurrence(r.id, r.flexible ? item.date : r.key, null);
+    if (r.flexible && item.date !== r.key) await setRoutineOccurrence(r.id, r.key, null);
+    return;
+  }
+  if (r.flexible) {
+    // a flexible routine is pinned on the new day; the old day stops counting
+    await setRoutineOccurrence(r.id, p.date, { start: p.start, minutes });
+    if (p.date !== item.date) await setRoutineOccurrence(r.id, item.date, { skip: true });
+  } else {
+    await setRoutineOccurrence(r.id, r.key, { start: p.start, minutes, ...(p.date !== r.key && { date: p.date }) });
+  }
+}
+
 export function SemesterCalendar({
   items,
   today,
@@ -149,13 +176,15 @@ export function SemesterCalendar({
   }, [toast]);
 
   const place = (item: CalItem, to: Placement) => {
-    const id = item.eventId!;
+    const id = itemId(item)!;
     const from = { date: item.date, start: item.start!, end: item.end! };
     if (from.date === to.date && from.start === to.start && from.end === to.end)
       return;
-    const go = (p: Placement, after?: () => void) => {
+    const save = (p: Placement, undo: boolean) =>
+      item.routine ? saveRoutineMove(item, p, undo) : updateEvent({ id: item.eventId!, ...p });
+    const go = (p: Placement, undo: boolean, after?: () => void) => {
       setMoved((m) => new Map(m).set(id, p));
-      updateEvent({ id, ...p })
+      save(p, undo)
         .then(after)
         .catch((e: Error) => {
           setMoved((m) => {
@@ -166,14 +195,14 @@ export function SemesterCalendar({
           setToast({ text: e.message || "השינוי לא נשמר" });
         });
     };
-    go(to, () =>
+    go(to, false, () =>
       setToast({
         text:
           (from.date === to.date && from.start === to.start
-            ? `המשך שונה: \u2066${to.start}–${to.end}\u2069`
-            : `הוזז ל${fmt(to.date, { weekday: "long" })} ${to.start}`) +
-          (item.seriesId ? " (רק המופע הזה)" : ""),
-        undo: () => go(from, () => setToast(null)),
+            ? `המשך שונה: \u2066${to.start}–${clock(to.end)}\u2069`
+            : `הוזז ל${fmt(to.date, { weekday: "long" })} \u2066${to.start}\u2069`) +
+          (item.seriesId || item.routine ? " (רק הפעם)" : ""),
+        undo: () => go(from, true, () => setToast(null)),
       }),
     );
   };
@@ -182,8 +211,8 @@ export function SemesterCalendar({
     const m = new Map<string, CalItem[]>();
     for (const raw of items) {
       const it =
-        raw.eventId && moved.has(raw.eventId)
-          ? { ...raw, ...moved.get(raw.eventId)! }
+        itemId(raw) && moved.has(itemId(raw)!)
+          ? { ...raw, ...moved.get(itemId(raw)!)! }
           : raw;
       if (!showRoutines && it.kind === "routine") continue;
       if (!m.has(it.date)) m.set(it.date, []);
@@ -319,7 +348,7 @@ export function SemesterCalendar({
             onSelect={setSelected}
             editable={editable}
             onPlace={place}
-            onEdit={(item) => setEditor({ mode: "edit", item })}
+            onEdit={(item) => setEditor({ mode: item.routine ? "routine" : "edit", item })}
             onCreate={(p) => {
               setSelected(p.date);
               setEditor({ mode: "new", ...p });
@@ -350,7 +379,7 @@ export function SemesterCalendar({
         editable={editable}
         isOff={offDays.includes(selected)}
         today={today}
-        onEdit={(item) => setEditor({ mode: "edit", item })}
+        onEdit={(item) => setEditor({ mode: item.routine ? "routine" : "edit", item })}
         onNew={() =>
           setEditor({
             mode: "new",
@@ -361,7 +390,11 @@ export function SemesterCalendar({
         }
       />
 
-      {editor && (
+      {editor?.mode === "routine" && (
+        <RoutineEditor item={editor.item} onClose={() => setEditor(null)} onDone={(text) => setToast({ text })} />
+      )}
+
+      {editor && editor.mode !== "routine" && (
         <EventEditor
           state={editor}
           people={people}
@@ -972,8 +1005,8 @@ function WeekGrid({
                       ((toMin(it.end!) - toMin(it.start!)) / 60) * HOUR_PX - 2,
                     );
                     const faded = it.status === "skipped";
-                    const isDragged = dragged && it.eventId === dragged.eventId;
-                    const mine = editable && it.editable;
+                    const isDragged = dragged && itemId(it) === itemId(dragged);
+                    const mine = editable && canEdit(it);
                     return (
                       <div
                         key={k}
@@ -1232,6 +1265,18 @@ function DayPanel({
                         </button>
                       </>
                     )}
+                  </div>
+                )}
+                {editable && it.routine?.mine && (
+                  <div className="mt-1.5 flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(it)}
+                      className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 hover:border-ink"
+                    >
+                      <Icon name="pencil" className="size-3" />
+                      שינוי
+                    </button>
                   </div>
                 )}
                 {editable && it.editable && it.eventId && (
@@ -1709,6 +1754,167 @@ function EventEditor({
             disabled={pending}
             className="rounded-lg bg-ink px-5 py-2 text-sm font-medium text-bg"
           >
+            שמירה
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ---------- Routine occurrence editor (this time / the whole routine) ---------- */
+
+function RoutineEditor({ item, onClose, onDone }: { item: CalItem; onClose: () => void; onDone: (text: string) => void }) {
+  const r = item.routine!;
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [date, setDate] = useState(item.date);
+  const [startT, setStartT] = useState(item.start ?? "09:00");
+  const [endT, setEndT] = useState(item.end ? clock(item.end) : "09:30");
+  const [scope, setScope] = useState<"once" | "all">("once");
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, []);
+
+  const toEnd = (t: string) => (t === "00:00" ? 24 * 60 : toMin(t));
+  const minutes = toEnd(endT) - toMin(startT);
+  const changeStart = (v: string) => {
+    if (v) setEndT(clock(hhmm(Math.min(toMin(v) + Math.max(minutes, SNAP), 24 * 60)).replace("24:00", "00:00")));
+    setStartT(v);
+  };
+  const day = r.flexible ? item.date : r.key; // the key a one-off change is stored under
+
+  const run = (fn: () => Promise<void>, done: string) =>
+    start(async () => {
+      setError(null);
+      try {
+        await fn();
+        onDone(done);
+        onClose();
+      } catch (e) {
+        setError((e as Error).message || "השמירה נכשלה. נסו שוב.");
+      }
+    });
+
+  const save = () => {
+    if (minutes < 5) return setError("שעת הסיום צריכה להיות אחרי שעת ההתחלה");
+    if (scope === "all")
+      return run(
+        () => setRoutineTiming(r.id, r.flexible ? { minutes } : { start: startT, minutes }, r.flexible ? undefined : r.key),
+        r.flexible ? "משך השגרה עודכן" : "השגרה עודכנה מעכשיו והלאה",
+      );
+    run(async () => {
+      if (r.flexible) {
+        await setRoutineOccurrence(r.id, date, { start: startT, minutes });
+        if (date !== item.date) await setRoutineOccurrence(r.id, item.date, { skip: true });
+      } else await setRoutineOccurrence(r.id, r.key, { start: startT, minutes, ...(date !== r.key && { date }) });
+    }, "השתנה רק הפעם");
+  };
+
+  const field = "rounded-lg border border-rule bg-surface px-2 py-1.5";
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 sm:items-center sm:p-4" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <form
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="routine-editor-title"
+        className={`panel max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-b-none p-5 sm:rounded-b-[inherit] ${pending ? "opacity-70" : ""}`}
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="routine-editor-title" className="section-title">
+            {item.label}
+          </h2>
+          <button type="button" onClick={onClose} aria-label="סגירה" className="rounded-lg p-1.5 text-ink-soft hover:bg-bg hover:text-ink">
+            <Icon name="close" className="size-4" />
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-ink-soft">
+          {r.flexible ? "שגרה גמישה: משובצת בזמן פנוי לפי היעד השבועי." : "שגרה קבועה."}
+          {r.moved ? " המופע הזה כבר שונה." : ""}
+        </p>
+
+        <fieldset className="mt-4 flex rounded-lg border border-rule p-0.5 text-sm">
+          <legend className="sr-only">על מה השינוי חל</legend>
+          {(
+            [
+              ["once", "רק הפעם"],
+              ["all", "כל השגרה"],
+            ] as const
+          ).map(([v, l]) => (
+            <label key={v} className={`flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center ${scope === v ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`}>
+              <input type="radio" name="scope" value={v} checked={scope === v} onChange={() => setScope(v)} className="sr-only" />
+              {l}
+            </label>
+          ))}
+        </fieldset>
+
+        <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-3 text-sm">
+          <Icon name="calendar" className="size-4 text-ink-soft" />
+          <div className="flex flex-col items-start gap-2">
+            {scope === "once" && (
+              <input
+                type="date"
+                required
+                dir="ltr"
+                value={date}
+                min={addDays(day, -6)}
+                max={addDays(day, 6)}
+                onChange={(e) => setDate(e.target.value)}
+                aria-label="תאריך"
+                className={field}
+              />
+            )}
+            <div className="flex items-center gap-2">
+              <input type="time" required step={300} dir="ltr" value={startT} onChange={(e) => changeStart(e.target.value)} aria-label="שעת התחלה" disabled={scope === "all" && r.flexible} className={`${field} disabled:opacity-50`} />
+              <span className="text-ink-soft">עד</span>
+              <input type="time" required step={300} dir="ltr" value={endT} onChange={(e) => setEndT(e.target.value)} aria-label="שעת סיום" className={field} />
+            </div>
+          </div>
+        </div>
+        {scope === "all" && (
+          <p className="mt-3 text-xs text-ink-soft">
+            {r.flexible
+              ? "בשגרה גמישה משתנה המשך בכל הפעמים. השעה נקבעת כל פעם לפי הזמן הפנוי."
+              : "השעה והמשך ישתנו בכל הימים של השגרה. ימים, אימוג׳י ושאר ההגדרות בדף השגרות."}
+          </p>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-3 text-sm">
+            <span className="hl">{error}</span>
+          </p>
+        )}
+
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          {scope === "once" && (
+            <button type="button" onClick={() => run(() => setRoutineOccurrence(r.id, day, { skip: true }), "דילגת על הפעם הזו")} className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-bg hover:text-ink">
+              דילוג הפעם
+            </button>
+          )}
+          {scope === "once" && r.moved && (
+            <button type="button" onClick={() => run(() => setRoutineOccurrence(r.id, day, null), "חזר לזמן הרגיל")} className="rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-bg hover:text-ink">
+              החזרה לרגיל
+            </button>
+          )}
+          {scope === "all" && (
+            <a href="/routines" className="rounded-lg px-3 py-2 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
+              כל ההגדרות
+            </a>
+          )}
+          <button type="button" onClick={onClose} className="ms-auto rounded-lg px-3 py-2 text-sm text-ink-soft hover:text-ink">
+            ביטול
+          </button>
+          <button disabled={pending} className="rounded-lg bg-ink px-5 py-2 text-sm font-medium text-bg">
             שמירה
           </button>
         </div>

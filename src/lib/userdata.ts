@@ -91,7 +91,7 @@ export async function getPrefs(): Promise<StudyPrefs> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("study_prefs")
-    .select("availability, session_minutes, fill_routine, jewish")
+    .select("availability, session_minutes, fill_routine, jewish, weekly_goal_minutes")
     .maybeSingle();
   return data ? { ...defaultPrefs, ...(data as StudyPrefs) } : defaultPrefs;
 }
