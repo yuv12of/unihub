@@ -74,6 +74,7 @@ async function Semester() {
       minutes: s.minutes,
       sessionKey: key,
       status: status[key],
+      note: s.why ? `יותר זמן כאן: ${s.why}` : undefined,
     });
   }
   for (const ev of events) {

@@ -1104,11 +1104,22 @@ async function addStuck_(input: { topic: string; course_code?: string | null }) 
   const code = input.course_code && /^\d{5}$/.test(input.course_code) ? input.course_code : null;
   const { error } = await supabase.from("stuck_points").insert({ user_id: userId, topic, course_code: code });
   if (error) throw new Error(error.message);
+  await syncFocus(supabase, userId);
+  refresh();
+}
+
+/** Open "stuck" points per course, kept in study prefs so every plan (app, push, calendar feed) weighs them. */
+async function syncFocus(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string) {
+  const { data } = await supabase.from("stuck_points").select("course_code").match({ user_id: userId, resolved: false });
+  const focus: Record<string, number> = {};
+  for (const r of data ?? []) if (r.course_code) focus[r.course_code] = (focus[r.course_code] ?? 0) + 1;
+  await supabase.from("study_prefs").update({ focus }).eq("user_id", userId);
 }
 
 export async function resolveStuck(id: string, resolved = true) {
   const { supabase, userId } = await requireUser();
   await supabase.from("stuck_points").update({ resolved }).match({ id, user_id: userId });
+  await syncFocus(supabase, userId);
   refresh();
 }
 

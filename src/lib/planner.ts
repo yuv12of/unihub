@@ -25,6 +25,8 @@ export interface StudyPrefs {
   fill_routine: boolean;
   /** study hours a week to aim for: routine study fills each week up to it (null = one session a day) */
   weekly_goal_minutes?: number | null;
+  /** open "stuck" points per course: those courses get more routine study */
+  focus?: Record<string, number> | null;
   /** Hebcal settings (see lib/hebcal) */
   jewish?: import("@/lib/hebcal").JewishPrefs | null;
 }
@@ -62,6 +64,8 @@ export interface Session {
   title: string; // "הכנה לממ״ן 01 באינפי"
   /** stable id inside the course ("a01", "exam", "routine"): the key survives renaming a course */
   ref?: string;
+  /** why routine study went to this course ("ממ״ן 12 בעוד 5 ימים") */
+  why?: string;
 }
 
 export interface PlanWarning {
@@ -231,6 +235,36 @@ export function buildPlan({
     const slot = prefs.availability[String(weekday(d))];
     return !!slot && slot.minutes >= MIN_CHUNK && !examDays.has(d) && !off.has(d);
   };
+  /**
+   * How much a course needs routine study on a day: a deadline in the next two weeks and open
+   * "stuck" points raise its share (weight 1 = an even split).
+   */
+  const need = (code: string, d: string): { weight: number; why: string | null } => {
+    const c = courses.find((x) => x.code === code);
+    let weight = 1;
+    const why: string[] = [];
+    const next = c?.assignments
+      .filter((a) => a.due >= d && prepMinutes(a.type, a.weight) > 0)
+      .filter((a) => {
+        const st = progress[progressKey(code, a.n)]?.status;
+        return st !== "submitted" && st !== "skipped";
+      })
+      .sort((a, b) => a.due.localeCompare(b.due))[0];
+    if (next) {
+      const days = Math.round((Date.parse(next.due + "T00:00:00Z") - Date.parse(d + "T00:00:00Z")) / 86_400_000);
+      if (days <= 14) {
+        weight += (1.5 * (15 - days)) / 15;
+        why.push(`${typeLabel[next.type]} ${next.n} ${days === 0 ? "היום" : days === 1 ? "מחר" : `בעוד ${days} ימים`}`);
+      }
+    }
+    const stuck = Math.min(3, prefs.focus?.[code] ?? 0);
+    if (stuck) {
+      weight += 0.35 * stuck;
+      why.push(stuck === 1 ? "נקודה אחת שנתקעת בה" : `${stuck} נקודות שנתקעת בהן`);
+    }
+    return { weight, why: why.length ? why.join(" · ") : null };
+  };
+
   /** This day's share of what the week still needs. */
   const shareFor = (d: string) => {
     if (!goal) return 0;
@@ -304,15 +338,21 @@ export function buildPlan({
         // With a weekly goal: keep adding sessions (rotating courses) until today's share of the goal
         // is planned. Without one: a single session.
         const perCourse = new Map<string, number>();
+        const needs = new Map(courses.map((c) => [c.code, need(c.code, day)]));
         for (let k = 0; capacity >= MIN_CHUNK && k < 8; k++) {
           if (goal ? placedToday >= share : k > 0) break;
-          const code = [...routineLoad.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
+          // The course furthest behind its fair share gets the next session; the share grows with need.
+          const code = [...routineLoad.entries()].sort(
+            (a, b) => a[1] / needs.get(a[0])!.weight - b[1] / needs.get(b[0])!.weight,
+          )[0]?.[0];
           if (!code) break;
           const n = (perCourse.get(code) ?? 0) + 1;
           perCourse.set(code, n);
           const want = goal ? Math.max(MIN_CHUNK, Math.min(prefs.session_minutes, share - placedToday)) : prefs.session_minutes;
           const len = Math.min(want, capacity);
           const used = place(len, code, "routine", `לימוד שוטף ב${themeOf(courses, code).short}`, n === 1 ? "routine" : `routine${n}`);
+          const why = needs.get(code)!.why;
+          if (why) sessions[sessions.length - 1].why = why;
           // a skipped session still took its slot; count it so the rotation moves on
           routineLoad.set(code, (routineLoad.get(code) ?? 0) + (used || len));
         }

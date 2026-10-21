@@ -531,7 +531,7 @@ function SessionList({ sessions, status, courses, reading, assignmentPlans }: { 
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{x.title}</div>
             <div className="text-xs text-ink-soft">
-              {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : ""}עד {x.end}
+              {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : x.why ? `יותר זמן כאן: ${x.why}. ` : ""}עד {x.end}
             </div>
             {x.kind === "assignment" && x.ref && assignmentPlans[x.courseCode]?.[x.ref.replace(/^a/, "")] ? (
               <ReadChips links={assignmentPlans[x.courseCode][x.ref.replace(/^a/, "")].links} className="mt-1" />
