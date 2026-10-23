@@ -1,3 +1,4 @@
+import { range } from "@/lib/time";
 /**
  * Plain rules for university mail, so most mail never needs AI.
  *
@@ -217,7 +218,7 @@ export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: 
       if (near) {
         result.updates.push({
           kind: "tutorial_new",
-          title: `מפגש חלופי${name} ב־${he(replacement.iso)}, ${hhmm(near[1], near[2])}–${hhmm(near[3], near[4])}`,
+          title: `מפגש חלופי${name} ב־${he(replacement.iso)}, ${range(hhmm(near[1], near[2]), hhmm(near[3], near[4]))}`,
           detail: "נוסף ללוח השנה.",
           payload: {
             date: replacement.iso,

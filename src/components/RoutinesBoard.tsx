@@ -1,4 +1,5 @@
 "use client";
+import { duration } from "@/lib/time";
 
 import { useOptimistic, useState, useTransition } from "react";
 import { answerRoutine, deleteRoutine, saveRoutine, toggleRoutine, type RoutineInput } from "@/app/act";
@@ -299,8 +300,10 @@ function RoutineCard({
   );
 }
 
-const DURATIONS = [0, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
-const durLabel = (m: number) => (m === 0 ? "בלי זמן (רק לסמן)" : m < 60 ? `${m} דק׳` : m % 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} ש׳` : `${m / 60} ש׳`);
+const DURATIONS = [0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 480];
+/** The list always includes the routine's own length, so opening the editor never changes it. */
+const withValue = (list: number[], v: number) => (list.includes(v) ? list : [...list, v].sort((a, b) => a - b));
+const durLabel = (m: number) => (m === 0 ? "בלי זמן (רק לסמן)" : duration(m));
 
 function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInput>; people: Person[]; onClose: () => void }) {
   const [f, setF] = useState<RoutineInput>({
@@ -441,7 +444,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                     <label className="flex items-center gap-2">
                       משך
                       <select value={f.minutes} onChange={(e) => set("minutes", Number(e.target.value))} className={field}>
-                        {DURATIONS.map((m) => (
+                        {withValue(DURATIONS, f.minutes).map((m) => (
                           <option key={m} value={m}>
                             {durLabel(m)}
                           </option>
@@ -470,7 +473,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                   <label className="flex items-center gap-2">
                     משך
                     <select value={f.minutes} onChange={(e) => set("minutes", Number(e.target.value))} className={field}>
-                      {DURATIONS.map((m) => (
+                      {withValue(DURATIONS, f.minutes).map((m) => (
                         <option key={m} value={m}>
                           {durLabel(m)}
                         </option>

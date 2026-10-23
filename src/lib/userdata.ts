@@ -4,7 +4,7 @@ import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, courseFromRow, semester, todayInIsrael, type Course, type CourseRow } from "@/lib/semester";
 import { restFor } from "@/lib/hebcal";
-import { defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
+import { baseRef, defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { planFor } from "@/lib/planfor";
 import type { Routine, RoutineLog } from "@/lib/routines";
 import { coursesFor, getProgress, type ProgressMap } from "@/lib/progress";
@@ -407,7 +407,8 @@ export async function getSpentByAssignment(): Promise<Record<string, number>> {
   for (const r of await getSessionRows()) {
     if (r.status !== "done" || !r.minutes) continue;
     const [, kind, code, ref] = r.session_key.split("|");
-    if (kind === "assignment" && ref?.startsWith("a")) out[`${code}|${ref.slice(1)}`] = (out[`${code}|${ref.slice(1)}`] ?? 0) + r.minutes;
+    const n = ref ? baseRef(ref).slice(1) : "";
+    if (kind === "assignment" && ref?.startsWith("a")) out[`${code}|${n}`] = (out[`${code}|${n}`] ?? 0) + r.minutes;
   }
   return out;
 }

@@ -19,7 +19,7 @@ import { occurrencesFor } from "@/lib/planfor";
 import { TodayRoutines } from "@/components/TodayRoutines";
 import { InvitesList } from "@/components/InvitesList";
 import { UpdatesList } from "@/components/UpdatesList";
-import { minutesLabel, nextExams, sessionKey, type Session } from "@/lib/planner";
+import { baseRef, minutesLabel, nextExams, sessionKey, type Session } from "@/lib/planner";
 import { academicEvents, academicOn } from "@/lib/academic";
 import { SessionToggle } from "@/components/SessionToggle";
 import { ShareDay } from "@/components/ShareDay";
@@ -533,8 +533,8 @@ function SessionList({ sessions, status, courses, reading, assignmentPlans }: { 
             <div className="text-xs text-ink-soft">
               {x.kind === "assignment" ? "הכנה למטלה, " : x.kind === "exam" ? "חזרה לבחינה, " : x.why ? `יותר זמן כאן: ${x.why}. ` : ""}עד {x.end}
             </div>
-            {x.kind === "assignment" && x.ref && assignmentPlans[x.courseCode]?.[x.ref.replace(/^a/, "")] ? (
-              <ReadChips links={assignmentPlans[x.courseCode][x.ref.replace(/^a/, "")].links} className="mt-1" />
+            {x.kind === "assignment" && x.ref && assignmentPlans[x.courseCode]?.[baseRef(x.ref).replace(/^a/, "")] ? (
+              <ReadChips links={assignmentPlans[x.courseCode][baseRef(x.ref).replace(/^a/, "")].links} className="mt-1" />
             ) : x.courseCode && reading[x.courseCode] && (
               <Link href={reading[x.courseCode].href} className="mt-0.5 flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
                 <Icon name="book" className="size-3.5 shrink-0" />

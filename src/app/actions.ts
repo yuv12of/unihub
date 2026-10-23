@@ -72,8 +72,13 @@ export async function savePrefs(formData: FormData) {
   const availability: Record<string, { start: string; minutes: number }> = {};
   for (let d = 0; d < 7; d++) {
     const start = String(formData.get(`start-${d}`) ?? "18:00");
-    const minutes = formData.get(`on-${d}`) ? Number(formData.get(`minutes-${d}`) ?? 0) : 0;
-    if (!TIME.test(start) || !Number.isFinite(minutes) || minutes < 0 || minutes > 600) throw new Error("Bad availability");
+    // The form sends an end time ("עד"); older forms sent a length in minutes.
+    const end = String(formData.get(`end-${d}`) ?? "");
+    const [sh, sm] = start.split(":").map(Number);
+    const fromEnd = TIME.test(end) ? Number(end.slice(0, 2)) * 60 + Number(end.slice(3, 5)) - (sh * 60 + sm) : NaN;
+    const raw = Number.isFinite(fromEnd) ? fromEnd : Number(formData.get(`minutes-${d}`) ?? 0);
+    const minutes = formData.get(`on-${d}`) ? raw : 0;
+    if (!TIME.test(start) || !Number.isFinite(minutes) || minutes < 0 || minutes > 24 * 60) throw new Error("שעות הלימוד לא תקינות: שעת הסיום צריכה להיות אחרי שעת ההתחלה");
     // A window can't run past midnight (the planner would date those sessions wrongly).
     const [h, m] = start.split(":").map(Number);
     availability[String(d)] = { start, minutes: Math.min(minutes, 24 * 60 - 1 - (h * 60 + m)) };

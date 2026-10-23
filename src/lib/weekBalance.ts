@@ -1,3 +1,4 @@
+import { duration } from "@/lib/time";
 /**
  * The week at a glance: how much awake time is still free, and how study (done + planned) compares
  * with the weekly goal. Pure, so the calendar can recompute it the moment an event is moved.
@@ -92,10 +93,5 @@ export function weekBalance({
   return { free, freeByDay, done, planned, goal, gap, past: days[6] < today };
 }
 
-/** "7:30 ש׳", "45 דק׳" */
-export function hoursLabel(min: number): string {
-  const m = Math.max(0, Math.round(min));
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  return h ? `${h}${r ? `:${String(r).padStart(2, "0")}` : ""} ש׳` : `${r} דק׳`;
-}
+/** "שעה ו־30 דק׳", "45 דק׳" */
+export const hoursLabel = (m: number) => duration(m);

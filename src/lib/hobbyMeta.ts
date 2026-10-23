@@ -1,3 +1,4 @@
+import { duration } from "@/lib/time";
 import { addDays } from "@/lib/semester";
 
 /**
@@ -102,8 +103,4 @@ export function hobbyStats(h: Hobby, logs: HobbyLog[], today: string, n = 12): H
   };
 }
 
-export const minutesText = (m: number) => {
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  return h ? `${h}${r ? `:${String(r).padStart(2, "0")}` : ""} ש׳` : `${r} דק׳`;
-};
+export const minutesText = (m: number) => duration(m);

@@ -1,4 +1,5 @@
 "use client";
+import { range } from "@/lib/time";
 
 import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
@@ -39,7 +40,7 @@ export function TodayRoutines({ items, date }: { items: Occurrence[]; date: stri
               {o.done ? "✓" : ""}
             </button>
             <bdi dir="ltr" className="w-[5.5rem] shrink-0 text-end text-sm tabular-nums text-ink-soft">
-              {o.start ? `${o.start}–${o.end && o.end !== o.start ? o.end : ""}` : "בלי שעה"}
+              {o.start ? range(o.start, o.end) : "בלי שעה"}
             </bdi>
             <span className={`min-w-0 flex-1 truncate ${o.done ? "text-ink-soft line-through" : ""}`}>
               {o.emoji} {o.title}

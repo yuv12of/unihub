@@ -1,4 +1,5 @@
 "use client";
+import { durationShort } from "@/lib/time";
 
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { setWatched } from "@/app/act";
@@ -7,7 +8,7 @@ import type { Video } from "@/lib/videos";
 
 const thumb = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
-const len = (m: number | null) => (m == null ? "" : m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")} ש׳` : `${m} דק׳`);
+const len = (m: number | null) => (m == null ? "" : durationShort(m));
 
 /** A swipeable row of videos for one chapter. A tap plays it here; the tick marks it watched. */
 export function VideoStrip({ videos }: { videos: Video[] }) {

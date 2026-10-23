@@ -1,4 +1,5 @@
 "use client";
+import { duration } from "@/lib/time";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
@@ -1962,8 +1963,4 @@ function Chip({
   );
 }
 
-function hours(min: number) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h ? `${h}${m ? `:${String(m).padStart(2, "0")}` : ""} ש׳` : `${m} דק׳`;
-}
+const hours = (m: number) => duration(m);

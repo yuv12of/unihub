@@ -1,3 +1,4 @@
+import { duration } from "@/lib/time";
 /**
  * Study planner: turns deadlines, exam dates and weekly availability into dated study sessions.
  *
@@ -131,6 +132,9 @@ export interface Busy {
   end: string;
 }
 
+/** The task a session belongs to: "a01-2" → "a01". */
+export const baseRef = (ref: string) => ref.replace(/-\d+$/, "");
+
 /** Stable identity for a planned session, used to remember done / skipped. */
 export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title" | "ref">) {
   return `${s.date}|${s.kind}|${s.courseCode}|${s.ref ?? s.title}`;
@@ -167,7 +171,8 @@ export function buildPlan({
   for (const [key, min] of Object.entries(doneMinutes)) {
     const [date, ...rest] = key.split("|");
     if (date >= today || !min) continue;
-    const id = rest.join("|");
+    // "a01-2" (a second session that day) counts toward "a01"
+    const id = baseRef(rest.join("|"));
     credit.set(id, (credit.get(id) ?? 0) + min);
   }
   const creditFor = (kind: string, code: string, ref: string) => credit.get(`${kind}|${code}|${ref}`) ?? 0;
@@ -296,7 +301,10 @@ export function buildPlan({
     const place = (minutes: number, courseCode: string, kind: SessionKind, title: string, ref: string) => {
       const seg = segments.find(([a, z]) => z - a >= Math.min(minutes, MIN_CHUNK))!;
       const len = Math.min(minutes, seg[1] - seg[0]);
-      const s: Session = { date: day, start: toHHMM(seg[0]), end: toHHMM(seg[0] + len), minutes: len, courseCode, kind, title, ref };
+      // A second session of the same task on one day gets its own key ("a01-2"), so ticking one doesn't tick both.
+      let key = ref;
+      for (let n = 2; sessions.some((x) => x.date === day && x.kind === kind && x.courseCode === courseCode && x.ref === key); n++) key = `${ref}-${n}`;
+      const s: Session = { date: day, start: toHHMM(seg[0]), end: toHHMM(seg[0] + len), minutes: len, courseCode, kind, title, ref: key };
       seg[0] += len + BREAK_MINUTES;
       capacity = freeNow();
       sessions.push(s);
@@ -380,13 +388,7 @@ function maxIso(a: string, b: string) {
   return a > b ? a : b;
 }
 
-export function minutesLabel(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (!h) return `${m} דק׳`;
-  if (!m) return h === 1 ? "שעה" : h === 2 ? "שעתיים" : `${h} שעות`;
-  return `${h}:${String(m).padStart(2, "0")} ש׳`;
-}
+export const minutesLabel = (min: number) => duration(min);
 
 export function daysUntil(today: string, iso: string) {
   return daysBetween(today, iso);

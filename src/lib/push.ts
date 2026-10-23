@@ -35,9 +35,8 @@ async function sendAll(subs: Sub[], items: PushItem[], fresh: (key: string) => P
 export async function sendPush(token: string, subscriptions: Sub[], items: PushItem[]): Promise<number> {
   if (!items.length || !subscriptions.length) return 0;
   const sb = anonClient();
-  const [{ data: pub }, { data: priv }] = await Promise.all([sb.rpc("vapid_public"), sb.rpc("vapid_private", { p_token: token })]);
-  if (!pub || !priv) return 0;
-  webpush.setVapidDetails("https://unihub-beta.vercel.app", pub as string, priv as string);
+  // The signing key stays on the server (secret key); a user's token only proves who is asking.
+  if (!(await adminVapid())) return 0;
   return sendAll(
     subscriptions,
     items,

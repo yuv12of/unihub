@@ -1,4 +1,5 @@
 "use client";
+import { duration } from "@/lib/time";
 
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -37,7 +38,7 @@ export function ShareDay({ name, date, minutes, sessions, routines, streak }: { 
       x.fillText(`${name} סיים/ה את היום`, W - 90, 330, W - 180);
       const h = Math.floor(minutes / 60);
       const m = minutes % 60;
-      const time = minutes ? (h ? `${h}:${String(m).padStart(2, "0")} ש׳` : `${m} דק׳`) : "—";
+      const time = minutes ? duration(h * 60 + m) : "—";
       const rows: [string, string][] = [
         ["⏱", `${time} לימוד`],
         ["✅", `${sessions} מפגשי לימוד`],

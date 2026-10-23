@@ -1,3 +1,4 @@
+import { ltr } from "@/lib/time";
 import { connection } from "next/server";
 import { bearer, loadPrivate } from "@/lib/privateFeed";
 import { minutesLabel, nextExams } from "@/lib/planner";
@@ -127,7 +128,7 @@ export async function POST(req: Request) {
     parts.push(`<p style="margin-top:18px"><a href="${APP}" style="color:#2f5bd3">${feed.updates_pending} עדכונים מהדואר מחכים לאישור</a></p>`);
 
   const subject = `Unihub · סיכום שבועי · ${minutesLabel(doneMin || 0)} השבוע${deadlines.length ? ` · ${deadlines.length} הגשות בשבוע הבא` : ""}`;
-  const html = page(`<p style="color:${GREY};margin:0">${formatHebrewDate(weekStart, { day: "numeric", month: "numeric" })}–${formatHebrewDate(today, { day: "numeric", month: "numeric" })}</p>
+  const html = page(`<p style="color:${GREY};margin:0">${ltr(`${formatHebrewDate(weekStart, { day: "numeric", month: "numeric" })}–${formatHebrewDate(today, { day: "numeric", month: "numeric" })}`)}</p>
 <h1 style="font-size:24px;margin:4px 0 6px">סיכום שבועי</h1>
 ${parts.join("\n")}
 ${button(APP, "פתיחת Unihub")}`);

@@ -1,3 +1,4 @@
+import { range } from "@/lib/time";
 import Link from "next/link";
 import { SessionToggle } from "@/components/SessionToggle";
 import { ExamKit } from "@/components/ExamKit";
@@ -47,7 +48,7 @@ export function UpNext({
         {item ? (
           <>
             <p className="text-sm opacity-75">
-              {live ? `עכשיו${item.end ? `, עד ${item.end}` : ""}` : inMin < 60 ? `בעוד ${inMin} דק׳ (${item.start}${item.end ? `–${item.end}` : ""})` : `${item.start}${item.end ? `–${item.end}` : ""}`}
+              {live ? `עכשיו${item.end ? `, עד ${range(item.end)}` : ""}` : inMin < 60 ? `בעוד ${inMin} דק׳ (${range(item.start, item.end)})` : range(item.start, item.end)}
             </p>
             <h2 className="mt-1 flex items-center gap-2 text-xl font-semibold leading-snug">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: item.color }} aria-hidden />

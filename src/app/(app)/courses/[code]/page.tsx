@@ -1,3 +1,5 @@
+import { range } from "@/lib/time";
+import { duration } from "@/lib/time";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -31,11 +33,7 @@ export default function CoursePage({ params }: PageProps<"/courses/[code]">) {
   );
 }
 
-const hrs = (m: number) => {
-  const h = Math.floor(m / 60);
-  const r = Math.round(m % 60);
-  return h ? `${h}${r ? `:${String(r).padStart(2, "0")}` : ""} ש׳` : `${r} דק׳`;
-};
+const hrs = (m: number) => duration(m);
 const day = (d: string) => formatHebrewDate(d, { weekday: "short", day: "numeric", month: "numeric" });
 
 async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) {
@@ -94,7 +92,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
       </header>
 
       <dl className="panel mt-6 grid grid-cols-2 divide-rule overflow-hidden sm:grid-cols-4 sm:divide-x sm:divide-x-reverse [&>div]:border-rule [&>div]:p-4 max-sm:[&>div:nth-child(odd)]:border-e max-sm:[&>div:nth-child(-n+2)]:border-b">
-        <Fact label="המפגש הבא" value={nextMeetup ? day(nextMeetup.date) : "אין"} sub={nextMeetup ? `${nextMeetup.start_time}–${nextMeetup.end_time ?? ""}` : undefined} />
+        <Fact label="המפגש הבא" value={nextMeetup ? day(nextMeetup.date) : "אין"} sub={nextMeetup ? range(nextMeetup.start_time, nextMeetup.end_time) : undefined} />
         <Fact
           label="ההגשה הבאה"
           value={nextDue ? `${typeLabel[nextDue.type]} ${nextDue.n}` : "אין"}

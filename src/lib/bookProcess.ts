@@ -11,14 +11,19 @@ export async function bookCaller(req: Request): Promise<{ admin: SupabaseClient;
   const admin = adminClient();
   if (!admin || !supabaseEnabled) return null;
   const token = bearer(req);
+  let uid: string | undefined;
   if (token) {
     const { data } = await admin.from("ingest_tokens").select("user_id").eq("token", token).maybeSingle();
-    return data ? { admin, uid: data.user_id as string } : null;
+    uid = data?.user_id as string | undefined;
+  } else {
+    const sb = await createClient();
+    const { data } = await sb.auth.getClaims();
+    uid = data?.claims?.sub as string | undefined;
   }
-  const sb = await createClient();
-  const { data } = await sb.auth.getClaims();
-  const uid = data?.claims?.sub as string | undefined;
-  return uid ? { admin, uid } : null;
+  if (!uid) return null;
+  // Only approved accounts may store books (uploads go through the admin client).
+  const { data: p } = await admin.from("profiles").select("status").eq("id", uid).maybeSingle();
+  return p?.status === "approved" ? { admin, uid } : null;
 }
 
 export const safeName = (s: string) =>

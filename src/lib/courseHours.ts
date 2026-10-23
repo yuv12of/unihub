@@ -2,7 +2,7 @@
  * Study time for one course: this week's hours (done + planned) and, per open assignment, how much
  * prep is done, scheduled, and still missing. Pure, from the plan and the session log.
  */
-import { prepMinutes, sessionKey, type Plan } from "@/lib/planner";
+import { baseRef, prepMinutes, sessionKey, type Plan } from "@/lib/planner";
 import { progressKey, type ProgressMap } from "@/lib/progress";
 import { addDays, typeLabel, type Course } from "@/lib/semester";
 
@@ -62,9 +62,9 @@ export function courseHours({
     const need = prepMinutes(a.type, a.weight);
     if (!need) continue;
     const ref = `a${a.n}`;
-    const d = done.filter((r) => r.session_key.split("|")[1] === "assignment" && r.session_key.split("|")[3] === ref).reduce((n, r) => n + r.minutes!, 0);
+    const d = done.filter((r) => r.session_key.split("|")[1] === "assignment" && baseRef(r.session_key.split("|")[3] ?? "") === ref).reduce((n, r) => n + r.minutes!, 0);
     const scheduled = plan.sessions
-      .filter((s) => s.courseCode === code && s.kind === "assignment" && s.ref === ref && s.date >= today && !doneKeys.has(sessionKey(s)))
+      .filter((s) => s.courseCode === code && s.kind === "assignment" && !!s.ref && baseRef(s.ref) === ref && s.date >= today && !doneKeys.has(sessionKey(s)))
       .reduce((n, s) => n + s.minutes, 0);
     assignments.push({ n: a.n, label: `${typeLabel[a.type]} ${a.n}`, due: a.due, need, done: d, scheduled, missing: Math.max(0, need - d - scheduled) });
   }

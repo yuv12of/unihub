@@ -1,3 +1,4 @@
+import { duration } from "@/lib/time";
 /**
  * Life routines: sleep, meals, sport, habits, chores, hobbies, time with people.
  *
@@ -229,31 +230,51 @@ export function expandRoutines({
     ...taken.filter((b) => b.date === d).map((b) => [toMin(b.start), toMin(b.end)] as [number, number]),
     ...occ.filter((o) => o.date === d && o.start).map((o) => [toMin(o.start!), toMin(o.start!) + o.minutes] as [number, number]),
   ];
-  for (const r of active.filter((x) => x.mode === "flexible")) {
+  // Longest first: a 3-hour evening needs the big free blocks before 15-minute habits take bits of them.
+  const flexible = active.filter((x) => x.mode === "flexible").sort((a, b) => b.minutes - a.minutes);
+  for (const r of flexible) {
     const goal = r.per_week ?? 1;
+    const w = WINDOWS[r.time_window];
+    const inWindow = (d: string, len: number) => findSlot(takenOn(d), Math.max(toMin(w.from), wake + 30), Math.min(toMin(w.to), bed - 15), len);
+    const anywhere = (d: string, len: number) => findSlot(takenOn(d), wake + 30, bed - 15, len);
+    const slotOn = (d: string, len: number) => inWindow(d, len) ?? anywhere(d, len);
     for (let ws = weekStart(from); ws <= to; ws = addDays(ws, 7)) {
       const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
       const ov = r.overrides ?? {};
       const pinned = days.filter((d) => ov[d] && !ov[d].skip && startedBy(r, d));
       const doneDays = days.filter((d) => doneSet.has(`${r.id}|${d}`) && !pinned.includes(d));
-      const open = days.filter(
-        (d) => d >= today && startedBy(r, d) && !doneSet.has(`${r.id}|${d}`) && !off.has(d) && !ov[d],
-      );
       // A rough day lowers the week's goal instead of breaking it.
       const weekGoal = Math.max(0, goal - days.filter((d) => off.has(d)).length);
-      const chosen = spread(open, Math.max(0, weekGoal - doneDays.length - pinned.length));
-      for (const d of [...pinned, ...doneDays, ...chosen].sort()) {
-        if (d < from || d > to) continue;
-        const pin = pinned.includes(d) ? ov[d] : null;
+      const need = Math.max(0, weekGoal - doneDays.length - pinned.length);
+      // The week's days are chosen from the whole week, so they stay put as days pass. Only a chosen
+      // day that went by without being done is moved to a later free day.
+      const usable = (d: string) => startedBy(r, d) && !off.has(d) && !ov[d] && !doneSet.has(`${r.id}|${d}`);
+      const ideal = spread(days.filter(usable), Math.max(0, weekGoal - pinned.length));
+      const keep = ideal.filter((d) => d >= today).slice(0, need);
+      const spare = days.filter((d) => d >= today && usable(d) && !keep.includes(d));
+      const chosen = [...keep, ...spread(spare, Math.max(0, need - keep.length))];
+      for (const d0 of [...pinned, ...doneDays, ...chosen].sort()) {
+        const pin = pinned.includes(d0) ? ov[d0] : null;
         const len = pin?.minutes ?? r.minutes;
+        let d = d0;
         let start: number | null = pin?.start ? toMin(pin.start) : null;
-        if (start == null && len > 0) {
-          const w = WINDOWS[r.time_window];
-          const lo = Math.max(toMin(w.from), wake + 30);
-          const hi = Math.min(toMin(w.to), bed - 15);
-          // its own window first, then anywhere in the waking day, so it always gets a time
-          start = findSlot(takenOn(d), lo, hi, len) ?? findSlot(takenOn(d), wake + 30, bed - 15, len);
-        }
+        if (start == null && len > 0 && !pin && !doneDays.includes(d0)) {
+          // Its own time of day first (evening stays evening), on that day or the nearest other free day this week (later first);
+          // only then any free time on the chosen day.
+          start = inWindow(d0, len);
+          if (start == null)
+            for (const alt of [...spare.filter((x) => x > d0), ...spare.filter((x) => x < d0).reverse()].filter((x) => !chosen.includes(x))) {
+              const s2 = inWindow(alt, len);
+              if (s2 != null) {
+                d = alt;
+                start = s2;
+                chosen.push(alt);
+                break;
+              }
+            }
+          if (start == null) start = anywhere(d0, len);
+        } else if (start == null && len > 0) start = slotOn(d0, len);
+        if (d < from || d > to) continue;
         occ.push(make(r, d, start, true, d, len, !!pin));
       }
     }
@@ -303,7 +324,7 @@ export const timesAWeek = (n: number) =>
 
 /** "א׳ ג׳ ה׳ · 07:00 · שעה" style description. */
 export function describe(r: Routine): string {
-  const len = r.minutes ? (r.minutes % 60 === 0 ? `${r.minutes / 60} ש׳` : `${r.minutes} דק׳`) : "בלי זמן קבוע";
+  const len = r.minutes ? duration(r.minutes) : "בלי זמן קבוע";
   if (r.category === "sleep" && r.start_time && r.minutes)
     return `\u2066${r.start_time}–${toHHMM(toMin(r.start_time) + r.minutes)}\u2069`;
   if (r.mode === "flexible")

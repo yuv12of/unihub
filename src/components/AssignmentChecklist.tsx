@@ -1,4 +1,5 @@
 "use client";
+import { duration } from "@/lib/time";
 
 import { ReadChips } from "@/components/ReadChips";
 import { MathText } from "@/components/MathText";
@@ -123,7 +124,7 @@ export function AssignmentChecklist({
           )}
           {it.review && (it.review.minutes_spent || it.review.difficulty) ? (
             <p className="ms-8 text-xs text-ink-soft">
-              {it.review.minutes_spent ? `⏱ ${Math.round(it.review.minutes_spent / 6) / 10} ש׳` : ""}
+              {it.review.minutes_spent ? `${duration(it.review.minutes_spent)} בפועל` : ""}
               {it.review.difficulty ? ` · קושי ${it.review.difficulty}/5` : ""}
               {it.review.hard ? ` · ${it.review.hard}` : ""}
             </p>

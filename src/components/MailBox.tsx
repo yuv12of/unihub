@@ -29,9 +29,13 @@ function clean(body: string | null) {
     .trim();
 }
 
+/** Categories that stay out of the "important" view unless the mail has something to do. */
+const LOW = new Set(["שיווק", "מלגות", "אירועים"]);
+
 export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; editable: boolean; initialOpen?: string }) {
   const [openId, setOpenId] = useState<string | null>(initialOpen && mails.some((m) => m.id === initialOpen) ? initialOpen : null);
-  const [filter, setFilter] = useState<string>("all");
+  // Starts on "important": no marketing, scholarships or events unless they ask for something.
+  const [filter, setFilter] = useState<string>("important");
   const [query, setQuery] = useState("");
   const [readLocal, setReadLocal] = useState<Set<string>>(new Set());
   const [, start] = useTransition();
@@ -44,7 +48,13 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = mails.filter(
     (m) =>
-      (filter === "all" ? true : filter === "unread" ? !isRead(m) : m.category === filter) &&
+      (filter === "all"
+        ? true
+        : filter === "important"
+          ? !LOW.has(m.category ?? "") || (m.action_items ?? []).some((a) => a.text)
+          : filter === "unread"
+            ? !isRead(m)
+            : m.category === filter) &&
       words.every((w) =>
         `${m.subject ?? ""} ${m.summary ?? ""} ${m.body_text ?? ""} ${m.attachments.map((a) => a.filename).join(" ")}`.toLowerCase().includes(w),
       ),
@@ -71,7 +81,7 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
           className="mb-3 w-full rounded-lg border border-rule bg-surface px-3 py-2 text-[15px] outline-none focus:border-ink"
         />
         <div className="mb-3 flex flex-wrap gap-2" role="tablist" aria-label="סינון">
-          {[["all", "הכל"], ["unread", "לא נקראו"], ...categories.map((c) => [c, c])].map(([k, label]) => (
+          {[["important", "חשוב"], ["unread", "לא נקראו"], ["all", "הכל"], ...categories.map((c) => [c, c])].map(([k, label]) => (
             <button
               key={k}
               type="button"
@@ -86,7 +96,7 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
             </button>
           ))}
         </div>
-        <ul className="panel max-h-[70vh] divide-y divide-rule overflow-y-auto">
+        <ul className="panel divide-y divide-rule lg:max-h-[70vh] lg:overflow-y-auto">
           {shown.length === 0 && <li className="px-4 py-6 text-ink-soft">אין הודעות כאן.</li>}
           {shown.map((m) => (
             <li key={m.id}>

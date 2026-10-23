@@ -14,7 +14,12 @@ import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester, themeOf } from "@/lib/semester";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
-const DURATIONS = [30, 60, 90, 120, 150, 180, 240, 300, 360];
+/** "08:45" + 405 min → "15:30" (a window never runs past midnight). */
+const endOf = (start: string, minutes: number) => {
+  const [h, m] = start.split(":").map(Number);
+  const e = Math.min(h * 60 + m + minutes, 24 * 60 - 1);
+  return `${String(Math.floor(e / 60)).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`;
+};
 const SESSION = [45, 60, 90, 120];
 
 export default function SettingsPage() {
@@ -88,14 +93,8 @@ async function Settings() {
                               <input type="time" name={`start-${d}`} defaultValue={slot.start} className={field} dir="ltr" />
                             </label>
                             <label className="flex items-center gap-2 text-sm text-ink-soft">
-                              למשך
-                              <select name={`minutes-${d}`} defaultValue={slot.minutes > 0 ? slot.minutes : 120} className={field}>
-                                {DURATIONS.map((m) => (
-                                  <option key={m} value={m}>
-                                    {m < 60 ? `${m} דק׳` : `${m / 60} ש׳`}
-                                  </option>
-                                ))}
-                              </select>
+                              עד
+                              <input type="time" name={`end-${d}`} defaultValue={endOf(slot.start, slot.minutes > 0 ? slot.minutes : 120)} className={field} dir="ltr" />
                             </label>
                           </div>
                         );

@@ -28,7 +28,11 @@ export async function POST(req: Request) {
   let others = 0;
   let google = 0;
   let pdfs = 0;
-  if (admin) {
+  // Everyone else's reminders run at most once every 8 minutes, however many scripts call this.
+  const turn = admin
+    ? (await admin.rpc("claim_tick")).data === true
+    : false;
+  if (admin && turn) {
     const { data: subs } = await admin.from("push_subscriptions").select("user_id, endpoint, p256dh, auth");
     const byUser = new Map<string, { endpoint: string; p256dh: string; auth: string }[]>();
     for (const s of subs ?? []) byUser.set(s.user_id, [...(byUser.get(s.user_id) ?? []), s]);
