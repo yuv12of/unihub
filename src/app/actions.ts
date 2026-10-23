@@ -743,6 +743,14 @@ export async function deleteRoutine(id: string) {
 }
 
 /** Ticks (or unticks) a routine for a day. */
+/** Mark a recommended video as watched (or not). */
+export async function setWatched(videoId: string, on: boolean) {
+  const { supabase, userId } = await requireUser();
+  if (!/^[\w-]{11}$/.test(videoId)) return;
+  if (on) await supabase.from("video_watched").upsert({ user_id: userId, video_id: videoId });
+  else await supabase.from("video_watched").delete().match({ user_id: userId, video_id: videoId });
+}
+
 async function toggleRoutine_(id: string, date: string, done: boolean) {
   notifyNow();
   const { supabase, userId } = await requireUser();
@@ -752,6 +760,17 @@ async function toggleRoutine_(id: string, date: string, done: boolean) {
     if (error) throw new Error(error.message);
   } else {
     await supabase.from("routine_logs").delete().match({ routine_id: id, user_id: userId, date });
+  }
+  // A hobby's routine: ticking it logs that practice time (once a day); unticking removes it again.
+  const { data: hobby } = await supabase.from("hobbies").select("id").match({ routine_id: id, user_id: userId }).maybeSingle();
+  if (hobby) {
+    if (done) {
+      const { data: had } = await supabase.from("hobby_logs").select("id").match({ hobby_id: hobby.id, date }).limit(1);
+      if (!had?.length) {
+        const { data: r } = await supabase.from("routines").select("minutes").eq("id", id).single();
+        await supabase.from("hobby_logs").insert({ user_id: userId, hobby_id: hobby.id, date, minutes: Math.max(5, r?.minutes ?? 30), routine_date: date });
+      }
+    } else await supabase.from("hobby_logs").delete().match({ hobby_id: hobby.id, user_id: userId, routine_date: date });
   }
   refresh();
 }

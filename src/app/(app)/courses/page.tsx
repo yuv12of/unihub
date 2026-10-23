@@ -103,7 +103,11 @@ async function Courses() {
               style={{ borderTop: `4px solid ${theme.color}` }}
             >
               <div className="px-5 pt-5">
-                <h2 className="text-xl font-semibold leading-snug">{c.name}</h2>
+                <h2 className="text-xl font-semibold leading-snug">
+                  <Link href={`/courses/${c.code}`} className="hover:underline">
+                    {c.name}
+                  </Link>
+                </h2>
                 <p className="mt-0.5 text-sm text-ink-soft">
                   {c.code}, מרכז ההוראה {c.coordinator}
                 </p>
@@ -207,6 +211,9 @@ async function Courses() {
                   </details>
                 )}
                 <div className="flex flex-wrap gap-4">
+                  <Link className={`${linkClass} font-medium text-ink`} href={`/courses/${c.code}`}>
+                    עמוד הקורס
+                  </Link>
                   <Link className={linkClass} href={`/books?course=${c.code}`}>
                     ספרי הקורס
                   </Link>

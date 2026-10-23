@@ -6,6 +6,7 @@
 import * as A from "@/app/actions";
 import type { Failed } from "@/app/actions";
 import * as B from "@/app/bookActions";
+import * as H from "@/app/hobbyActions";
 
 function w<P extends unknown[], R>(f: (...a: P) => Promise<R>) {
   return async (...a: P): Promise<Exclude<R, Failed>> => {
@@ -50,6 +51,7 @@ export const logStudy = w(A.logStudy);
 export const saveReview = w(A.saveReview);
 export const addStuck = w(A.addStuck);
 export const resolveStuck = A.resolveStuck;
+export const setWatched = A.setWatched;
 
 export {
   saveProgress,
@@ -81,3 +83,12 @@ export const markChapterDone = w(B.markChapterDone);
 export const setQuestionStatus = w(B.setQuestionStatus);
 export const searchMyBooks = w(B.searchMyBooks);
 export const deleteBook = w(B.deleteBook);
+
+export const createHobby = w(H.createHobby);
+export const updateHobby = w(H.updateHobby);
+export const deleteHobby = w(H.deleteHobby);
+export const logHobby = w(H.logHobby);
+export const deleteHobbyLog = w(H.deleteHobbyLog);
+export const addHobbyItem = w(H.addHobbyItem);
+export const updateHobbyItem = w(H.updateHobbyItem);
+export const deleteHobbyItem = w(H.deleteHobbyItem);
