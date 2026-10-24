@@ -8,7 +8,11 @@ import { CITIES, jewishPrefs } from "@/lib/hebcal";
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getMyProfile, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { LookPicker, WeeklyGoal } from "@/components/ProfileParts";
+import { SpotifyCard } from "@/components/SpotifyCard";
+import { CourseChip } from "@/components/CourseChip";
+import { Chevron } from "@/components/Icon";
 import { OpalSync } from "@/components/OpalSync";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester, themeOf } from "@/lib/semester";
@@ -26,7 +30,7 @@ export default function SettingsPage() {
   return (
     <>
       <h1 className="font-display text-4xl">הגדרות</h1>
-      <p className="mt-2 text-ink-soft">מתי יש לך זמן ללמוד, מתי הבחינות, ואיך התוכנית מגיעה ליומן.</p>
+      <p className="mt-2 text-ink-soft">זמני לימוד, בחינות, יומנים, התראות, מראה ומוזיקה.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Settings />
       </Suspense>
@@ -34,12 +38,13 @@ export default function SettingsPage() {
   );
 }
 
-const field = "rounded-lg border border-rule bg-surface px-3 py-2";
+const field = "rounded-lg border border-rule-strong bg-surface px-3 py-2";
 
 async function Settings() {
   await connection();
-  if (!supabaseEnabled) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
-  const [prefs, exams, token, ingest, opal, courses, google] = await Promise.all([
+  // Local design previews (UNIHUB_DEMO, no database) show the forms with their defaults.
+  if (!supabaseEnabled && !process.env.UNIHUB_DEMO) return <p className="mt-8">ההגדרות זמינות אחרי התחברות.</p>;
+  const [prefs, exams, token, ingest, opal, courses, google, me] = await Promise.all([
     getPrefs(),
     getExams(),
     getFeedToken(),
@@ -47,7 +52,18 @@ async function Settings() {
     getOpalFeed(),
     getCourses(),
     getGoogleFeed(),
+    getMyProfile(),
   ]);
+  const name = me?.name ?? me?.email.split("@")[0] ?? "";
+  const profileInput = {
+    name,
+    bio: me?.bio ?? "",
+    program: me?.program ?? "",
+    study_year: me?.study_year ?? "",
+    avatar_emoji: me?.avatar_emoji ?? "",
+    avatar_color: me?.avatar_color ?? "",
+    weekly_goal_minutes: me?.weekly_goal_minutes ?? null,
+  };
   const jp = jewishPrefs(prefs.jewish);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
@@ -63,11 +79,12 @@ async function Settings() {
           google: "calendars",
           jewish: "calendars",
           mail: "connect",
+          spotify: "music",
         }}
         tabs={[
           {
             key: "study",
-            label: "זמני לימוד ובחינות",
+            label: "זמני לימוד",
             panel: (
               <div className="grid items-start gap-6 xl:grid-cols-2">
                 <section className="panel p-5 sm:p-6" aria-labelledby="avail-title">
@@ -75,6 +92,10 @@ async function Settings() {
                     זמני לימוד
                   </h2>
                   <p className="mt-1 text-sm text-ink-soft">התוכנית משבצת מפגשי לימוד רק בזמנים האלה.</p>
+                  <div className="mt-4">
+                    <WeeklyGoal initial={profileInput} />
+                    <p className="mt-1 text-xs text-ink-soft">התוכנית ממלאת זמן פנוי עד היעד, ולוח השנה מראה כמה חסר.</p>
+                  </div>
                   <form action={savePrefs} className="mt-5 space-y-5">
                     <div className="divide-y divide-rule border-y border-rule">
                       {DAYS.map((name, d) => {
@@ -84,8 +105,8 @@ async function Settings() {
                         };
                         return (
                           <div key={d} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
-                            <label className="flex w-24 items-center gap-2 font-medium">
-                              <input type="checkbox" name={`on-${d}`} defaultChecked={slot.minutes > 0} className="size-4" />
+                            <label className="flex min-h-11 w-24 items-center gap-2 font-medium">
+                              <input type="checkbox" name={`on-${d}`} defaultChecked={slot.minutes > 0} className="size-5" />
                               {name}
                             </label>
                             <label className="flex items-center gap-2 text-sm text-ink-soft">
@@ -131,14 +152,8 @@ async function Settings() {
                   <form action={saveExams} className="mt-5 space-y-5">
                     {courses.map((c) => (
                       <fieldset key={c.code}>
-                        <legend className="flex items-center gap-2 font-medium">
-                          <span
-                            className="size-2.5 rounded-full"
-                            style={{
-                              background: themeOf(courses, c.code).color,
-                            }}
-                          />
-                          {c.name}
+                        <legend className="font-medium">
+                          <CourseChip short={c.name} color={themeOf(courses, c.code).color} />
                         </legend>
                         <div className="mt-2 grid gap-3 sm:grid-cols-2">
                           {["א", "ב"].map((moed) => {
@@ -331,8 +346,11 @@ async function Settings() {
                         <b dir="ltr">setup</b>, ואחר כך פעם אחת <b dir="ltr">backfillAttachmentText</b> (קורא את מסמכי ה־PDF של ארבעת החודשים
                         האחרונים; אם נעצר באמצע, מריצים שוב). שום דבר לא ייכפל.
                       </p>
-                      <details>
-                        <summary className="cursor-pointer text-sm font-medium">הקוד להדבקה</summary>
+                      <details className="group">
+                        <summary className="summary-clean flex min-h-10 items-center gap-2 text-sm font-medium">
+                          הקוד להדבקה
+                          <Chevron />
+                        </summary>
                         <div className="mt-2">
                           <CopyField value={mailScript(origin, ingest)} multiline />
                         </div>
@@ -350,6 +368,34 @@ async function Settings() {
                   )}
                 </section>
               </div>
+            ),
+          },
+          {
+            key: "look",
+            label: "מראה",
+            panel: (
+              <section className="panel max-w-4xl p-5 sm:p-6" aria-labelledby="look-title">
+                <h2 id="look-title" className="section-title">
+                  מראה
+                </h2>
+                <p className="mt-1 mb-5 text-sm text-ink-soft">צבעים, סגנון, בהיר או כהה, גודל טקסט, מה מופיע ב״היום״ ואילו לשוניות בסרגל בטלפון. נשמר בחשבון, אז עובר בין המכשירים.</p>
+                <LookPicker initial={me?.prefs ?? {}} />
+              </section>
+            ),
+          },
+          {
+            key: "music",
+            label: "מוזיקה",
+            panel: (
+              <section id="spotify" className="panel max-w-4xl scroll-mt-24 p-5 sm:p-6" aria-labelledby="music-title">
+                <h2 id="music-title" className="section-title">
+                  מוזיקה לריכוז
+                </h2>
+                <div className="mt-4">
+                  <LookPicker initial={me?.prefs ?? {}} part="music" />
+                </div>
+                <SpotifyCard />
+              </section>
             ),
           },
         ]}

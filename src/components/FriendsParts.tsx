@@ -161,7 +161,7 @@ export function ShareSettingsForm({ initial }: { initial: ShareSettings }) {
               type="button"
               aria-pressed={s.schedule === v}
               onClick={() => update({ ...s, schedule: v })}
-              className={`rounded-full border px-3 py-1 ${s.schedule === v ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft"}`}
+              className={`rounded-full border px-3 py-1 ${s.schedule === v ? "border-accent bg-accent text-on-accent" : "border-rule text-ink-soft"}`}
             >
               {label}
             </button>

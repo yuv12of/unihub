@@ -10,25 +10,28 @@ export interface Badges {
   admin?: number | null;
 }
 
-type Item = { href: string; label: string; icon: () => React.ReactElement; badge?: keyof Badges; adminOnly?: boolean };
+type Group = "study" | "life" | "social" | "account";
+type Item = { href: string; label: string; icon: () => React.ReactElement; group: Group; badge?: keyof Badges; adminOnly?: boolean };
+
+const GROUPS: Record<Group, string> = { study: "לימודים", life: "חיים", social: "חברים", account: "חשבון" };
 
 const items: Item[] = [
-  { href: "/", label: "היום", icon: IconToday },
-  { href: "/semester", label: "לוח שנה", icon: IconSemester },
-  { href: "/routines", label: "שגרה", icon: IconRoutine },
-  { href: "/friends", label: "חברים", icon: IconFriends, badge: "friends" },
-  { href: "/courses", label: "קורסים", icon: IconCourses },
-  { href: "/books", label: "ספרים", icon: IconBooks },
-  { href: "/study", label: "תרגול", icon: IconStudy },
-  { href: "/hobbies", label: "תחביבים", icon: IconHobbies },
-  { href: "/mail", label: "דואר", icon: IconMail },
-  { href: "/profile", label: "פרופיל", icon: IconProfile },
-  { href: "/settings", label: "הגדרות", icon: IconSettings },
-  { href: "/admin", label: "חשבונות", icon: IconAdmin, badge: "admin", adminOnly: true },
+  { href: "/", label: "היום", icon: IconToday, group: "study" },
+  { href: "/semester", label: "לוח שנה", icon: IconSemester, group: "study" },
+  { href: "/courses", label: "קורסים", icon: IconCourses, group: "study" },
+  { href: "/books", label: "ספרים", icon: IconBooks, group: "study" },
+  { href: "/study", label: "תרגול", icon: IconStudy, group: "study" },
+  { href: "/routines", label: "שגרה", icon: IconRoutine, group: "life" },
+  { href: "/hobbies", label: "תחביבים", icon: IconHobbies, group: "life" },
+  { href: "/friends", label: "חברים", icon: IconFriends, badge: "friends", group: "social" },
+  { href: "/mail", label: "דואר", icon: IconMail, group: "account" },
+  { href: "/profile", label: "פרופיל", icon: IconProfile, group: "account" },
+  { href: "/settings", label: "הגדרות", icon: IconSettings, group: "account" },
+  { href: "/admin", label: "חשבונות", icon: IconAdmin, badge: "admin", adminOnly: true, group: "account" },
 ];
 const PHONE_MAIN = 4; // the rest live under "more"
-/** Default phone tabs; each user can pick their own four (Profile → personalisation). */
-export const DEFAULT_TABS = ["/", "/semester", "/courses", "/routines"];
+/** Default phone tabs; each user can pick their own four (Settings → look). */
+export const DEFAULT_TABS = ["/", "/semester", "/courses", "/study"];
 /** Pages that can sit in the phone tab bar, for the picker. */
 export const TAB_CHOICES = items.filter((i) => !i.adminOnly).map((i) => ({ href: i.href, label: i.label }));
 
@@ -42,34 +45,58 @@ const visible = (badges: Badges) => items.filter((i) => !i.adminOnly || badges.a
 function Dot({ n }: { n?: number | null }) {
   if (!n) return null;
   return (
-    <span className="grid min-w-5 place-items-center rounded-full bg-highlight px-1.5 text-[11px] font-semibold leading-5 text-ink" aria-label={`${n} חדשים`}>
+    <span className="grid min-w-5 place-items-center rounded-full bg-highlight px-1.5 text-[11px] font-semibold leading-5 text-highlight-ink ring-1 ring-ink/40" aria-label={`${n} חדשים`}>
       {n}
     </span>
   );
 }
 
-/** Vertical navigation in the PC sidebar. */
+/**
+ * Vertical navigation: a full sidebar on computers (grouped: study / life / social / account),
+ * an icon rail with tooltips on iPad portrait (768–1023px).
+ */
 export function SideNav({ badges = {} }: { badges?: Badges }) {
   const isActive = useActive();
+  const list = visible(badges);
+  const groups = (Object.keys(GROUPS) as Group[]).filter((g) => list.some((i) => i.group === g));
   return (
-    <nav aria-label="ניווט ראשי" className="mt-8 flex flex-col gap-1">
-      {visible(badges).map(({ href, label, icon: Icon, badge }) => {
-        const active = isActive(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors ${
-              active ? "bg-ink text-bg font-medium" : "text-ink-soft hover:bg-rule/60 hover:text-ink"
-            }`}
-          >
-            <Icon />
-            <span className="flex-1">{label}</span>
-            {badge && <Dot n={badges[badge]} />}
-          </Link>
-        );
-      })}
+    <nav aria-label="ניווט ראשי" className="mt-6 flex flex-col gap-3 lg:mt-7 lg:gap-4">
+      {groups.map((g, gi) => (
+        <div key={g} className={gi ? "border-t border-rule pt-3 lg:border-0 lg:pt-0" : ""}>
+          <p className="mb-1 hidden px-3 text-[11px] font-medium text-ink-soft lg:block">{GROUPS[g]}</p>
+          <ul className="flex flex-col gap-0.5">
+            {list
+              .filter((i) => i.group === g)
+              .map(({ href, label, icon: Icon, badge }) => {
+                const active = isActive(href);
+                const n = badge ? badges[badge] : null;
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      aria-current={active ? "page" : undefined}
+                      title={label}
+                      className={`relative flex items-center justify-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors lg:justify-start lg:py-2 ${
+                        active ? "accent-surface font-medium" : "text-ink-soft hover:bg-rule/60 hover:text-ink"
+                      }`}
+                    >
+                      <Icon />
+                      <span className="sr-only lg:not-sr-only lg:flex-1">{label}</span>
+                      {n ? (
+                        <>
+                          <span className="hidden lg:inline">
+                            <Dot n={n} />
+                          </span>
+                          <span className="absolute end-2 top-1.5 size-2.5 rounded-full bg-highlight ring-2 ring-ink/50 lg:hidden" aria-hidden />
+                        </>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -91,11 +118,11 @@ export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[]
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-30 bg-black/25 lg:hidden" onClick={() => setOpen(false)} aria-hidden />
+        <div className="fixed inset-0 z-30 bg-black/25 md:hidden" onClick={() => setOpen(false)} aria-hidden />
       )}
       <nav
         aria-label="ניווט ראשי"
-        className="relative z-40 shrink-0 border-t border-rule bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:hidden"
+        className="app-tabbar relative z-40 shrink-0 border-t border-rule bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] md:hidden"
       >
         {open && (
           <ul className="absolute inset-x-0 bottom-full grid grid-cols-3 gap-2 border-t border-rule bg-surface px-4 py-4 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
@@ -104,7 +131,7 @@ export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[]
                 <Link
                   href={href}
                   aria-current={isActive(href) ? "page" : undefined}
-                  className={`flex flex-col items-center gap-1 rounded-xl py-3 text-sm ${isActive(href) ? "bg-ink text-bg" : "bg-bg text-ink"}`}
+                  className={`flex flex-col items-center gap-1 rounded-xl py-3 text-sm ${isActive(href) ? "accent-surface" : "bg-bg text-ink"}`}
                 >
                   <Icon />
                   <span className="flex items-center gap-1">
@@ -115,7 +142,7 @@ export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[]
               </li>
             ))}
             <li className="col-span-3 text-center">
-              <Link href="/profile#look" className="text-xs text-ink-soft underline underline-offset-4 decoration-rule">
+              <Link href="/settings#look" className="btn-ghost text-xs">
                 בחירת הלשוניות בסרגל
               </Link>
             </li>
@@ -130,7 +157,7 @@ export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[]
                   <Icon />
                   {label}
                   {badge && badges[badge] ? (
-                    <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-surface" aria-label="חדש" />
+                    <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-ink/50" aria-label="חדש" />
                   ) : null}
                 </Link>
               </li>
@@ -145,7 +172,7 @@ export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[]
             >
               <IconMore />
               עוד
-              {moreBadge > 0 && <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-surface" />}
+              {moreBadge > 0 && <span className="absolute end-[calc(50%-1.1rem)] top-2 size-2.5 rounded-full bg-highlight ring-2 ring-ink/50" aria-label="חדש" />}
             </button>
           </li>
         </ul>

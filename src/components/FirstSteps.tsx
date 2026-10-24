@@ -20,7 +20,7 @@ export function FirstSteps({ steps }: { steps: { label: string; href: string; do
     <section className="panel p-5" aria-label="צעדים ראשונים">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="section-title">ברוכים הבאים ל־Unihub 👋</h2>
+          <h2 className="section-title">ברוכים הבאים ל־Unihub</h2>
           <p className="text-sm text-ink-soft">
             עוד {left} {left === 1 ? "צעד" : "צעדים"}, והתוכנית בונה את עצמה.
           </p>

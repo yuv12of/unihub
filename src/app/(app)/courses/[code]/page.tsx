@@ -13,7 +13,9 @@ import { StuckList } from "@/components/StuckList";
 import { QuestionsForTutor } from "@/components/QuestionsForTutor";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { GradeCalculator } from "@/components/GradeCalculator";
-import { StandingText, WeightBar } from "@/components/CourseParts";
+import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
+import { CourseLook } from "@/components/CourseManager";
+import { PALETTE } from "@/lib/semester";
 import { getBooks, readingByCourse } from "@/lib/books";
 import { getReadings, weekFor, type ReadingItem } from "@/lib/readings";
 import { getForumPosts } from "@/lib/forum";
@@ -116,7 +118,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               key: "overview",
               label: "סקירה",
               panel: (
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="space-y-6">
                     <section className="panel p-5">
                       <h2 className="section-title">{thisWeek ? `לקריאה השבוע · ${thisWeek.label}` : "לקריאה השבוע"}</h2>
@@ -202,7 +204,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               key: "assignments",
               label: "מטלות",
               panel: (
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
                   <section className="panel px-5 pb-2 pt-5">
                     <h2 className="section-title">מטלות הקורס</h2>
                     <AssignmentChecklist
@@ -250,10 +252,10 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
             },
             {
               key: "more",
-              label: "עוד",
+              label: "פורום וקישורים",
               badge: courseForum.filter((f) => !f.isRead).length || undefined,
               panel: (
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid items-start gap-6 lg:grid-cols-2">
                   <section className="panel p-5">
                     <h2 className="section-title">מהפורומים</h2>
                     {courseForum.length ? (
@@ -319,6 +321,19 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                           </Link>
                         </li>
                       </ul>
+                      {(c.rules?.length || c.finalAssessment) && (
+                        <div className="mt-4 border-t border-rule pt-3 text-ink-soft">
+                          {c.finalAssessment && <p>הערכה מסכמת: {c.finalAssessment}</p>}
+                          {c.rules?.length ? (
+                            <ul className="mt-1 list-disc space-y-1 ps-5">
+                              {c.rules.map((r) => (
+                                <li key={r}>{ruleHe[r] ?? r}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      )}
+                      <CourseLook code={code} short={c.short} color={Object.entries(PALETTE).find(([, v]) => v.css === c.color)?.[0] ?? "slate"} />
                     </section>
                   </div>
                 </div>
@@ -478,7 +493,7 @@ function ChapterTrack({ topics, weeks, today, watched, total, color }: { topics:
                 <h3 className="text-lg font-semibold">
                   <MathText text={t.topic} />
                 </h3>
-                {w && <span className={`text-xs ${now ? "rounded-full bg-ink px-2 py-0.5 text-bg" : "text-ink-soft"}`}>{now ? "השבוע" : `שבוע ${w.ref}`}</span>}
+                {w && <span className={`text-xs ${now ? "rounded-full bg-accent px-2 py-0.5 text-on-accent" : "text-ink-soft"}`}>{now ? "השבוע" : `שבוע ${w.ref}`}</span>}
                 {t.chapter?.done && <span className="text-xs text-ink-soft">נקרא</span>}
                 {t.chapter && (
                   <Link href={t.chapter.href} className="ms-auto inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink">
@@ -529,7 +544,7 @@ function Meetups({ meetups, weeks, today }: { meetups: UserEvent[]; weeks: Readi
     );
   };
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <section className="panel overflow-hidden">
         <h2 className="section-title px-5 pt-5">המפגשים הקרובים</h2>
         {next.length ? <ol className="mt-3 divide-y divide-rule border-t border-rule">{next.map(row)}</ol> : <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">אין מפגשים קרובים.</p>}

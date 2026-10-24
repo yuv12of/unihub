@@ -1,7 +1,9 @@
 "use client";
-import { duration } from "@/lib/time";
+import { durationShort } from "@/lib/time";
+import { CourseChip } from "@/components/CourseChip";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   addEvent,
   deleteEvent,
@@ -23,6 +25,8 @@ export interface CalItem {
   kind: CalKind;
   color: string;
   label: string;
+  /** the course's short name (month cells) */
+  short?: string;
   start?: string; // "18:00"
   end?: string;
   minutes?: number;
@@ -224,8 +228,11 @@ export function SemesterCalendar({
   }, [items, showRoutines, moved]);
 
   const [view, setView] = useState<"week" | "month">("week");
-  const [anchor, setAnchor] = useState(today); // any day inside the shown week / month
-  const [selected, setSelected] = useState(today);
+  // /semester?d=2026-10-27 (from Today's week strip) opens on that day
+  const asked = useSearchParams().get("d");
+  const start = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : today;
+  const [anchor, setAnchor] = useState(start); // any day inside the shown week / month
+  const [selected, setSelected] = useState(start);
 
   const move = (dir: 1 | -1) => {
     if (view === "week") {
@@ -273,14 +280,16 @@ export function SemesterCalendar({
       : null;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+    // Full content width (the page breaks out of the usual max width, see .page-wide); the selected
+    // day's panel sits under the grid so the day columns get the room.
+    <div className="page-wide grid gap-6">
       <div className="panel min-w-0 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b border-rule px-3 py-3 sm:px-5">
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => move(-1)}
-              className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg"
+              className="btn-ghost px-3"
               aria-label="הקודם"
             >
               <Icon name="chevronRight" className="size-4" />
@@ -288,7 +297,7 @@ export function SemesterCalendar({
             <button
               type="button"
               onClick={() => move(1)}
-              className="rounded-lg px-2.5 py-1.5 text-ink-soft hover:bg-bg"
+              className="btn-ghost px-3"
               aria-label="הבא"
             >
               <Icon name="chevronLeft" className="size-4" />
@@ -298,7 +307,7 @@ export function SemesterCalendar({
           <button
             type="button"
             onClick={goToday}
-            className="rounded-full border border-rule px-3 py-1 text-sm text-ink-soft hover:border-ink hover:text-ink"
+            className="btn"
           >
             היום
           </button>
@@ -306,12 +315,13 @@ export function SemesterCalendar({
             type="button"
             aria-pressed={showRoutines}
             onClick={() => setShowRoutines((v) => !v)}
-            className={`ms-auto rounded-full border px-3 py-1 text-sm ${showRoutines ? "border-ink text-ink" : "border-rule text-ink-soft"}`}
+            className="chip ms-auto"
           >
-            {showRoutines ? "✓ " : ""}שגרה
+            {showRoutines && <Icon name="check" className="size-4" />}
+            שגרה
           </button>
           <div
-            className="flex rounded-lg border border-rule p-0.5 text-sm"
+            className="seg"
             role="tablist"
             aria-label="תצוגה"
           >
@@ -322,7 +332,7 @@ export function SemesterCalendar({
                 role="tab"
                 aria-selected={view === v}
                 onClick={() => setView(v)}
-                className={`rounded-md px-3 py-1 ${view === v ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`}
+                className="seg-item"
               >
                 {v === "week" ? "שבוע" : "חודש"}
               </button>
@@ -561,18 +571,20 @@ function MonthGrid({
                 {marks.map((m, k) => (
                   <Chip key={k} item={m} />
                 ))}
-                {studyMin > 0 && (
-                  <span className="flex items-center gap-1 whitespace-nowrap px-1 text-[11px] text-ink-soft">
-                    {study.map((s, k) => (
-                      <span
-                        key={k}
-                        className="size-1.5 shrink-0 rounded-full"
-                        style={{ background: s.color }}
-                      />
-                    ))}
-                    <span className="truncate">לימוד {hours(studyMin)}</span>
-                  </span>
-                )}
+                {studyMin > 0 &&
+                  // one line per course: "● לינארית 1.5 ש׳"
+                  Object.values(
+                    study.reduce<Record<string, { short: string; color: string; min: number }>>((m, s) => {
+                      const k = s.short ?? s.color;
+                      m[k] = { short: s.short ?? "לימוד", color: s.color, min: (m[k]?.min ?? 0) + (s.minutes ?? 0) };
+                      return m;
+                    }, {}),
+                  ).map((g) => (
+                    <span key={g.short} className="flex items-center gap-1 px-1 text-[11px] text-ink-soft">
+                      <CourseChip short={g.short} color={g.color} className="min-w-0 flex-1" />
+                      <span className="shrink-0 tabular-nums">{durationShort(g.min)}</span>
+                    </span>
+                  ))}
               </span>
               <span className="flex flex-wrap gap-0.5 px-0.5 md:hidden">
                 {marks.map((m, k) => (
@@ -1187,7 +1199,7 @@ function DayPanel({
 
   return (
     <aside
-      className={`panel self-start p-5 ${pending ? "opacity-70" : ""}`}
+      className={`panel p-5 ${pending ? "opacity-70" : ""}`}
       aria-live="polite"
     >
       <h3 className="font-semibold">
@@ -1202,7 +1214,7 @@ function DayPanel({
           אין הגשות, בחינות או לימוד מתוכנן.
         </p>
       ) : (
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-3 grid gap-3 lg:grid-cols-2 lg:gap-x-8 2xl:grid-cols-3">
           {items.map((it, k) => (
             <li key={k} className="flex gap-3">
               <span
@@ -1617,7 +1629,7 @@ function EventEditor({
                               : [...pickedDays, d].sort(),
                           )
                         }
-                        className={`grid size-8 place-items-center rounded-full border text-xs ${on ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft hover:border-ink"}`}
+                        className={`grid size-11 place-items-center rounded-full border text-sm sm:size-9 sm:text-xs ${on ? "border-accent bg-accent text-on-accent" : "border-rule-strong text-ink-soft hover:border-ink"}`}
                       >
                         {l}
                       </button>
@@ -1852,7 +1864,7 @@ function RoutineEditor({ item, onClose, onDone }: { item: CalItem; onClose: () =
               ["all", "כל השגרה"],
             ] as const
           ).map(([v, l]) => (
-            <label key={v} className={`flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center ${scope === v ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`}>
+            <label key={v} className={`flex-1 cursor-pointer rounded-md px-3 py-1.5 text-center ${scope === v ? "bg-accent text-on-accent" : "text-ink-soft hover:text-ink"}`}>
               <input type="radio" name="scope" value={v} checked={scope === v} onChange={() => setScope(v)} className="sr-only" />
               {l}
             </label>
@@ -1932,7 +1944,7 @@ function Chip({
   onClick?: (e: React.MouseEvent) => void;
 }) {
   const base =
-    "block w-full rounded px-1.5 py-0.5 text-start text-[11px] leading-tight";
+    "block w-full truncate rounded px-1.5 py-0.5 text-start text-[11px] leading-tight";
   if (item.kind === "exam")
     return (
       <span
@@ -1963,4 +1975,3 @@ function Chip({
   );
 }
 
-const hours = (m: number) => duration(m);

@@ -68,6 +68,7 @@ async function Semester() {
       date: s.date,
       kind: "study",
       color: themeOf(courses, s.courseCode).color,
+      short: themeOf(courses, s.courseCode).short,
       label: s.title,
       start: s.start,
       end: s.end,

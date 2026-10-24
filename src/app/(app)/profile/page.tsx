@@ -5,14 +5,15 @@ import { getCheerCounts, getMyProfile, getMyStudyDays, getPeople, getUserPlan } 
 import { computeBadges } from "@/lib/badges";
 import { standing } from "@/lib/progress";
 import { weekStart } from "@/lib/routines";
-import { minutesLabel } from "@/lib/planner";
+import { duration } from "@/lib/time";
 import { todayInIsrael } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
 import { BadgeGrid } from "@/components/BadgeGrid";
 import { Heatmap } from "@/components/Heatmap";
-import { LookPicker, ProfileEditor } from "@/components/ProfileParts";
+import { ProfileEditor } from "@/components/ProfileParts";
 import { Tabs } from "@/components/Fold";
-import { SpotifyCard } from "@/components/SpotifyCard";
+import { supabaseEnabled } from "@/lib/supabase/config";
+import type { MyProfile } from "@/lib/userdata";
 
 export default function ProfilePage() {
   return (
@@ -25,7 +26,9 @@ export default function ProfilePage() {
 async function Profile() {
   await connection();
   const today = todayInIsrael();
-  const [me, plan, days, people, cheers] = await Promise.all([getMyProfile(), getUserPlan(today), getMyStudyDays(), getPeople(), getCheerCounts()]);
+  const [mine, plan, days, people, cheers] = await Promise.all([getMyProfile(), getUserPlan(today), getMyStudyDays(), getPeople(), getCheerCounts()]);
+  // Local design previews (no database) show a sample person.
+  const me = mine ?? (!supabaseEnabled && process.env.UNIHUB_DEMO ? DEMO_ME : null);
   if (!me) return <p>הפרופיל זמין אחרי התחברות.</p>;
   const friends = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").length;
   const badges = computeBadges({
@@ -85,20 +88,25 @@ async function Profile() {
       </header>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {tile("השבוע", minutesLabel(week), goal ? `מתוך יעד של ${minutesLabel(goal)}` : undefined)}
+        {tile("השבוע", duration(week), goal ? `מתוך יעד של ${duration(goal)}` : "בלי יעד שבועי")}
         {tile("סך הכל", `${Math.round(total / 60)} ש׳`, "לימוד שסומן")}
         {tile("מטלות שהוגשו", String(submitted))}
         {tile("חברים", String(friends), cheers.received ? `${cheers.received} פרגונים התקבלו` : undefined)}
       </section>
-      {goal > 0 && (
-        <div className="-mt-4 h-2 overflow-hidden rounded-full bg-rule" aria-label="התקדמות ליעד השבועי">
-          <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${Math.min(100, (week / goal) * 100)}%` }} />
-        </div>
-      )}
+      <div className="-mt-4 flex items-center gap-3">
+        {goal > 0 && (
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-rule" role="progressbar" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={week} aria-label="התקדמות ליעד השבועי">
+            <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${Math.min(100, (week / goal) * 100)}%` }} />
+          </div>
+        )}
+        {/* the goal is set in one place: Settings → study times */}
+        <Link href="/settings#study" className="btn-ghost text-xs">
+          {goal ? "שינוי היעד" : "קביעת יעד שבועי"}
+        </Link>
+      </div>
 
       <Tabs
         id="profile"
-        anchors={{ music: "look" }}
         tabs={[
           {
             key: "badges",
@@ -114,21 +122,11 @@ async function Profile() {
               </section>
             ),
           },
-          {
-            key: "look",
-            label: "התאמה אישית",
-            panel: (
-              <section className="panel p-5">
-                <LookPicker initial={me.prefs ?? {}} />
-                <SpotifyCard />
-              </section>
-            ),
-          },
         ]}
       />
 
       <form action="/auth/signout" method="post">
-        <button className="rounded-lg border border-rule px-4 py-2 text-sm text-ink-soft hover:border-ink">יציאה מהחשבון</button>
+        <button className="btn text-ink-soft">יציאה מהחשבון</button>
       </form>
 
       <p className="text-sm text-ink-soft">
@@ -136,7 +134,7 @@ async function Profile() {
         <Link href="/friends" className="underline underline-offset-4 decoration-rule hover:text-ink">
           עמוד החברים
         </Link>
-        . זמני לימוד, סקריפט Google והתראות ב
+        . מראה, מוזיקה, זמני לימוד והתראות ב
         <Link href="/settings" className="underline underline-offset-4 decoration-rule hover:text-ink">
           הגדרות
         </Link>
@@ -145,3 +143,20 @@ async function Profile() {
     </div>
   );
 }
+
+const DEMO_ME: MyProfile = {
+  id: "demo",
+  email: "demo@example.com",
+  name: "סטודנט/ית לדוגמה",
+  avatar_url: null,
+  avatar_emoji: "🦉",
+  avatar_color: "blue",
+  bio: null,
+  program: "מדעי המחשב",
+  study_year: "שנה א׳",
+  weekly_goal_minutes: 12 * 60,
+  prefs: {},
+  share: {} as MyProfile["share"],
+  created_at: "2026-09-01T00:00:00Z",
+  is_admin: false,
+};

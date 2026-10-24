@@ -8,14 +8,15 @@ import { addDays } from "@/lib/semester";
 export type HobbyKind = "music" | "sport" | "language" | "creative" | "reading" | "cooking" | "other";
 export type ItemStatus = "want" | "doing" | "done";
 
-export const KINDS: Record<HobbyKind, { label: string; emoji: string; items: string; item: string; placeholder: string }> = {
-  music: { label: "נגינה", emoji: "🎸", items: "קטעים וטכניקות", item: "קטע או טכניקה", placeholder: "למשל: מעבר חלק בין אקורדים" },
-  sport: { label: "ספורט", emoji: "🏃", items: "יעדים", item: "יעד", placeholder: "למשל: 5 ק״מ ברצף" },
-  language: { label: "שפה", emoji: "🗣️", items: "נושאים", item: "נושא", placeholder: "למשל: זמן עבר" },
-  creative: { label: "יצירה", emoji: "🎨", items: "פרויקטים", item: "פרויקט", placeholder: "למשל: סקיצה של הנוף מהחלון" },
-  reading: { label: "קריאה", emoji: "📚", items: "ספרים", item: "ספר", placeholder: "שם הספר" },
-  cooking: { label: "בישול", emoji: "🍳", items: "מתכונים", item: "מתכון", placeholder: "למשל: לחם מחמצת" },
-  other: { label: "אחר", emoji: "✨", items: "דברים לעשות", item: "פריט", placeholder: "מה הבא?" },
+/** icon: the SVG for buttons and chips (emoji stay as the hobby's own mark). */
+export const KINDS: Record<HobbyKind, { label: string; emoji: string; icon: "music" | "run" | "speech" | "palette" | "book" | "pot" | "sparkle"; items: string; item: string; placeholder: string }> = {
+  music: { label: "נגינה", emoji: "🎸", icon: "music", items: "קטעים וטכניקות", item: "קטע או טכניקה", placeholder: "למשל: מעבר חלק בין אקורדים" },
+  sport: { label: "ספורט", emoji: "🏃", icon: "run", items: "יעדים", item: "יעד", placeholder: "למשל: 5 ק״מ ברצף" },
+  language: { label: "שפה", emoji: "🗣️", icon: "speech", items: "נושאים", item: "נושא", placeholder: "למשל: זמן עבר" },
+  creative: { label: "יצירה", emoji: "🎨", icon: "palette", items: "פרויקטים", item: "פרויקט", placeholder: "למשל: סקיצה של הנוף מהחלון" },
+  reading: { label: "קריאה", emoji: "📚", icon: "book", items: "ספרים", item: "ספר", placeholder: "שם הספר" },
+  cooking: { label: "בישול", emoji: "🍳", icon: "pot", items: "מתכונים", item: "מתכון", placeholder: "למשל: לחם מחמצת" },
+  other: { label: "אחר", emoji: "✨", icon: "sparkle", items: "דברים לעשות", item: "פריט", placeholder: "מה הבא?" },
 };
 
 export const STATUS: Record<ItemStatus, string> = { want: "רוצה לנסות", doing: "בתהליך", done: "הושלם" };

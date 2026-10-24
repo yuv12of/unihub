@@ -117,7 +117,7 @@ export function GroupFinder({ people }: { people: { id: string; name: string; sh
                 setChosen(on ? chosen.filter((x) => x !== p.id) : [...chosen, p.id]);
                 setSlots(null);
               }}
-              className={`rounded-full border px-3 py-1 text-sm ${on ? "border-ink bg-ink text-bg" : "border-rule"} disabled:opacity-40`}
+              className={`rounded-full border px-3 py-1 text-sm ${on ? "border-accent bg-accent text-on-accent" : "border-rule"} disabled:opacity-40`}
             >
               {p.name.split(" ")[0]}
             </button>

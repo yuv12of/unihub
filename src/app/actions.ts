@@ -1066,9 +1066,10 @@ async function saveProfile_(input: ProfileInput) {
 async function saveLook_(patch: import("@/lib/themes").LookPrefs) {
   const { supabase, userId } = await requireUser();
   const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle();
-  const { PALETTES } = await import("@/lib/themes");
+  const { normalizePalette } = await import("@/lib/themes");
   const next = { ...((data?.prefs as object) ?? {}), ...patch } as import("@/lib/themes").LookPrefs;
-  if (next.palette && !(next.palette in PALETTES)) delete next.palette;
+  // removed palettes become the nearest kept one instead of silently resetting to the default
+  if (next.palette) next.palette = normalizePalette(next.palette);
   if (next.style && !["classic", "soft", "bold", "glass", "notebook"].includes(next.style)) delete next.style;
   if (next.theme && !["system", "light", "dark"].includes(next.theme)) delete next.theme;
   if (next.size && !["sm", "md", "lg", "xl"].includes(next.size)) delete next.size;
@@ -1076,7 +1077,7 @@ async function saveLook_(patch: import("@/lib/themes").LookPrefs) {
   if (next.music && !/^[A-Za-z0-9]{22}$/.test(next.music)) next.music = null;
   if (next.hidden) next.hidden = next.hidden.filter((h) => /^[a-z]{2,20}$/.test(h)).slice(0, 20);
   if (next.tabs) {
-    const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/study", "/mail", "/profile", "/settings"];
+    const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/books", "/study", "/hobbies", "/mail", "/profile", "/settings"];
     next.tabs = [...new Set(next.tabs.filter((t) => ok.includes(t)))].slice(0, 4);
   }
   const { error } = await supabase.from("profiles").update({ prefs: next }).eq("id", userId);

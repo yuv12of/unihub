@@ -46,21 +46,21 @@ async function Library({ searchParams }: { searchParams: PageProps<"/books">["se
   return (
     <div className="mt-6 space-y-8">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href="/books" className={`rounded-full border px-3.5 py-1.5 text-sm ${!only ? "border-ink bg-ink text-bg" : "border-rule"}`}>
+        <Link href="/books" className={`rounded-full border px-3.5 py-1.5 text-sm ${!only ? "border-accent bg-accent text-on-accent" : "border-rule"}`}>
           הכל
         </Link>
         {withBooks.map((c) => (
-          <Link key={c.code} href={`/books?course=${c.code}`} className={`rounded-full border px-3.5 py-1.5 text-sm ${only === c.code ? "border-ink bg-ink text-bg" : "border-rule"}`}>
+          <Link key={c.code} href={`/books?course=${c.code}`} className={`rounded-full border px-3.5 py-1.5 text-sm ${only === c.code ? "border-accent bg-accent text-on-accent" : "border-rule"}`}>
             <span className="me-1.5 inline-block size-2 rounded-full" style={{ background: c.color }} aria-hidden />
             {c.short}
           </Link>
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-8">
           {cont && (
-            <Link href={`/books/${cont.book.id}?ch=${cont.chapter.idx}`} className="block overflow-hidden rounded-2xl bg-ink p-5 text-bg">
+            <Link href={`/books/${cont.book.id}?ch=${cont.chapter.idx}`} className="accent-surface block overflow-hidden rounded-2xl p-5">
               <p className="text-sm opacity-75">{cont.chapter.read_at ? "להמשיך מאיפה שעצרתם" : "להתחיל לקרוא"}</p>
               <p className="mt-1 text-xl font-semibold leading-snug">{cont.chapter.title}</p>
               <p className="mt-1 text-sm opacity-75">

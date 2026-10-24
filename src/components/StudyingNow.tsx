@@ -31,7 +31,7 @@ export function StudyingNow({ rows }: { rows: LiveRow[] }) {
   if (!live.length) return null;
   return (
     <div className="panel flex flex-col gap-2 p-4">
-      <h2 className="text-sm font-semibold">לומדים עכשיו 📚</h2>
+      <h2 className="text-sm font-semibold">לומדים עכשיו</h2>
       {live.map((r) => {
         const left = Math.max(1, Math.round((Date.parse(r.ends_at) - now) / 60_000));
         return (
