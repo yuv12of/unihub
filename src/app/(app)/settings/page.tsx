@@ -92,7 +92,7 @@ async function Settings() {
                     זמני לימוד
                   </h2>
                   <p className="mt-1 text-sm text-ink-soft">התוכנית משבצת מפגשי לימוד רק בזמנים האלה.</p>
-                  <div className="mt-4 border-b border-rule pb-4">
+                  <div className="mt-4">
                     <WeeklyGoal initial={profileInput} />
                     <p className="mt-1 text-xs text-ink-soft">התוכנית ממלאת זמן פנוי עד היעד, ולוח השנה מראה כמה חסר.</p>
                   </div>
