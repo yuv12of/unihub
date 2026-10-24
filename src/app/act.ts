@@ -4,7 +4,7 @@
  * the server becomes a normal Error with the Hebrew message, so try/catch around them works.
  */
 import * as A from "@/app/actions";
-import type { Failed } from "@/app/actions";
+import type { Failed } from "@/app/guard";
 import * as B from "@/app/bookActions";
 import * as H from "@/app/hobbyActions";
 
@@ -50,32 +50,29 @@ export const saveLook = w(A.saveLook);
 export const logStudy = w(A.logStudy);
 export const saveReview = w(A.saveReview);
 export const addStuck = w(A.addStuck);
-export const resolveStuck = A.resolveStuck;
-export const setWatched = A.setWatched;
-
-export {
-  saveProgress,
-  savePrefs,
-  saveExams,
-  resetFeed,
-  markMailRead,
-  resetIngestToken,
-  removePushSubscription,
-  dismissUpdate,
-  saveJewish,
-  mailHtml,
-  removeCourse,
-  deleteRoutine,
-  shareRoutine,
-  inviteToEvent,
-  searchPeople,
-  unfollow,
-  removeFollower,
-  markNotificationsRead,
-  startStudyLive,
-  endStudyLive,
-  findCommonSlots,
-} from "@/app/actions";
+export const resolveStuck = w(A.resolveStuck);
+export const setWatched = w(A.setWatched);
+export const saveProgress = w(A.saveProgress);
+export const savePrefs = w(A.savePrefs);
+export const saveExams = w(A.saveExams);
+export const resetFeed = w(A.resetFeed);
+export const markMailRead = w(A.markMailRead);
+export const resetIngestToken = w(A.resetIngestToken);
+export const removePushSubscription = w(A.removePushSubscription);
+export const dismissUpdate = w(A.dismissUpdate);
+export const saveJewish = w(A.saveJewish);
+export const mailHtml = w(A.mailHtml);
+export const removeCourse = w(A.removeCourse);
+export const deleteRoutine = w(A.deleteRoutine);
+export const shareRoutine = w(A.shareRoutine);
+export const inviteToEvent = w(A.inviteToEvent);
+export const searchPeople = w(A.searchPeople);
+export const unfollow = w(A.unfollow);
+export const removeFollower = w(A.removeFollower);
+export const markNotificationsRead = w(A.markNotificationsRead);
+export const startStudyLive = w(A.startStudyLive);
+export const endStudyLive = w(A.endStudyLive);
+export const findCommonSlots = w(A.findCommonSlots);
 export type * from "@/app/actions";
 
 export const savePlace = w(B.savePlace);

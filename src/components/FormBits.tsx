@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { FormFailed } from "@/components/ActionForm";
 import { useFormStatus } from "react-dom";
 
 /** Submit button that shows progress, then a short "saved" confirmation. */
 export function SaveButton({ children = "שמירה", done = "נשמר" }: { children?: string; done?: string }) {
   const { pending } = useFormStatus();
+  const failed = useContext(FormFailed);
   const [saved, setSaved] = useState(false);
   const [wasPending, setWasPending] = useState(false);
   useEffect(() => {
@@ -26,7 +28,7 @@ export function SaveButton({ children = "שמירה", done = "נשמר" }: { chi
         {pending ? "שומר…" : children}
       </button>
       <span role="status" className="text-sm text-ink-soft">
-        {saved ? done : ""}
+        {saved && !failed ? done : ""}
       </span>
     </div>
   );
