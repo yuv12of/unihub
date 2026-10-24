@@ -71,7 +71,7 @@ export function ShareDay({ name, date, minutes, sessions, routines, streak }: { 
     }
   };
   return (
-    <button type="button" onClick={make} disabled={busy} className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
+    <button type="button" onClick={make} disabled={busy} className="btn-ghost">
       <Icon name="camera" className="me-1 size-4" />
       שיתוף היום כתמונה
     </button>

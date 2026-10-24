@@ -13,7 +13,10 @@ export function SessionToggle({
   title,
   hero = false,
   courseCode,
+  past = false,
 }: {
+  /** the session's time has passed: ask "done or skipped?" (no timer) */
+  past?: boolean;
   sessionKey: string;
   status?: "done" | "skipped";
   minutes: number;
@@ -36,10 +39,11 @@ export function SessionToggle({
       <button
         type="button"
         onClick={() => save(null)}
-        className="shrink-0 rounded-full border border-rule px-3 py-1.5 text-sm text-ink-soft hover:border-ink"
-        aria-label="ביטול סימון"
+        className="btn shrink-0 text-ink-soft"
+        aria-label={`${current === "done" ? "בוצע" : "דולג"}. לביטול הסימון`}
       >
-        {current === "done" ? "✓ בוצע" : "דולג"}
+        {current === "done" ? <Icon name="check" className="size-4" /> : null}
+        {current === "done" ? "בוצע" : "דולג"}
       </button>
     );
   const timerEl = timer && (
@@ -58,14 +62,26 @@ export function SessionToggle({
   if (hero)
     return (
       <span className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setTimer(true)} className="inline-flex items-center rounded-full bg-bg px-5 py-2.5 font-semibold text-ink">
+        <button type="button" onClick={() => setTimer(true)} className="inline-flex min-h-11 items-center rounded-full bg-on-accent px-5 py-2.5 font-semibold text-accent">
           <Icon name="play" className="me-1.5 size-4" />
           להתחיל עכשיו
         </button>
-        <button type="button" onClick={() => save("done")} className="rounded-full border border-bg/40 px-4 py-2.5 text-sm">
+        <button type="button" onClick={() => save("done")} className="min-h-11 rounded-full border border-on-accent/40 px-4 py-2.5 text-sm">
           כבר עשיתי
         </button>
         {timerEl}
+      </span>
+    );
+  if (past)
+    return (
+      <span className="flex shrink-0 items-center gap-1.5">
+        <button type="button" onClick={() => save("done")} className="btn">
+          <Icon name="check" className="size-4" />
+          בוצע
+        </button>
+        <button type="button" onClick={() => save("skipped")} className="btn-ghost">
+          דולג
+        </button>
       </span>
     );
   return (
@@ -73,7 +89,7 @@ export function SessionToggle({
       <button
         type="button"
         onClick={() => setTimer(true)}
-        className="grid size-8 place-items-center rounded-full border border-rule text-ink-soft hover:border-ink hover:text-ink"
+        className="grid size-9 place-items-center rounded-full border border-rule-strong text-ink-soft hover:border-ink hover:text-ink [@media(pointer:coarse)]:size-11"
         aria-label="טיימר ריכוז"
         title="טיימר ריכוז"
       >
@@ -84,14 +100,14 @@ export function SessionToggle({
       <button
         type="button"
         onClick={() => save("done")}
-        className="rounded-full border border-rule px-3 py-1.5 text-sm hover:border-ink"
+        className="btn"
       >
         בוצע
       </button>
       <button
         type="button"
         onClick={() => save("skipped")}
-        className="hidden rounded-full px-2 py-1.5 text-sm text-ink-soft hover:text-ink sm:inline"
+        className="btn-ghost hidden px-2 sm:inline-flex"
       >
         דילוג
       </button>

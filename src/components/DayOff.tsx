@@ -5,10 +5,10 @@ import { setDayOff } from "@/app/act";
 import { Icon } from "@/components/Icon";
 
 const REASONS = [
-  ["sick", "🤒 חולה"],
-  ["reserve", "🪖 מילואים"],
-  ["family", "👨‍👩‍👧 משפחה"],
-  ["other", "😮‍💨 סתם יום קשה"],
+  ["sick", "חולה"],
+  ["reserve", "מילואים"],
+  ["family", "משפחה"],
+  ["other", "סתם יום קשה"],
 ] as const;
 
 /** "Rough day": today's study moves to the next days and streaks are kept. */
@@ -40,7 +40,8 @@ export function DayOff({ date, isOff, sessionsToday = 0, routinesToday = 0 }: { 
   return (
     <div>
       {!open ? (
-        <button type="button" onClick={() => setOpen(true)} className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
+        <button type="button" onClick={() => setOpen(true)} className="btn-ghost">
+          <Icon name="sofa" className="size-4" />
           יום קשה היום?
         </button>
       ) : (
@@ -58,12 +59,12 @@ export function DayOff({ date, isOff, sessionsToday = 0, routinesToday = 0 }: { 
                   await setDayOff(date, r);
                 })
               }
-              className="rounded-full border border-rule bg-surface px-3 py-1.5 text-sm hover:border-ink"
+              className="chip"
             >
               {label}
             </button>
           ))}
-          <button type="button" onClick={() => setOpen(false)} className="px-2 text-sm text-ink-soft">
+          <button type="button" onClick={() => setOpen(false)} className="btn-ghost">
             ביטול
           </button>
         </div>

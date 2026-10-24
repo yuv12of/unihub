@@ -29,7 +29,10 @@ export function UpNext({
   exam,
   reading,
   prep,
+  unmarked = 0,
 }: {
+  /** earlier sessions today that nobody marked done or skipped */
+  unmarked?: number;
   nowMin: number;
   item: UpNextItem | null;
   status?: "done" | "skipped";
@@ -43,7 +46,7 @@ export function UpNext({
   const live = item && toMin(item.start) <= nowMin;
   const inMin = item ? toMin(item.start) - nowMin : 0;
   return (
-    <section aria-label="הבא בתור" className="overflow-hidden rounded-2xl bg-ink text-bg shadow-sm">
+    <section aria-label="הבא בתור" className="accent-surface overflow-hidden rounded-2xl shadow-sm ring-1 ring-on-accent/10">
       <div className="p-5">
         {item ? (
           <>
@@ -63,13 +66,13 @@ export function UpNext({
             {prep && prep.links.length > 0 && (
               <div className="mt-3 text-sm">
                 <p className="opacity-75">לקראת המפגש: <MathText text={prep.label} /></p>
-                <ReadChips links={prep.links} className="mt-1.5 [&_a]:border-bg/30 [&_a]:text-bg [&_span]:text-bg/80" />
+                <ReadChips links={prep.links} className="mt-1.5 [&_a]:border-on-accent/30 [&_a]:text-on-accent [&_span]:text-on-accent/80" />
               </div>
             )}
             {reading && (
               <Link href={reading.href} className="mt-3 flex items-center gap-2 text-sm opacity-90 hover:opacity-100">
                 <Icon name="book" className="size-4 shrink-0" />
-                <span className="min-w-0 truncate underline decoration-bg/40 underline-offset-4">
+                <span className="min-w-0 truncate underline decoration-on-accent/40 underline-offset-4">
                   לקרוא: {reading.title}
                   {reading.lastPage ? `, מעמ׳ ${reading.lastPage}` : ""}
                 </span>
@@ -79,7 +82,11 @@ export function UpNext({
         ) : (
           <>
             <p className="text-sm opacity-75">להיום</p>
-            <h2 className="mt-1 text-xl font-semibold">אין עוד משהו מתוכנן 🎉</h2>
+            {/* never "nothing planned" while an earlier session still waits to be marked */}
+            <h2 className="mt-1 text-xl font-semibold">
+              {unmarked > 0 ? (unmarked === 1 ? "נשאר לסמן מפגש אחד מקודם" : `נשארו לסמן ${unmarked} מפגשים מקודם`) : "אין עוד משהו מתוכנן היום"}
+            </h2>
+            {unmarked > 0 && <p className="mt-1 text-sm opacity-75">בוצע או דולג? הסימון מעדכן את התוכנית לימים הבאים.</p>}
             {tomorrow && (
               <p className="mt-1 text-sm opacity-75">
                 מחר ב־{tomorrow.start}: {tomorrow.title} ({minutesLabel(tomorrow.minutes)})
@@ -89,7 +96,7 @@ export function UpNext({
         )}
       </div>
       {(deadline || exam) && (
-        <div className="space-y-1 border-t border-bg/15 bg-bg/5 px-5 py-3 text-sm">
+        <div className="space-y-1 border-t border-on-accent/15 bg-on-accent/5 px-5 py-3 text-sm">
           {exam && (
             <p className="flex items-baseline gap-2">
               <Icon name="pencil" className="size-4 self-center opacity-75" />
