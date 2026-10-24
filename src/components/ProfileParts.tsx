@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { saveLook, saveProfile, type ProfileInput } from "@/app/act";
-import { PALETTES, STYLES, applyLook, type LookPrefs, type PaletteKey, type StyleKey } from "@/lib/themes";
+import { PALETTES, STYLES, applyLook, normalizePalette, type LookPrefs, type PaletteKey, type StyleKey } from "@/lib/themes";
 import { FOCUS_PLAYLISTS, playlistId } from "@/lib/focusMusic";
 import { PALETTE } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
 import { DEFAULT_TABS, TAB_CHOICES } from "@/components/Nav";
+import { Icon } from "@/components/Icon";
 
 const EMOJIS = ["🦊", "🐼", "🦉", "🐢", "🐙", "🦁", "🐧", "🐝", "🌵", "🌻", "🍀", "⚡", "🚀", "🎧", "📚", "🧠", "☕", "🎨", "⚽", "🎸", "🏀", "🐱", "🐶", "🦄"];
 
@@ -19,7 +20,7 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
   const field = "w-full rounded-lg border border-rule bg-surface px-3 py-2";
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)} className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-ink">
+      <button type="button" onClick={() => setOpen(true)} className="btn">
         עריכת פרופיל
       </button>
     );
@@ -80,21 +81,6 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
         קצת עליי
         <textarea value={f.bio} onChange={(e) => set("bio", e.target.value)} maxLength={300} rows={3} className={`${field} mt-1`} />
       </label>
-      <label className="flex flex-wrap items-center gap-2 text-sm">
-        יעד לימוד שבועי
-        <select
-          value={f.weekly_goal_minutes ?? 0}
-          onChange={(e) => set("weekly_goal_minutes", Number(e.target.value) || null)}
-          className="rounded-lg border border-rule bg-surface px-2 py-1.5"
-        >
-          <option value={0}>בלי יעד</option>
-          {[5, 8, 10, 12, 15, 20, 25, 30].map((h) => (
-            <option key={h} value={h * 60}>
-              {h} שעות
-            </option>
-          ))}
-        </select>
-      </label>
       {error && <p className="text-sm text-red-700">{error}</p>}
       <div className="flex gap-3">
         <button
@@ -110,11 +96,11 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
               }
             })
           }
-          className="rounded-lg bg-ink px-5 py-2 font-medium text-bg disabled:opacity-60"
+          className="btn-primary"
         >
           {pending ? "שומר…" : "שמירה"}
         </button>
-        <button onClick={() => setOpen(false)} className="text-sm text-ink-soft">
+        <button onClick={() => setOpen(false)} className="btn-ghost">
           ביטול
         </button>
       </div>
@@ -124,6 +110,7 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
 
 export const TODAY_SECTIONS: [string, string][] = [
   ["clock", "שעון"],
+  ["weekstrip", "השבוע שלי (פס ימים)"],
   ["quickadd", "הוספה מהירה"],
   ["live", "לומדים עכשיו"],
   ["dayoff", "כפתור יום קשה"],
@@ -135,9 +122,12 @@ export const TODAY_SECTIONS: [string, string][] = [
   ["standings", "מצב בקורסים"],
 ];
 
-/** Colours, light/dark, text size, calm mode, Today sections, focus music. */
-export function LookPicker({ initial }: { initial: LookPrefs }) {
-  const [p, setP] = useState<LookPrefs>({ palette: "default", style: "classic", theme: "system", size: "md", hidden: [], ...initial });
+/**
+ * Colours, light/dark, text size, calm mode, Today sections, phone tabs (part "look"),
+ * or the focus music (part "music").
+ */
+export function LookPicker({ initial, part = "look" }: { initial: LookPrefs; part?: "look" | "music" }) {
+  const [p, setP] = useState<LookPrefs>({ style: "classic", theme: "system", size: "md", hidden: [], ...initial, palette: normalizePalette(initial.palette) ?? "default" });
   const [custom, setCustom] = useState("");
   const [, start] = useTransition();
   const update = (patch: LookPrefs) => {
@@ -152,10 +142,10 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
     } catch {}
     start(() => saveLook(patch));
   };
-  const seg = (on: boolean) => `rounded-md px-3 py-1.5 text-sm ${on ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`;
+  if (part === "music") return <MusicPicker p={p} update={update} custom={custom} setCustom={setCustom} />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
         <h3 className="text-sm font-semibold">סגנון</h3>
         <p className="mt-0.5 text-xs text-ink-soft">אותם צבעים, תחושה אחרת. משתלב עם כל ערכת צבעים.</p>
@@ -169,7 +159,7 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
                   type="button"
                   onClick={() => update({ style: k })}
                   aria-pressed={on}
-                  className={`w-full rounded-xl border p-2 text-start ${on ? "border-ink ring-1 ring-ink" : "border-rule"}`}
+                  className={`w-full rounded-xl border p-2 text-start ${on ? "border-ink ring-1 ring-ink" : "border-rule-strong"}`}
                 >
                   <StylePreview k={k} />
                   <span className="mt-1.5 block text-sm font-medium">{st.label}</span>
@@ -183,7 +173,8 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
 
       <div>
         <h3 className="text-sm font-semibold">ערכת צבעים</h3>
-        <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <p className="mt-0.5 text-xs text-ink-soft">כל אריח מראה את הערכה בבהיר (מימין) ובכהה (משמאל).</p>
+        <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(Object.keys(PALETTES) as PaletteKey[]).map((k) => {
             const pal = PALETTES[k];
             const on = (p.palette ?? "default") === k;
@@ -192,15 +183,17 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
                 <button
                   type="button"
                   onClick={() => update({ palette: k })}
-                  className={`w-full rounded-xl border p-2 text-start ${on ? "border-ink ring-1 ring-ink" : "border-rule"}`}
+                  className={`w-full rounded-xl border p-2 text-start ${on ? "border-ink ring-1 ring-ink" : "border-rule-strong"}`}
                   aria-pressed={on}
                 >
-                  <span className="flex h-8 overflow-hidden rounded-lg">
-                    {pal.swatch.map((c, i) => (
-                      <span key={i} className="flex-1" style={{ background: c }} />
-                    ))}
+                  <span className="flex h-14 overflow-hidden rounded-lg ring-1 ring-rule" aria-hidden>
+                    <PaletteHalf c={pal.light} />
+                    <PaletteHalf c={pal.dark} />
                   </span>
-                  <span className="mt-1 block text-xs">{pal.label}</span>
+                  <span className="mt-1.5 flex items-center gap-1.5 text-sm">
+                    {on && <Icon name="check" className="size-4" />}
+                    {pal.label}
+                  </span>
                 </button>
               </li>
             );
@@ -211,15 +204,16 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
       <div className="flex flex-wrap gap-6">
         <div>
           <h3 className="text-sm font-semibold">בהיר / כהה</h3>
-          <div className="mt-2 inline-flex rounded-lg border border-rule p-0.5">
+          <div className="seg mt-2">
             {(
               [
-                ["system", "אוטומטי"],
-                ["light", "בהיר"],
-                ["dark", "כהה"],
+                ["system", "אוטומטי", "auto"],
+                ["light", "בהיר", "sun"],
+                ["dark", "כהה", "moon"],
               ] as const
-            ).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => update({ theme: v })} className={seg((p.theme ?? "system") === v)}>
+            ).map(([v, l, icon]) => (
+              <button key={v} type="button" onClick={() => update({ theme: v })} aria-pressed={(p.theme ?? "system") === v} className="seg-item">
+                <Icon name={icon} className="size-4" />
                 {l}
               </button>
             ))}
@@ -227,23 +221,32 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
         </div>
         <div>
           <h3 className="text-sm font-semibold">גודל טקסט</h3>
-          <div className="mt-2 inline-flex rounded-lg border border-rule p-0.5">
+          <div className="seg mt-2">
             {(
               [
-                ["sm", "א"],
-                ["md", "א"],
-                ["lg", "א"],
-                ["xl", "א"],
+                ["sm", "קטן"],
+                ["md", "רגיל"],
+                ["lg", "גדול"],
+                ["xl", "גדול מאוד"],
               ] as const
             ).map(([v, l], i) => (
-              <button key={v} type="button" onClick={() => update({ size: v })} className={seg((p.size ?? "md") === v)} style={{ fontSize: 12 + i * 3 }}>
-                {l}
+              <button
+                key={v}
+                type="button"
+                onClick={() => update({ size: v })}
+                aria-pressed={(p.size ?? "md") === v}
+                aria-label={`טקסט ${l}`}
+                title={l}
+                className="seg-item min-w-10"
+                style={{ fontSize: 12 + i * 3 }}
+              >
+                א
               </button>
             ))}
           </div>
         </div>
         <label className="flex items-center gap-2 self-end text-sm">
-          <input type="checkbox" checked={!!p.calm} onChange={(e) => update({ calm: e.target.checked })} className="size-4" />
+          <input type="checkbox" checked={!!p.calm} onChange={(e) => update({ calm: e.target.checked })} className="size-5" />
           מצב רגוע (בלי אנימציות)
         </label>
       </div>
@@ -259,8 +262,9 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
                 type="button"
                 aria-pressed={shown}
                 onClick={() => update({ hidden: shown ? [...(p.hidden ?? []), k] : (p.hidden ?? []).filter((x) => x !== k) })}
-                className={`rounded-full border px-3 py-1 text-sm ${shown ? "border-ink" : "border-rule text-ink-soft line-through"}`}
+                className="chip"
               >
+                {shown && <Icon name="check" className="size-4" />}
                 {label}
               </button>
             );
@@ -283,7 +287,7 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
                 aria-pressed={on}
                 disabled={!on && tabs.length >= 4}
                 onClick={() => update({ tabs: on ? tabs.filter((h) => h !== t.href) : [...tabs, t.href] })}
-                className={`rounded-full border px-3 py-1 text-sm disabled:opacity-40 ${on ? "border-ink bg-ink text-bg" : "border-rule"}`}
+                className="chip disabled:opacity-40"
               >
                 {on ? `${i + 1}. ` : ""}
                 {t.label}
@@ -293,11 +297,17 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
         </div>
       </div>
 
+    </div>
+  );
+}
+
+function MusicPicker({ p, update, custom, setCustom }: { p: LookPrefs; update: (patch: LookPrefs) => void; custom: string; setCustom: (v: string) => void }) {
+  return (
       <div>
         <h3 className="text-sm font-semibold">מוזיקה לריכוז (Spotify)</h3>
         <p className="mt-0.5 text-xs text-ink-soft">מתנגנת בטיימר הריכוז. בטלפון היא נפתחת באפליקציה של Spotify.</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" onClick={() => update({ music: null })} className={`rounded-full border px-3 py-1 text-sm ${!p.music ? "border-ink bg-ink text-bg" : "border-rule"}`}>
+          <button type="button" onClick={() => update({ music: null })} aria-pressed={!p.music} className="chip">
             בלי מוזיקה
           </button>
           {FOCUS_PLAYLISTS.map((pl) => (
@@ -305,9 +315,11 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
               key={pl.id}
               type="button"
               onClick={() => update({ music: pl.id })}
-              className={`rounded-full border px-3 py-1 text-sm ${p.music === pl.id ? "border-ink bg-ink text-bg" : "border-rule"}`}
+              aria-pressed={p.music === pl.id}
+              className="chip"
             >
-              {pl.emoji} {pl.name}
+              <Icon name="music" className="size-4" />
+              {pl.name}
             </button>
           ))}
         </div>
@@ -327,14 +339,67 @@ export function LookPicker({ initial }: { initial: LookPrefs }) {
             onChange={(e) => setCustom(e.target.value)}
             placeholder="או קישור לפלייליסט שלך"
             dir="ltr"
-            className="min-w-0 flex-1 rounded-lg border border-rule bg-surface px-3 py-1.5 text-sm"
+            className="min-w-0 flex-1 rounded-lg border border-rule-strong bg-surface px-3 py-2 text-sm"
           />
-          <button disabled={!playlistId(custom)} className="rounded-lg border border-rule px-3 text-sm disabled:opacity-40">
+          <button disabled={!playlistId(custom)} className="btn">
             שמירה
           </button>
         </form>
         {p.music && !FOCUS_PLAYLISTS.some((x) => x.id === p.music) && <p className="mt-1 text-xs text-ink-soft">נבחר פלייליסט משלך.</p>}
       </div>
+  );
+}
+
+/** A palette in miniature: page, a card with a line of text, and the highlighter. */
+function PaletteHalf({ c }: { c: readonly string[] }) {
+  const [bg, surface, ink, hl] = c;
+  return (
+    <span className="flex flex-1 items-center justify-center p-1.5" style={{ background: bg }}>
+      <span className="block w-full rounded-md p-1.5" style={{ background: surface, border: `1px solid ${ink}22` }}>
+        <span className="block h-1.5 w-3/4 rounded-full" style={{ background: ink }} />
+        <span className="mt-1 block h-1.5 w-1/2 rounded-full" style={{ background: hl }} />
+      </span>
+    </span>
+  );
+}
+
+/** The weekly study goal. Saved through saveProfile, which keeps profiles and study_prefs in step. */
+export function WeeklyGoal({ initial }: { initial: ProfileInput }) {
+  const [goal, setGoal] = useState(initial.weekly_goal_minutes ?? 0);
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <label className="flex flex-wrap items-center gap-3">
+        יעד לימוד שבועי
+        <select
+          value={goal}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setGoal(v);
+            setMsg(null);
+            start(async () => {
+              try {
+                await saveProfile({ ...initial, weekly_goal_minutes: v || null });
+                setMsg("נשמר");
+              } catch (err) {
+                setMsg(err instanceof Error ? err.message : "לא נשמר");
+              }
+            });
+          }}
+          className="rounded-lg border border-rule-strong bg-surface px-3 py-2"
+        >
+          <option value={0}>בלי יעד</option>
+          {[5, 8, 10, 12, 15, 20, 25, 30].map((h) => (
+            <option key={h} value={h * 60}>
+              {h} שעות
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className="text-sm text-ink-soft" aria-live="polite">
+        {pending ? "שומר…" : msg}
+      </span>
     </div>
   );
 }

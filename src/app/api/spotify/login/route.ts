@@ -11,7 +11,7 @@ export async function GET() {
   await connection();
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
-  if (!spotifyEnabled) return Response.redirect(`${origin}/profile?spotify=off#music`);
+  if (!spotifyEnabled) return Response.redirect(`${origin}/settings?spotify=off#music`);
   const sb = await createClient();
   const { data } = await sb.auth.getClaims();
   if (!data?.claims?.sub) return Response.redirect(`${origin}/login`);

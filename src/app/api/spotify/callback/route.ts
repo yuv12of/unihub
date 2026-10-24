@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   await connection();
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
-  const back = (r: string) => Response.redirect(`${origin}/profile?spotify=${r}#music`);
+  const back = (r: string) => Response.redirect(`${origin}/settings?spotify=${r}#music`);
   const url = new URL(req.url);
   const jar = await cookies();
   const verifier = jar.get("sp_v")?.value;
