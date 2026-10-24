@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Icon } from "@/components/Icon";
 import { MathText } from "@/components/MathText";
+import { CheckCard, PretestCard, usePretest } from "@/components/practice/Pretest";
 import { markChapterDone, savePlace, searchMyBooks, setQuestionStatus } from "@/app/act";
 import type { BookQuestion, SearchHit } from "@/lib/books";
 
@@ -41,6 +42,8 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
   const [zoom, setZoom] = useState(1);
   const jump = useRef<(p: number) => void>(() => {});
   const router = useRouter();
+  // pretest: two questions before the first read, the same ones again once the chapter is done
+  const [pre, setPre] = usePretest(chapter.id);
   const next = chapters.find((c) => c.idx === chapter.idx + 1);
   const prev = chapters.find((c) => c.idx === chapter.idx - 1);
   const go = (idx: number, p?: number) => router.push(`/books/${book.id}?ch=${idx}${p ? `&p=${p}` : ""}`);
@@ -114,6 +117,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className={side === "read" ? "" : "hidden lg:block"}>
+          {pre.pretest && <PretestCard chapterId={chapter.id} questions={pre.pretest} onDone={(seen) => setPre({ pretest: null, check: seen })} />}
           {chapter.url ? (
             <Pages url={chapter.url} chapterId={chapter.id} initialPage={initialPage} zoom={zoom} onPage={setPage} jumpRef={jump} />
           ) : (
@@ -148,6 +152,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
               </button>
             )}
           </div>
+          {done && pre.check && pre.check.length > 0 && <CheckCard chapterId={chapter.id} questions={pre.check} onDone={() => setPre((p) => ({ ...p, check: null }))} />}
         </div>
 
         <aside className={`space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto ${side === "read" ? "hidden lg:block" : ""}`}>

@@ -124,6 +124,8 @@ export async function markPretest(chapterId: string, phase: "pretest" | "check",
 }
 
 export interface AskContext {
+  courseName: string | null;
+  forumHref: string | null;
   question: StuckQuestion | null;
   phone: PhoneSlot | null;
   tutorial: Awaited<ReturnType<typeof getNextTutorial>>;
@@ -132,14 +134,22 @@ export interface AskContext {
 /** What the "turn into a question" sheet needs: a saved draft, the next phone hour and meetup. */
 export async function getAskContext(stuckId: string, courseCode: string | null) {
   return g(async (): Promise<AskContext> => {
-    await requireUser();
+    const { sb } = await requireUser();
     const code = courseCode && /^\d{5}$/.test(courseCode) ? courseCode : null;
-    const [qs, phone, tutorial] = await Promise.all([
+    const [course, qs, phone, tutorial] = await Promise.all([
+      code ? sb.from("user_courses").select("short, course:courses(name, opal_id)").eq("course_code", code).limit(1).maybeSingle() : Promise.resolve({ data: null }),
       UUID.test(stuckId) ? getStuckQuestions([stuckId]) : Promise.resolve({} as Record<string, StuckQuestion>),
       getNextPhoneSlot(code),
       code ? getNextTutorial(code) : Promise.resolve(null),
     ]);
-    return { question: qs[stuckId] ?? null, phone, tutorial };
+    const c = course.data as { short: string | null; course: { name: string; opal_id: number | null } | null } | null;
+    return {
+      courseName: c?.short || c?.course?.name || null,
+      forumHref: c?.course?.opal_id ? `https://opal.openu.ac.il/mod/ouilforum/index.php?id=${c.course.opal_id}` : null,
+      question: qs[stuckId] ?? null,
+      phone,
+      tutorial,
+    };
   });
 }
 
