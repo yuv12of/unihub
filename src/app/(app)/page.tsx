@@ -35,6 +35,7 @@ import { MathText } from "@/components/MathText";
 import { getForumPosts } from "@/lib/forum";
 import { SessionAgendaFor } from "@/components/SessionAgendaFor";
 import { PracticeMarksCard } from "@/components/PracticeMarks";
+import { ExamCandidates } from "@/components/ExamCandidates";
 import {
   addDays,
   allDeadlines,
@@ -251,6 +252,8 @@ async function Today() {
         {updates.length > 0 && <UpdatesList updates={updates} />}
 
         <PracticeMarksCard />
+
+        <ExamCandidates />
 
         {show("forums") && forumNew.length > 0 && (
           <div>

@@ -3,7 +3,8 @@ import { supabaseEnabled } from "@/lib/supabase/config";
 import { anonClient, bearer, loadPrivate } from "@/lib/privateFeed";
 import { runMailRules } from "@/lib/mailRules";
 import { sendPush } from "@/lib/push";
-import { todayInIsrael } from "@/lib/semester";
+import { semester, todayInIsrael } from "@/lib/semester";
+import { parseExamDates } from "@/lib/examMail";
 
 /**
  * Receives university mail from the user's Google Apps Script.
@@ -68,5 +69,23 @@ export async function POST(req: Request) {
       fresh.map((u) => ({ key: `u|${u.id}`, title: u.title, body: "עדכון מהדואר של האוניברסיטה", url: "/" })),
     );
 
-  return Response.json({ result: data, rules: rules.category ?? "ai", updates: fresh.length });
+  // Exam dates (Sheilta notices, invitations, staff posts) → candidates the user accepts on Today.
+  let exams = 0;
+  if (priv?.courses.length) {
+    const found = parseExamDates(
+      { subject: String(m.subject ?? ""), body_text: String(m.body ?? ""), attachments: attachments.map((a) => a.text) },
+      priv.courses.map((c) => c.code),
+      semester.semester,
+    );
+    if (found.length) {
+      const { data: n } = await sb.rpc("exam_candidates_add", { p_token: token, p_gmail_id: m.id, p_rows: found.map((e) => ({ ...e, semester: semester.semester })) });
+      exams = typeof n === "number" ? n : 0;
+      if (exams)
+        await sendPush(token, priv.feed.subscriptions, [
+          { key: `exam|${String(m.id)}`, title: "מועדי הבחינות פורסמו", body: `${exams === 1 ? "מועד חדש" : `${exams} מועדים חדשים`}. לבדוק ולהוסיף ללוח.`, url: "/" },
+        ]);
+    }
+  }
+
+  return Response.json({ result: data, rules: rules.category ?? "ai", updates: fresh.length, exams });
 }

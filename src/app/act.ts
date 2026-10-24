@@ -99,3 +99,5 @@ export const saveIfThen = w(Auto.saveIfThen);
 export const setIfThenActive = w(Auto.setIfThenActive);
 export const deleteIfThen = w(Auto.deleteIfThen);
 export const markPracticeSeen = w(Auto.markPracticeSeen);
+export const acceptExamCandidate = w(Auto.acceptExamCandidate);
+export const dismissExamCandidate = w(Auto.dismissExamCandidate);

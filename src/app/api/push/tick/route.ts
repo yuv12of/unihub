@@ -6,6 +6,7 @@ import type { IfThenPlan } from "@/lib/ifthen";
 import { syncDueGoogle } from "@/lib/googleCal";
 import { adminClient } from "@/lib/supabase/admin";
 import { backfillAttachmentText } from "@/lib/pdfText";
+import { scanExamMails } from "@/lib/examScan";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
   let others = 0;
   let google = 0;
   let pdfs = 0;
+  let exams = 0;
   // Everyone else's reminders run at most once every 8 minutes, however many scripts call this.
   const turn = admin
     ? (await admin.rpc("claim_tick")).data === true
@@ -47,11 +49,14 @@ export async function POST(req: Request) {
       const built = buildFromFeed(full, await restForFeed(full));
       others += await sendPushAsServer(userId, list, remindersFor(built, now, await extrasByUser(admin, userId)));
     }
+    pdfs = await backfillAttachmentText(admin).catch(() => 0);
+    // Exam dates in new mail (after PDF text, the Sheilta notice is a PDF); Saturday night a wider safety scan.
+    const weekly = new Date(now.date + "T00:00:00Z").getUTCDay() === 6 && now.minutes >= 21 * 60 && now.minutes < 21 * 60 + 15;
+    exams = await scanExamMails(admin, weekly ? 120 : 3).catch(() => 0);
     sent += others + (await deliverNotifications());
     google = await syncDueGoogle(admin);
-    pdfs = await backfillAttachmentText(admin).catch(() => 0);
   }
-  return Response.json({ sent, others, google, pdfs });
+  return Response.json({ sent, others, google, pdfs, exams });
 }
 
 type Row = { id: string; kind?: string; trigger_kind?: string; params: IfThenPlan["params"] | null; action: string; active: boolean };
