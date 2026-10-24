@@ -1,3 +1,4 @@
+import "server-only";
 import webpush from "web-push";
 import { anonClient } from "@/lib/privateFeed";
 import { adminClient } from "@/lib/supabase/admin";

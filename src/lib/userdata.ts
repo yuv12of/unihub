@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import semesterData from "@/data/semester-2027a.json";
 import { supabaseEnabled } from "@/lib/supabase/config";

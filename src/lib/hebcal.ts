@@ -68,10 +68,12 @@ interface HebcalItem {
 const dayOf = (iso: string) => iso.slice(0, 10);
 const timeOf = (iso: string) => iso.slice(11, 16);
 
-/** Hebcal events for a whole Gregorian year and city, cached for a day. */
+/**
+ * Hebcal events for a whole Gregorian year and city, cached for a day. A failure (Hebcal down or
+ * slower than 3 s) is cached too, but only for minutes, so pages don't wait on it on every view.
+ */
 async function hebcalYear(city: CityKey, year: number): Promise<HebcalItem[]> {
   "use cache";
-  cacheLife("days");
   const c = CITIES.find((x) => x.key === city) ?? CITIES[0];
   const q = new URLSearchParams({
     v: "1",
@@ -93,12 +95,18 @@ async function hebcalYear(city: CityKey, year: number): Promise<HebcalItem[]> {
     b: String(c.b),
     year: String(year),
   });
-  // A failure throws, so it isn't cached: the next page view simply tries again.
-  const res = await fetch(`https://www.hebcal.com/hebcal?${q}`, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`Hebcal ${res.status}`);
-  const json = (await res.json()) as { items?: HebcalItem[] };
-  if (!json.items?.length) throw new Error("Hebcal: no items");
-  return json.items;
+  try {
+    const res = await fetch(`https://www.hebcal.com/hebcal?${q}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) throw new Error(`Hebcal ${res.status}`);
+    const json = (await res.json()) as { items?: HebcalItem[] };
+    if (!json.items?.length) throw new Error("Hebcal: no items");
+    cacheLife("days");
+    return json.items;
+  } catch (e) {
+    console.error(`[hebcal ${year}]`, e instanceof Error ? e.message : e);
+    cacheLife("minutes");
+    return [];
+  }
 }
 
 async function hebcalYearSafe(city: CityKey, year: number): Promise<HebcalItem[]> {
