@@ -99,3 +99,11 @@ export const saveIfThen = w(Auto.saveIfThen);
 export const setIfThenActive = w(Auto.setIfThenActive);
 export const deleteIfThen = w(Auto.deleteIfThen);
 export const markPracticeSeen = w(Auto.markPracticeSeen);
+
+import * as P from "@/app/practiceActions";
+export const recordAttempt = w(P.recordAttempt);
+export const getPretest = w(P.getPretest);
+export const markPretest = w(P.markPretest);
+export const getAskContext = w(P.getAskContext);
+export const saveStuckQuestion = w(P.saveStuckQuestion);
+export const stuckFromQuestion = w(P.stuckFromQuestion);

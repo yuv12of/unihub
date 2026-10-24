@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 
 const HEB = /[֐-׿]/;
-const MATHY = /[A-Za-z0-9∑√≤≥∈∉⊆⊂∪∩→←↔∀∃≠±×÷^_=+*/<>|{}()[\]∞λαβγδεπσμθφΣΠ]/;
+const MATHY = /[A-Za-z0-9∑√≤≥∈∉⊆⊂∪∩→←↔∀∃≠±×÷−·⋅^_=+*/<>|{}()[\]∞λαβγδεπσμθφΣΠ-]/;
 
 /**
  * Hebrew text with plain-text math inside (like "הקבוצה {(1,0),(0,1)} היא בסיס של R^2."). Runs of

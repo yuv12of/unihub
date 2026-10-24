@@ -10,6 +10,7 @@ import { ReadChips } from "@/components/ReadChips";
 import { MathText } from "@/components/MathText";
 import { VideoStrip } from "@/components/VideoStrip";
 import { StuckList } from "@/components/StuckList";
+import { QuestionsForTutor } from "@/components/QuestionsForTutor";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { GradeCalculator } from "@/components/GradeCalculator";
 import { StandingText, WeightBar } from "@/components/CourseParts";
@@ -238,7 +239,14 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
             {
               key: "meetups",
               label: "מפגשים",
-              panel: <Meetups meetups={meetups} weeks={weeks} today={today} />,
+              panel: (
+                <div className="space-y-6">
+                  <Meetups meetups={meetups} weeks={weeks} today={today} />
+                  <Suspense fallback={null}>
+                    <QuestionsForTutor courseCode={code} courseName={c.name} />
+                  </Suspense>
+                </div>
+              ),
             },
             {
               key: "more",
