@@ -506,6 +506,8 @@ async function Today() {
           ]}
         />
 
+        <ExamCandidates />
+
         {show("forums") && forumNew.length > 0 && (
           <Fold id="today-forums" title="חדש בפורומים" summary={`${forumNew.length} הודעות חדשות`} defaultOpen={false}>
             <ul className="-mx-4 -my-3 divide-y divide-rule sm:-mx-5">

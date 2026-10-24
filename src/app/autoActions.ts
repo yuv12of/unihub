@@ -92,3 +92,34 @@ export async function markPracticeSeen(id: string) {
     return true;
   });
 }
+
+// ---------- Exam dates from mail ----------
+
+/** Adds a candidate exam date to my exams (one date per מועד: other pending dates of it are dismissed). */
+export async function acceptExamCandidate(id: string) {
+  return g(async () => {
+    const { sb, userId } = await user();
+    const { data: c, error } = await sb.from("exam_candidates").select("course_code, semester, moed, date, start_time").eq("id", id).maybeSingle();
+    if (error || !c) throw new Error("לא נמצא");
+    const { examsMoed } = await import("@/lib/examMail");
+    const { error: upErr } = await sb.from("exams").upsert(
+      { user_id: userId, course_code: c.course_code, semester: c.semester, moed: examsMoed(c.moed), date: c.date, start_time: c.start_time, source: "mail" },
+      { onConflict: "user_id,course_code,semester,moed" },
+    );
+    if (upErr) throw new Error("לא נשמר");
+    await sb.from("exam_candidates").update({ status: "accepted" }).eq("id", id);
+    await sb.from("exam_candidates").update({ status: "dismissed" }).match({ course_code: c.course_code, semester: c.semester, moed: c.moed, status: "pending" });
+    refresh();
+    return true;
+  });
+}
+
+export async function dismissExamCandidate(id: string) {
+  return g(async () => {
+    const { sb } = await user();
+    const { error } = await sb.from("exam_candidates").update({ status: "dismissed" }).eq("id", id);
+    if (error) throw new Error("לא נשמר");
+    refresh();
+    return true;
+  });
+}

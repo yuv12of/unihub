@@ -107,3 +107,6 @@ export const markPretest = w(P.markPretest);
 export const getAskContext = w(P.getAskContext);
 export const saveStuckQuestion = w(P.saveStuckQuestion);
 export const stuckFromQuestion = w(P.stuckFromQuestion);
+
+export const acceptExamCandidate = w(Auto.acceptExamCandidate);
+export const dismissExamCandidate = w(Auto.dismissExamCandidate);

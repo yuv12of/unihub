@@ -92,3 +92,56 @@ order by m.created_at desc limit 10;
 
 **First small step:** write one solved exercise in Notability as `תרגול 20109 1.1`, wait for it to appear in
 `notes`, then run the task once by hand and check the row and the card on Today.
+
+## Exam dates published (fallback step for the 05:25 task)
+
+Needs migration `0023_exam_candidates.sql`. The app already looks for exam dates in two places:
+the mail ingest (`/api/ingest/mail`, using the attachment text the Apps Script sends) and the push tick
+(`scanExamMails`, every tick for the last 3 days of mail after PDF attachments get their text, and a
+120-day safety scan on Saturday 21:00–21:15). Both only add rows to `exam_candidates`; the user accepts
+each date on Today ("מועדי הבחינות פורסמו"). This step catches what the deterministic parser misses
+(new layouts, scanned PDFs without a text layer, dates written in prose).
+
+### Prompt text
+
+```
+STEP: EXAM DATES (owner only: user_id ffc91068-ed7d-45bf-8f81-73f67d0f6cfd, semester 2027א)
+
+Goal: when the Open University publishes the 2027א exam dates (מועדי בחינות), they wait on Today for
+approval. Never write to the exams table yourself.
+
+1. Skip this step if all my 2027א courses already have exams rows for both מועד א and מועד ב:
+   select c.course_code,
+          bool_or(e.moed = 'א') has_a, bool_or(e.moed = 'ב') has_b
+   from user_courses c left join exams e
+     on e.user_id = c.user_id and e.course_code = c.course_code and e.semester = c.semester
+   where c.user_id = 'ffc91068-ed7d-45bf-8f81-73f67d0f6cfd' and c.semester = '2027א'
+   group by c.course_code;
+
+2. Read mail of the last 4 days that may announce exam dates:
+   select m.id, m.subject, m.received_at, m.body_text, a.filename, a.text_content
+   from mails m left join mail_attachments a on a.mail_id = m.id
+   where m.user_id = 'ffc91068-ed7d-45bf-8f81-73f67d0f6cfd'
+     and m.received_at > now() - interval '4 days'
+     and (m.subject ~ '(בחינ|מבחן|מועד|זימון)' or m.body_text ~ '(מועדי הבחינה|לוח בחינות|זימון לבחינה|מועד [אב])'
+          or a.text_content ~ 'מועדי הבחינה');
+   If an attachment is a PDF with empty text_content, open it (data_base64) and read it as an image.
+   Sheilta's notice "הודעה על מועדי בחינות בקורסים" has a table: each course row has the course
+   semester and code ("2027א 20109") and up to four dates; the code above each date says the מועד
+   (א8, א3 = מועד א; ב1 = מועד ב). Moed א often has two dates: keep both.
+
+3. Only my 2027א courses (step 1), only exam dates (not registration deadlines "תסגר בתאריך",
+   not assignment deadlines). Moed is 'א', 'ב' or 'מיוחד'. start_time 'HH:MM' or null.
+
+4. Insert, never update:
+   insert into exam_candidates (user_id, course_code, semester, moed, date, start_time, mail_id)
+   values ('ffc91068-ed7d-45bf-8f81-73f67d0f6cfd', '<code>', '2027א', '<moed>', '<YYYY-MM-DD>', <'HH:MM' or null>, '<mail id>')
+   on conflict (user_id, course_code, semester, moed, date) do nothing;
+
+5. If any row was inserted, also add one notification (the app pushes it to the phone):
+   insert into notifications (user_id, kind, title, body, url)
+   values ('ffc91068-ed7d-45bf-8f81-73f67d0f6cfd', 'exam_dates', 'מועדי הבחינות פורסמו',
+           '<N> מועדים חדשים (<codes>). לבדוק ולהוסיף ללוח ב־Unihub.', '/');
+
+6. In the final report: "בחינות: N מועדים חדשים" or "בחינות: אין חדש".
+```
