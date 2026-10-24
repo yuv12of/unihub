@@ -47,11 +47,11 @@ export const DRILL_SETS: { code: string; subject: string; drills: { id: DrillId;
 const ALL = DRILL_SETS.flatMap((s) => s.drills.map((d) => ({ ...d, code: s.code, subject: s.subject })));
 
 /** The drill chooser, or one drill with an endless supply of new instances. */
-export function Drills({ drill, myCourses }: { drill: DrillId | null; myCourses: { code: string; name: string; color: string }[] }) {
+export function Drills({ drill, myCourses, seed }: { drill: DrillId | null; myCourses: { code: string; name: string; color: string }[]; seed: number }) {
   const meta = ALL.find((d) => d.id === drill);
   if (!meta) return <Chooser myCourses={myCourses} />;
   const color = myCourses.find((c) => c.code === meta.code)?.color ?? "var(--ink)";
-  return <Runner key={meta.id} id={meta.id} title={meta.title} subject={meta.subject} code={meta.code} color={color} />;
+  return <Runner key={meta.id} firstSeed={seed} id={meta.id} title={meta.title} subject={meta.subject} code={meta.code} color={color} />;
 }
 
 function Chooser({ myCourses }: { myCourses: { code: string; name: string; color: string }[] }) {
@@ -88,8 +88,9 @@ function Chooser({ myCourses }: { myCourses: { code: string; name: string; color
   );
 }
 
-function Runner({ id, title, subject, code, color }: { id: DrillId; title: string; subject: string; code: string; color: string }) {
-  const [seed, setSeed] = useState(newSeed);
+function Runner({ firstSeed, id, title, subject, code, color }: { firstSeed: number; id: DrillId; title: string; subject: string; code: string; color: string }) {
+  // the first seed comes from the server so server and browser render the same drill
+  const [seed, setSeed] = useState(firstSeed);
   const [tally, setTally] = useState({ done: 0, first: 0 });
   const [finished, setFinished] = useState<boolean | null>(null);
   const finish = (firstTry: boolean, detail?: Record<string, unknown>) => {
@@ -247,7 +248,10 @@ function HeapDrillView({ seed, onFinish }: DrillProps) {
         <TreeSvg root={heapTree(d.start)} />
       </details>
       <p className="mt-3 text-sm text-ink-soft">
-        הפעולות לפי הסדר: {d.ops.map((o) => (o.t === "insert" ? `MAX-HEAP-INSERT(${o.key})` : "HEAP-EXTRACT-MAX")).join(", ")}
+        הפעולות לפי הסדר:{" "}
+        <bdi dir="ltr" className="font-mono">
+          {d.ops.map((o) => (o.t === "insert" ? `INSERT(${o.key})` : "EXTRACT-MAX")).join(", ")}
+        </bdi>
       </p>
       <ListSteps steps={d.steps} onFinish={onFinish} tree={(a) => <TreeSvg root={heapTree(a)} />} />
     </div>

@@ -147,7 +147,7 @@ export function RrefDrill({ seed, onFinish }: { seed: number; onFinish: (firstTr
             <span className="text-ink-soft">{kind === "swap" ? "↔" : kind === "scale" ? "→ c ·" : "→ +c ·"}</span>
             {kind !== "scale" && <RowPick value={j} onChange={setJ} rows={rows} label="שורה שנייה" />}
             {showCoef && (
-              <input value={c} onChange={(e) => setC(e.target.value)} placeholder="c" inputMode="numeric" autoComplete="off" aria-label="מקדם" className={`${field} w-24 text-center`} />
+              <input value={c} onChange={(e) => setC(e.target.value)} placeholder="c" inputMode="numeric" autoComplete="off" aria-label="מקדם" className={`${field} max-w-24 text-center`} />
             )}
           </div>
           {preview && <p className="text-sm" dir="ltr">{preview}</p>}

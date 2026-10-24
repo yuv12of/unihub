@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { Drills, type DrillId } from "@/components/practice/Drills";
 import { getCourses } from "@/lib/userdata";
+import { newSeed } from "@/lib/drills/rng";
 
 export default function DrillsPage({ searchParams }: PageProps<"/study/drills">) {
   return (
@@ -21,5 +22,5 @@ async function Body({ searchParams }: Pick<PageProps<"/study/drills">, "searchPa
   await connection();
   const [sp, mine] = await Promise.all([searchParams, getCourses()]);
   const d = typeof sp.d === "string" && (IDS as string[]).includes(sp.d) ? (sp.d as DrillId) : null;
-  return <Drills drill={d} myCourses={mine.map((c) => ({ code: c.code, name: c.short, color: c.color }))} />;
+  return <Drills drill={d} myCourses={mine.map((c) => ({ code: c.code, name: c.short, color: c.color }))} seed={newSeed()} />;
 }

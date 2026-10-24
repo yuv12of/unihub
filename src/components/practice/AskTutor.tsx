@@ -74,11 +74,11 @@ export function AskTutor({
       )}
       <label className="mt-3 block">
         <span className="text-ink-soft">מה ניסיתי</span>
-        <textarea value={tried} onChange={(e) => setTried(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="למשל: דירגתי ויצאה לי שורת אפסים, ניסיתי גם…" />
+        <textarea dir="auto" value={tried} onChange={(e) => setTried(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="למשל: דירגתי ויצאה לי שורת אפסים, ניסיתי גם…" />
       </label>
       <label className="mt-2 block">
         <span className="text-ink-soft">איפה נתקעתי</span>
-        <textarea value={where} onChange={(e) => setWhere(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="השלב המדויק שלא ברור לי" />
+        <textarea dir="auto" value={where} onChange={(e) => setWhere(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="השלב המדויק שלא ברור לי" />
       </label>
 
       <div className="mt-3 flex flex-wrap gap-2">

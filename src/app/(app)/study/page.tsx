@@ -9,6 +9,7 @@ export default function StudyPage({ searchParams }: PageProps<"/study">) {
     <>
       <h1 className="font-display text-4xl">תרגול</h1>
       <p className="mt-2 text-ink-soft">כרטיסיות ושאלות מהפרקים שפתחת, מיקס בין פרקים, ותרגול אינסופי עם בדיקה מדויקת.</p>
+      {/* PRACTICE-MARKS SLOT: the lead places <PracticeMarks /> (src/components/PracticeMarks.tsx, from rv-automation) here at merge. */}
       <Suspense fallback={<div className="mt-8 h-72 max-w-2xl animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Study searchParams={searchParams} />
       </Suspense>
