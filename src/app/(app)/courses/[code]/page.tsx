@@ -11,6 +11,7 @@ import { MathText } from "@/components/MathText";
 import { VideoStrip } from "@/components/VideoStrip";
 import { StuckList } from "@/components/StuckList";
 import { QuestionsForTutor } from "@/components/QuestionsForTutor";
+import { examLines, meetupHref, questionLines } from "@/lib/meetup";
 import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { GradeCalculator } from "@/components/GradeCalculator";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
@@ -309,7 +310,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               label: "מפגשים",
               panel: (
                 <div className="space-y-6">
-                  <Meetups meetups={meetups} weeks={weeks} today={today} />
+                  <Meetups meetups={meetups} weeks={weeks} today={today} code={code} />
                   <Suspense fallback={null}>
                     <QuestionsForTutor courseCode={code} courseName={c.name} />
                   </Suspense>
@@ -579,7 +580,13 @@ function ChapterTrack({ topics, weeks, today, watched, total, color }: { topics:
   );
 }
 
-function Meetups({ meetups, weeks, today }: { meetups: UserEvent[]; weeks: ReadingItem[]; today: string }) {
+async function Meetups({ meetups, weeks, today, code }: { meetups: UserEvent[]; weeks: ReadingItem[]; today: string; code: string }) {
+  const notes = new Map<string, { body: string; attended: boolean | null }>();
+  if (supabaseEnabled) {
+    const sb = await createClient();
+    const { data } = await sb.from("meetup_notes").select("date, body, attended").eq("course_code", code);
+    for (const n of data ?? []) notes.set(n.date, { body: n.body, attended: n.attended });
+  }
   const next = meetups.filter((m) => m.date >= today);
   const past = meetups.filter((m) => m.date < today);
   const row = (m: UserEvent) => {
@@ -599,6 +606,7 @@ function Meetups({ meetups, weeks, today }: { meetups: UserEvent[]; weeks: Readi
             {m.cancelled && <span className="ms-2 text-xs">בוטל</span>}
           </span>
           {m.location && <span className="block text-sm text-ink-soft">{m.location}</span>}
+          {m.kind === "tutorial" && !m.cancelled && <MeetupLine href={meetupHref(code, m.date)} note={notes.get(m.date)} past={m.date < today} />}
           {w && w.links.length > 0 && (
             <span className="mt-2 block">
               <span className="text-xs text-ink-soft">לקראת המפגש · {w.label}</span>
@@ -691,5 +699,22 @@ function RunwayPanel({ exam, run, today, status }: { exam: Exam | null; run: Run
         </>
       )}
     </section>
+  );
+}
+
+function MeetupLine({ href, note, past }: { href: string; note?: { body: string; attended: boolean | null }; past: boolean }) {
+  const stars = note ? examLines(note.body).length : 0;
+  const qs = note ? questionLines(note.body).length : 0;
+  const bits = [
+    note?.attended === false ? "פספסתי" : note?.attended ? "הייתי" : "",
+    note?.body.trim() ? "יש הערות" : "",
+    stars ? `${stars} ⭐` : "",
+    qs ? `${qs} ❓` : "",
+  ].filter(Boolean);
+  return (
+    <Link href={href} className="mt-1 inline-flex items-center gap-1.5 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
+      <Icon name="pencil" className="size-3.5" />
+      {past ? (bits.length ? bits.join(" · ") : "לסיכום המפגש") : bits.length ? `מצב מפגש · ${bits.join(" · ")}` : "מצב מפגש: שאלות והערות"}
+    </Link>
   );
 }

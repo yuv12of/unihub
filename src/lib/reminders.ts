@@ -9,6 +9,7 @@ import { addDays, allDeadlines, typeLabel, themeOf } from "@/lib/semester";
 import { weekStart } from "@/lib/routines";
 import { evaluateIfThen, ifThenPush, type IfThenPlan, type TriggerContext } from "@/lib/ifthen";
 import { range } from "@/lib/time";
+import { MEETUP_LEAD, meetupHref, meetupPhase } from "@/lib/meetup";
 
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 /** One evening push (replaces the 21:00 "tomorrow" and 22:00 wrap-up pushes): today's leftovers + tomorrow. */
@@ -33,7 +34,18 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
   const due: PushItem[] = [];
   for (const s of sessions.filter((x) => x.date === now.date && inWindow(x.start)))
     due.push({ key: `s|${s.date}|${s.start}|${s.title}`, title: `${s.start} · ${s.title}`, body: `מפגש לימוד עד ${s.end}`, url: "/" });
-  for (const e of feed.events.filter((x) => x.date === now.date && x.start_time && x.kind !== "other" && !x.cancelled && inWindow(x.start_time)))
+  // Meetups: ~30 minutes ahead, straight into meetup mode (join link, prepared questions, notes).
+  for (const e of feed.events.filter((x) => x.date === now.date && x.kind === "tutorial" && x.course_code && x.start_time && !x.cancelled)) {
+    const diff = toMin(e.start_time!) - now.minutes;
+    if (diff > 0 && diff <= MEETUP_LEAD + 5)
+      due.push({
+        key: `e|${e.id}`,
+        title: `בעוד ${diff} דק׳: מפגש ב${themeOf(courses, e.course_code!).short}`,
+        body: `${range(e.start_time, e.end_time)}. קישור לזום, השאלות שהכנת ומקום להערות.`,
+        url: meetupHref(e.course_code!, e.date),
+      });
+  }
+  for (const e of feed.events.filter((x) => x.date === now.date && x.start_time && x.kind !== "other" && x.kind !== "tutorial" && !x.cancelled && inWindow(x.start_time)))
     due.push({
       key: `e|${e.id}`,
       title: `${e.start_time} · ${e.title}${e.course_code ? ` ב${themeOf(courses, e.course_code).short}` : ""}`,
@@ -72,7 +84,9 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
 
   // If-then plans: the user's own fallback, quoted, once a day each.
   if (extras.ifThen?.length) for (const f of evaluateIfThen(extras.ifThen, triggerContext(data, now, todayRoutines, extras))) due.push(ifThenPush(f));
-  return due;
+  // Quiet during a live meetup: no study, routine or if-then nudges while the tutor is talking.
+  const inMeetup = feed.events.some((e) => meetupPhase(e, now.date, now.minutes) === "live");
+  return inMeetup ? due.filter((d) => !/^(s|r|if)\|/.test(d.key)) : due;
 }
 
 type Routines = ReturnType<typeof occurrencesFor>;

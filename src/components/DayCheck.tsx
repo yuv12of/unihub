@@ -95,7 +95,7 @@ export function DayCheck({
             )}
             {tip && tip.n >= 2 && (
               <p className="text-ink-soft">
-                {tip.label} הפריע/ה {tip.n} פעמים בשבועיים האחרונים. {tip.tip}
+                {tip.label}: {tip.n} פעמים בשבועיים האחרונים. {tip.tip}
               </p>
             )}
           </div>

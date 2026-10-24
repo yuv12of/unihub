@@ -121,3 +121,10 @@ export const toggleCheck = w(Plan.toggleCheck);
 import * as Check from "@/app/checkActions";
 export const saveDayCheck = w(Check.saveDayCheck);
 export const setRhythmOff = w(Check.setRhythmOff);
+
+import * as Meet from "@/app/meetupActions";
+export const saveMeetupNote = w(Meet.saveMeetupNote);
+export const setMeetupAttended = w(Meet.setMeetupAttended);
+export const setMeetupAsked = w(Meet.setMeetupAsked);
+export const meetupQuestionsToStuck = w(Meet.meetupQuestionsToStuck);
+export const saveMeetupLinks = w(Meet.saveMeetupLinks);

@@ -40,6 +40,8 @@ import { SessionAgendaFor } from "@/components/SessionAgendaFor";
 import { PracticeMarksCard } from "@/components/PracticeMarks";
 import { ExamCandidates } from "@/components/ExamCandidates";
 import { DayCheckCard } from "@/components/DayCheckCard";
+import { MeetupBanner } from "@/components/MeetupBanner";
+import { currentMeetup } from "@/lib/meetup";
 import {
   addDays,
   allDeadlines,
@@ -183,6 +185,7 @@ async function Today() {
 
   // ---- Layout: three tiers. Now (hero + the rest of today), This week, then everything else. ----
   const canEdit = supabaseEnabled || !!process.env.UNIHUB_DEMO;
+  const meetupOn = currentMeetup(events, today, nowMin);
   const pastUnmarked = todaySessions.filter((x) => !status[sessionKey(x)] && mins(x.end) <= nowMin);
   const heroKey = upNext?.session ? sessionKey(upNext.session) : null;
   const heroEventId = !upNext?.session && eventNext ? eventNext.id : null;
@@ -240,6 +243,20 @@ async function Today() {
         <BadgeToast earned={earned} />
 
         {isOff && supabaseEnabled && <DayOff date={today} isOff sessionsToday={0} routinesToday={0} />}
+
+        {meetupOn && (
+          <Suspense fallback={null}>
+            <MeetupBanner
+              code={meetupOn.event.course_code!}
+              short={themeOf(courses, meetupOn.event.course_code!).short}
+              date={today}
+              start={meetupOn.event.start_time!}
+              end={meetupOn.event.end_time}
+              phase={meetupOn.phase}
+              nowMin={nowMin}
+            />
+          </Suspense>
+        )}
 
         {courses.length > 0 && (
           <UpNext
