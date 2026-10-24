@@ -1,5 +1,6 @@
 "use client";
 
+import { Chevron } from "@/components/Icon";
 import { useState, useTransition } from "react";
 import { addCourse, removeCourse, updateCourseLook } from "@/app/act";
 import { PALETTE } from "@/lib/semester";
@@ -32,11 +33,11 @@ export function AddCourse({ semester }: { semester: string }) {
         pattern="\d{5}"
         maxLength={5}
         required
-        placeholder="20441"
-        dir="ltr"
-        className="w-24 rounded-lg border border-rule bg-surface px-3 py-2 text-center tabular-nums"
+        placeholder="מספר קורס, למשל 20441"
+        aria-label="מספר קורס (5 ספרות)"
+        className="w-56 max-w-full rounded-lg border border-rule-strong bg-surface px-3 py-2 tabular-nums"
       />
-      <button disabled={pending} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-bg disabled:opacity-60">
+      <button disabled={pending} className="btn-primary">
         {pending ? "טוען…" : "הוספה"}
       </button>
       {msg && <span className={`text-sm ${msg.ok ? "" : "text-red-700"}`}>{msg.text}</span>}
@@ -49,15 +50,18 @@ export function CourseLook({ code, short, color }: { code: string; short: string
   const [pending, start] = useTransition();
   const [name, setName] = useState(short);
   return (
-    <details className="mt-3">
-      <summary className="cursor-pointer text-ink">שם קצר וצבע</summary>
+    <details className="group mt-3">
+      <summary className="summary-clean flex min-h-10 items-center gap-2 text-ink">
+        שם קצר וצבע
+        <Chevron />
+      </summary>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && name !== short && start(() => updateCourseLook(code, { short: name }))}
           maxLength={24}
-          className="w-36 rounded-md border border-rule bg-surface px-2 py-1 text-ink"
+          className="w-36 rounded-md border border-rule-strong bg-surface px-2 py-1.5 text-ink"
           aria-label="שם קצר"
         />
         <span className="flex gap-1.5">
@@ -67,7 +71,8 @@ export function CourseLook({ code, short, color }: { code: string; short: string
               type="button"
               disabled={pending}
               onClick={() => start(() => updateCourseLook(code, { color: key }))}
-              className={`size-6 rounded-full ${key === color ? "ring-2 ring-ink ring-offset-2 ring-offset-surface" : ""}`}
+              aria-pressed={key === color}
+              className={`size-8 rounded-full ${key === color ? "ring-2 ring-ink ring-offset-2 ring-offset-surface" : ""}`}
               style={{ background: p.css }}
               aria-label={p.label}
               title={p.label}
@@ -78,7 +83,7 @@ export function CourseLook({ code, short, color }: { code: string; short: string
           type="button"
           disabled={pending}
           onClick={() => confirmRemove() && start(() => removeCourse(code))}
-          className="ms-auto text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
+          className="btn-ghost ms-auto"
         >
           הסרת הקורס
         </button>

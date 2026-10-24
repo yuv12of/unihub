@@ -1,5 +1,6 @@
 "use client";
 
+import { Chevron } from "@/components/Icon";
 import { useMemo, useState } from "react";
 
 interface Row {
@@ -50,18 +51,22 @@ export function GradeCalculator({ rows, max, color }: { rows: Row[]; max: number
 
   return (
     <details className="group border-t border-rule px-5 py-4">
-      <summary className="cursor-pointer text-sm font-semibold">מחשבון ציון</summary>
+      <summary className="summary-clean flex min-h-10 items-center gap-2 text-sm font-semibold">
+        <span className="flex-1">מחשבון ציון</span>
+        <Chevron />
+      </summary>
       <div className="mt-3 space-y-3 text-sm">
         <ul className="space-y-1.5">
           {rows
             .filter((r) => r.weight > 0)
             .map((r) => (
               <li key={r.n} className="flex items-center gap-3">
-                <label className="flex min-w-0 flex-1 items-center gap-2">
+                <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2">
                   <input
                     type="checkbox"
                     checked={plan[r.n].on}
                     onChange={(e) => setPlan((p) => ({ ...p, [r.n]: { ...p[r.n], on: e.target.checked } }))}
+                    className="size-5 shrink-0"
                     style={{ accentColor: color }}
                   />
                   <span className="truncate">
@@ -78,7 +83,7 @@ export function GradeCalculator({ rows, max, color }: { rows: Row[]; max: number
                   onChange={(e) =>
                     setPlan((p) => ({ ...p, [r.n]: { ...p[r.n], grade: Math.max(0, Math.min(100, Number(e.target.value) || 0)) } }))
                   }
-                  className="w-16 rounded-md border border-rule bg-surface px-2 py-1 text-center tabular-nums disabled:opacity-40"
+                  className="w-16 rounded-md border border-rule-strong bg-surface px-2 py-1 text-center tabular-nums disabled:opacity-40"
                   aria-label={`ציון ב${r.label}`}
                 />
                 <span className="w-10 text-xs text-ink-soft">{r.grade != null ? "בפועל" : "צפוי"}</span>
@@ -111,7 +116,7 @@ export function GradeCalculator({ rows, max, color }: { rows: Row[]; max: number
               max={100}
               value={target}
               onChange={(e) => setTarget(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-              className="mx-1 w-14 rounded-md border border-rule bg-surface px-1.5 py-0.5 text-center tabular-nums"
+              className="mx-1 w-14 rounded-md border border-rule-strong bg-surface px-1.5 py-0.5 text-center tabular-nums"
               aria-label="ציון יעד"
             />
             צריך בבחינה: <strong className="tabular-nums">{neededText}</strong>
