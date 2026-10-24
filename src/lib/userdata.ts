@@ -2,7 +2,7 @@ import { cache } from "react";
 import semesterData from "@/data/semester-2027a.json";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, courseFromRow, semester, todayInIsrael, type Course, type CourseRow } from "@/lib/semester";
+import { addDays, courseFromRow, CURRENT_SEMESTER, semester, todayInIsrael, type Course, type CourseRow } from "@/lib/semester";
 import { restFor } from "@/lib/hebcal";
 import { baseRef, defaultPrefs, type Exam, type Plan, type StudyPrefs } from "@/lib/planner";
 import { planFor } from "@/lib/planfor";
@@ -42,7 +42,7 @@ export const getRoutines = cache(async (): Promise<RoutineWithMembers[]> => {
 export const getRoutineLogs = cache(async (): Promise<RoutineLog[]> => {
   if (!supabaseEnabled) return [];
   const supabase = await createClient();
-  const since = new Date(Date.now() - 70 * 86_400_000).toISOString().slice(0, 10);
+  const since = addDays(todayInIsrael(), -70);
   const { data } = await supabase.from("routine_logs").select("routine_id, user_id, date").gte("date", since);
   return (data ?? []) as RoutineLog[];
 });
@@ -86,7 +86,9 @@ export async function getExams(): Promise<Exam[]> {
   return (data ?? []) as Exam[];
 }
 
-export async function getPrefs(): Promise<StudyPrefs> {
+/** Cached per request (the plan and the Today page both read it). */
+export const getPrefs = cache(loadPrefs);
+async function loadPrefs(): Promise<StudyPrefs> {
   if (!supabaseEnabled) return defaultPrefs;
   const supabase = await createClient();
   const { data } = await supabase
@@ -128,18 +130,24 @@ export interface UserEvent {
 
 const EVENT_COLS = "id, user_id, date, start_time, end_time, title, kind, course_code, location, source, cancelled, series_id, repeat";
 
-/** My own events (with who I invited) plus events I accepted an invitation to. */
+/**
+ * My own events (with who I invited) plus events I accepted an invitation to.
+ * From 60 days ago (like the SQL feed), or from the semester start if that's earlier, so the
+ * semester calendar still shows its first weeks.
+ */
 export const getEvents = cache(async (): Promise<UserEvent[]> => {
   if (!supabaseEnabled) return [];
   const me = await getUserId();
   const supabase = await createClient();
+  const back = addDays(todayInIsrael(), -60);
+  const since = CURRENT_SEMESTER.starts < back ? CURRENT_SEMESTER.starts : back;
   const [{ data: own }, { data: invited }] = await Promise.all([
-    supabase.from("user_events").select(`${EVENT_COLS}, guests:event_invites(invitee, status)`).eq("user_id", me ?? "").order("date"),
+    supabase.from("user_events").select(`${EVENT_COLS}, guests:event_invites(invitee, status)`).eq("user_id", me ?? "").gte("date", since).order("date"),
     supabase.from("event_invites").select(`status, inviter, event:user_events(${EVENT_COLS})`).eq("invitee", me ?? "").eq("status", "accepted"),
   ]);
   const mine = (own ?? []) as unknown as UserEvent[];
   const theirs = (invited ?? [])
-    .filter((i) => i.event)
+    .filter((i) => i.event && (i.event as unknown as UserEvent).date >= since)
     .map((i) => ({ ...(i.event as unknown as UserEvent), invited_by: i.inviter as string, guests: [] }));
   return [...mine, ...theirs].sort((a, b) => a.date.localeCompare(b.date));
 });
@@ -163,12 +171,19 @@ export async function getPendingInvites(): Promise<Invite[]> {
   return ((data ?? []) as unknown as Invite[]).filter((i) => i.event && i.event.date >= todayInIsrael());
 }
 
-export async function getSessionRows(): Promise<{ session_key: string; status: "done" | "skipped"; minutes: number | null }[]> {
+/**
+ * Done/skipped study sessions of the last 400 days (keys start with the date, so a text bound works).
+ * Cached per request: the plan, the heatmap and the hours per assignment all read it.
+ */
+export const getSessionRows = cache(async (): Promise<{ session_key: string; status: "done" | "skipped"; minutes: number | null }[]> => {
   if (!supabaseEnabled) return [];
   const supabase = await createClient();
-  const { data } = await supabase.from("session_status").select("session_key, status, minutes");
+  const { data } = await supabase
+    .from("session_status")
+    .select("session_key, status, minutes")
+    .gte("session_key", addDays(todayInIsrael(), -400));
   return data ?? [];
-}
+});
 
 
 export interface UserPlan {
@@ -489,7 +504,7 @@ export const getBadges = cache(async (): Promise<{ friends?: number; admin?: num
 export const getOffDays = cache(async (): Promise<string[]> => {
   if (!supabaseEnabled) return [];
   const supabase = await createClient();
-  const since = new Date(Date.now() - 120 * 86_400_000).toISOString().slice(0, 10);
+  const since = addDays(todayInIsrael(), -120);
   const { data } = await supabase.from("day_off").select("date").gte("date", since);
   return (data ?? []).map((r) => r.date as string);
 });
