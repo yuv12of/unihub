@@ -1,24 +1,38 @@
-/** Colour themes. The CSS for each lives in globals.css under [data-palette]. */
+/**
+ * Colour themes: eight clearly different ones. The CSS for each lives in globals.css under
+ * [data-palette]. `light` / `dark` are [bg, surface, ink, highlight] for the picker's preview.
+ */
 export const PALETTES = {
-  default: { label: "כחול לילה", swatch: ["#f4f6f9", "#16213a", "#ffe14d"] },
-  forest: { label: "יער", swatch: ["#f2f6f2", "#16301f", "#ffd84d"] },
-  ocean: { label: "ים", swatch: ["#eef6f8", "#0f2c3a", "#7ee0d2"] },
-  sunset: { label: "שקיעה", swatch: ["#fbf4ef", "#3a1d14", "#ffc24d"] },
-  lavender: { label: "לבנדר", swatch: ["#f5f3fb", "#2a2148", "#ffe14d"] },
-  rose: { label: "ורד", swatch: ["#fbf3f5", "#3d1726", "#ffd1dc"] },
-  sand: { label: "חול", swatch: ["#f7f2e8", "#3b2f1e", "#ffd65c"] },
-  mono: { label: "שחור לבן", swatch: ["#f4f4f4", "#111111", "#ffe600"] },
-  contrast: { label: "ניגודיות גבוהה", swatch: ["#ffffff", "#000000", "#ffe600"] },
-  midnight: { label: "חצות", swatch: ["#f3f2fb", "#1e1a4a", "#ff9ecf"] },
-  matcha: { label: "מאצ׳ה", swatch: ["#f1f4ea", "#26331c", "#c5e86c"] },
-  coffee: { label: "קפה", swatch: ["#f5efe9", "#3b2a20", "#f2b880"] },
-  peach: { label: "אפרסק", swatch: ["#fff3ec", "#47261b", "#ffb38a"] },
-  nordic: { label: "נורדי", swatch: ["#eceff4", "#2e3440", "#88c0d0"] },
-  sakura: { label: "סקורה", swatch: ["#fdf4f7", "#3c2233", "#ffc2d9"] },
-  citrus: { label: "הדר", swatch: ["#fff8ec", "#33270f", "#ffb020"] },
-  grape: { label: "ענבים", swatch: ["#f6f1f8", "#34163f", "#d5b3ff"] },
-  graphite: { label: "גרפיט", swatch: ["#eef0f2", "#1f2328", "#ffd166"] },
+  default: { label: "כחול לילה", light: ["#f4f6f9", "#ffffff", "#16213a", "#ffe14d"], dark: ["#0c1322", "#131c2f", "#e6ebf5", "#ffd92e"] },
+  nordic: { label: "נורדי", light: ["#eceff4", "#f8f9fb", "#2e3440", "#88c0d0"], dark: ["#242933", "#2e3440", "#eceff4", "#88c0d0"] },
+  forest: { label: "יער", light: ["#f2f6f2", "#ffffff", "#16301f", "#ffd84d"], dark: ["#0d1611", "#14211a", "#e3efe6", "#ffd84d"] },
+  ocean: { label: "ים", light: ["#eef6f8", "#ffffff", "#0f2c3a", "#7ee0d2"], dark: ["#0a1820", "#10232e", "#e0f0f5", "#5fd3c4"] },
+  sunset: { label: "שקיעה", light: ["#fbf4ef", "#ffffff", "#3a1d14", "#ffc24d"], dark: ["#1a100d", "#251713", "#f7e9e2", "#ffb547"] },
+  sakura: { label: "סקורה", light: ["#fdf4f7", "#ffffff", "#3c2233", "#ffc2d9"], dark: ["#1a1016", "#261821", "#f9e8f0", "#ff9cc3"] },
+  grape: { label: "ענבים", light: ["#f6f1f8", "#ffffff", "#34163f", "#d5b3ff"], dark: ["#150b1a", "#211128", "#f3e6f8", "#c79bff"] },
+  contrast: { label: "ניגודיות גבוהה", light: ["#ffffff", "#ffffff", "#000000", "#ffe600"], dark: ["#000000", "#0a0a0a", "#ffffff", "#ffe600"] },
 } as const;
+
+/** Palettes that were removed (Oct 2026), mapped to the nearest one that stayed, so saved choices keep working. */
+export const OLD_PALETTES: Record<string, PaletteKey> = {
+  lavender: "grape",
+  midnight: "grape",
+  rose: "sakura",
+  peach: "sunset",
+  coffee: "sunset",
+  citrus: "sunset",
+  sand: "sunset",
+  matcha: "forest",
+  graphite: "nordic",
+  mono: "contrast",
+};
+
+/** Any stored palette name → a palette that exists (unknown names fall back to the default). */
+export function normalizePalette(p: string | null | undefined): PaletteKey | undefined {
+  if (!p) return undefined;
+  if (p in PALETTES) return p as PaletteKey;
+  return OLD_PALETTES[p] ?? "default";
+}
 export type PaletteKey = keyof typeof PALETTES;
 
 /** Styles: the same colours, a different feel (CSS under [data-style] in globals.css). */
@@ -56,7 +70,8 @@ export function applyLook(p: LookPrefs) {
       else localStorage.removeItem(store);
     } catch {}
   };
-  set("palette", p.palette && p.palette !== "default" ? p.palette : null, "palette");
+  const pal = normalizePalette(p.palette);
+  set("palette", pal && pal !== "default" ? pal : null, "palette");
   set("style", p.style && p.style !== "classic" ? p.style : null, "style");
   set("theme", p.theme && p.theme !== "system" ? p.theme : null, "theme");
   set("size", p.size && p.size !== "md" ? p.size : null, "size");
@@ -64,4 +79,4 @@ export function applyLook(p: LookPrefs) {
 }
 
 /** Inline script for <head>: restores the look before the first paint. */
-export const LOOK_BOOT = `try{var d=document.documentElement,s=localStorage;["theme","palette","style","size","calm"].forEach(function(k){var v=s.getItem(k);if(v)d.dataset[k]=v})}catch(e){}`;
+export const LOOK_BOOT = `try{var d=document.documentElement,s=localStorage,o=${JSON.stringify(OLD_PALETTES)};["theme","palette","style","size","calm"].forEach(function(k){var v=s.getItem(k);if(k==="palette"&&v&&o[v]){v=o[v];s.setItem(k,v)}if(v)d.dataset[k]=v})}catch(e){}`;
