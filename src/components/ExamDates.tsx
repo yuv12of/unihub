@@ -26,12 +26,12 @@ export function ExamDates({ code, exams, editable, onSaved }: { code: string; ex
 
   const row = (moed: "א" | "ב", v: { date: string; time: string }, set: (v: { date: string; time: string }) => void) => (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <label className="flex w-24 shrink-0 items-center gap-1.5">
+      <label className="flex w-full shrink-0 items-center gap-1.5 sm:w-24">
         <input type="radio" name={`moed-${code}`} checked={chosen === moed} onChange={() => setChosen(moed)} disabled={!editable} className="size-4" />
         מועד {moed}
       </label>
-      <input type="date" value={v.date} onChange={(e) => set({ ...v, date: e.target.value })} disabled={!editable} className={`${field} flex-1`} aria-label={`תאריך מועד ${moed}`} />
-      <input type="time" value={v.time} onChange={(e) => set({ ...v, time: e.target.value })} disabled={!editable} className={`${field} w-28`} dir="ltr" aria-label={`שעת מועד ${moed}`} />
+      <input type="date" value={v.date} onChange={(e) => set({ ...v, date: e.target.value })} disabled={!editable} className={`${field} flex-1`} dir="ltr" aria-label={`תאריך מועד ${moed}`} />
+      <input type="time" value={v.time} onChange={(e) => set({ ...v, time: e.target.value })} disabled={!editable} className={`${field} w-32`} dir="ltr" aria-label={`שעת מועד ${moed}`} />
     </div>
   );
 

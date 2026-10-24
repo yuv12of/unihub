@@ -3,6 +3,7 @@
  * for the courses index (StrategyBadge, loads its own data).
  */
 import { cache } from "react";
+import { Icon } from "@/components/Icon";
 import { prepMinutes } from "@/lib/planner";
 import { courseStrategy, type CourseStrategy, type Crunch } from "@/lib/strategy";
 import { coursesFor, getProgress } from "@/lib/progress";
@@ -46,7 +47,10 @@ export function StrategyPanel({ s, crunches, color }: { s: CourseStrategy; crunc
           <h3 className="text-sm font-semibold">שבועות עמוסים</h3>
           <ul className="mt-2 space-y-2 text-sm leading-relaxed">
             {crunches.map((c) => (
-              <li key={c.first}>{c.tone === "warn" ? <span className="hl">{c.text}</span> : c.text}</li>
+              <li key={c.first} className="flex gap-2">
+                <Icon name={c.tone === "warn" ? "alert" : "calendar"} className={`mt-0.5 size-4 shrink-0 ${c.tone === "warn" ? "text-ink" : "text-ink-soft"}`} />
+                <span>{c.text}</span>
+              </li>
             ))}
           </ul>
         </div>

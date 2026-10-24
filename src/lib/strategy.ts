@@ -321,7 +321,7 @@ export function crunches({
   for (const c of courses) {
     for (const i of strat(c).items)
       if (i.state === "open" && prep(i.type, i.weight) > 0)
-        all.push({ code: c.code, short: c.short, n: i.n, label: `${i.label} ב${c.short}`, due: i.due, weight: i.weight, prep: i.prep });
+        all.push({ code: c.code, short: c.short, n: i.n, label: `${i.label} ב${c.short.endsWith("…") ? c.name : c.short}`, due: i.due, weight: i.weight, prep: i.prep });
   }
   all.sort((a, b) => a.due.localeCompare(b.due) || a.code.localeCompare(b.code));
 

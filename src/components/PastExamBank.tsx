@@ -84,7 +84,7 @@ export function PastExamBank({ code, rows, editable }: { code: string; rows: Ban
 
       {editable && (
         <form
-          className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto]"
+          className="mt-4 grid gap-2 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             start(async () => {
@@ -102,15 +102,17 @@ export function PastExamBank({ code, rows, editable }: { code: string; rows: Ban
         >
           <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={120} placeholder="שם, למשל 2025ב מועד 83" className={field} aria-label="שם הבחינה" />
           <input value={url} onChange={(e) => setUrl(e.target.value)} type="url" dir="ltr" placeholder="https://… (לא חובה)" className={field} aria-label="קישור ל־PDF" />
-          <input value={questions} onChange={(e) => setQuestions(e.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" placeholder="שאלות" className={`${field} sm:w-20`} aria-label="מספר שאלות" />
+          <div className="flex items-center gap-2 sm:col-span-2">
+          <input value={questions} onChange={(e) => setQuestions(e.target.value.replace(/\D/g, "").slice(0, 2))} inputMode="numeric" placeholder="שאלות" className={`${field} w-20`} aria-label="מספר שאלות" />
           <label className="flex items-center gap-1 text-sm text-ink-soft">
             <input value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, "").slice(0, 3))} inputMode="numeric" className={`${field} w-16 text-center`} aria-label="משך בדקות" />
             דק׳
           </label>
-          <button disabled={pending || (!label.trim() && !url.trim())} className="inline-flex items-center justify-center gap-1 rounded-lg border border-rule px-3 py-2 text-sm disabled:opacity-50">
+          <button disabled={pending || (!label.trim() && !url.trim())} className="ms-auto inline-flex items-center justify-center gap-1 rounded-lg border border-rule px-3 py-2 text-sm disabled:opacity-50">
             <Icon name="plus" className="size-4" />
             הוספה
           </button>
+          </div>
         </form>
       )}
       {err && <p className="mt-2 text-sm hl">{err}</p>}

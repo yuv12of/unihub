@@ -610,7 +610,7 @@ function ExamCard({ exam, run, today, code, hasRows }: { exam: Exam | null; run:
       <section className="panel p-5">
         <h2 className="section-title">הבחינה</h2>
         <p className="mt-2 text-sm leading-relaxed">
-          {hasRows ? "מועד הבחינה שבחרת כבר עבר." : "מועדי הבחינות עוד לא פורסמו."} הסמסטר נגמר ב־<b>{day(end)}</b> ({relDays(daysBetween(today, end))}), והבחינות אחריו.
+          {hasRows ? "מועד הבחינה שבחרת כבר עבר." : "מועדי הבחינות עוד לא פורסמו."} הסמסטר נגמר ב־<b>{formatHebrewDate(end, { day: "numeric", month: "numeric" })}</b> ({relDays(daysBetween(today, end))}), והבחינות אחריו.
         </p>
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer underline decoration-rule underline-offset-4">להזנת המועדים כשיתפרסמו</summary>
@@ -651,14 +651,21 @@ function RunwayPanel({ exam, run, today, status }: { exam: Exam | null; run: Run
       <h2 className="section-title px-5 pt-5">החזרות לקראת הבחינה</h2>
       {!exam ? (
         <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">
-          אחרי שמזינים מועד, התוכנית שומרת זמן לחזרה בשלושת השבועות שלפניו, עם בחינה לדוגמה פעם בשבוע. עד אז היא מתכננת עד סוף הסמסטר ({day(semesterEnd())}).
+          אחרי שמזינים מועד, התוכנית שומרת זמן לחזרה בשלושת השבועות שלפניו, עם בחינה לדוגמה פעם בשבוע. עד אז היא מתכננת עד סוף הסמסטר ({formatHebrewDate(semesterEnd(), { day: "numeric", month: "numeric" })}).
         </p>
       ) : !run?.sessions.length ? (
         <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">
           החזרות יתחילו ב־{day(addDays(exam.date, -21) > today ? addDays(exam.date, -21) : today)}.
         </p>
       ) : (
-        <SessionRows sessions={run.sessions.slice(0, 40)} status={status} highlight={MOCK_TITLE} />
+        <>
+          <SessionRows sessions={run.sessions.slice(0, 40)} status={status} highlight={MOCK_TITLE} />
+          {run.sessions.some((s) => s.title.startsWith(MOCK_TITLE) && s.minutes < 180) && (
+            <p className="border-t border-rule px-5 py-3 text-xs text-ink-soft">
+              בחינה לדוגמה אורכת 3 שעות, אבל חלון הלימוד בימים האלה קצר יותר. אפשר להאריך אותו בהגדרות, או לפתור רק חלק מהשאלות.
+            </p>
+          )}
+        </>
       )}
     </section>
   );
