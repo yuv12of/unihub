@@ -74,11 +74,12 @@ export function HobbyNew({ onDone }: { onDone?: () => void }) {
         <p className="text-sm text-ink-soft">להתחיל מאחד מאלה, או מאפס:</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {PRESETS.map((p) => (
-            <button key={p.title} type="button" onClick={() => pick(p)} className="rounded-full border border-rule bg-surface px-3 py-1.5 text-sm hover:border-ink">
-              {p.emoji} {p.title}
+            <button key={p.title} type="button" onClick={() => pick(p)} className="chip">
+              <Icon name={KINDS[p.kind].icon} className="size-4 text-ink-soft" />
+              {p.title}
             </button>
           ))}
-          <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1.5 text-sm font-medium text-bg">
+          <button type="button" onClick={() => setOpen(true)} className="btn-primary">
             <Icon name="plus" className="size-4" />
             תחביב אחר
           </button>

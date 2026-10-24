@@ -21,16 +21,16 @@ async function Study() {
   const courses = mine.map((c) => ({ code: c.code, name: c.short, color: c.color }));
   return (
     <>
-      <p className="mt-4 text-sm text-ink-soft">
-        {total === 0
-          ? "עוד אין כרטיסים. הראשונים ייווצרו בסבב הבוקר הקרוב."
-          : `${due.length} לחזרה עכשיו, מתוך ${total} כרטיסים. ` +
+      {total > 0 && (
+        <p className="mt-4 text-sm text-ink-soft">
+          {`${due.length} לחזרה עכשיו, מתוך ${total} כרטיסים. ` +
             courses
               .filter((c) => byCourse[c.code])
               .map((c) => `${c.name}: ${byCourse[c.code].due}/${byCourse[c.code].total}`)
               .join(" · ")}
-      </p>
-      <StudySession cards={due} courses={courses} />
+        </p>
+      )}
+      <StudySession cards={due} courses={courses} total={total} />
     </>
   );
 }

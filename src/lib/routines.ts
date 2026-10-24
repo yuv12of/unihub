@@ -71,16 +71,17 @@ export interface Occurrence {
   moved?: boolean;
 }
 
-export const CATEGORY: Record<RoutineCategory, { label: string; emoji: string; color: string }> = {
-  sleep: { label: "שינה", emoji: "🌙", color: "var(--c-slate)" },
-  meal: { label: "ארוחות", emoji: "🍽️", color: "var(--c-amber)" },
-  sport: { label: "ספורט", emoji: "🏃", color: "var(--c-orange)" },
-  health: { label: "בריאות", emoji: "💊", color: "var(--c-teal)" },
-  habit: { label: "הרגלים", emoji: "✨", color: "var(--c-purple)" },
-  chore: { label: "מטלות בית", emoji: "🧺", color: "var(--c-green)" },
-  hobby: { label: "תחביבים", emoji: "🎸", color: "var(--c-rose)" },
-  social: { label: "אנשים שאני אוהב", emoji: "❤️", color: "var(--c-rose)" },
-  other: { label: "אחר", emoji: "•", color: "var(--c-slate)" },
+/** emoji: the default mark on a routine (user content); icon: the SVG used on buttons and chips. */
+export const CATEGORY: Record<RoutineCategory, { label: string; emoji: string; icon: "moon" | "meal" | "run" | "pill" | "sparkle" | "basket" | "music" | "heart" | "dot"; color: string }> = {
+  sleep: { label: "שינה", emoji: "🌙", icon: "moon", color: "var(--c-slate)" },
+  meal: { label: "ארוחות", emoji: "🍽️", icon: "meal", color: "var(--c-amber)" },
+  sport: { label: "ספורט", emoji: "🏃", icon: "run", color: "var(--c-orange)" },
+  health: { label: "בריאות", emoji: "💊", icon: "pill", color: "var(--c-teal)" },
+  habit: { label: "הרגלים", emoji: "✨", icon: "sparkle", color: "var(--c-purple)" },
+  chore: { label: "מטלות בית", emoji: "🧺", icon: "basket", color: "var(--c-green)" },
+  hobby: { label: "תחביבים", emoji: "🎸", icon: "music", color: "var(--c-rose)" },
+  social: { label: "אנשים שאני אוהב", emoji: "❤️", icon: "heart", color: "var(--c-rose)" },
+  other: { label: "אחר", emoji: "•", icon: "dot", color: "var(--c-slate)" },
 };
 
 export const WINDOWS: Record<TimeWindow, { label: string; from: string; to: string }> = {

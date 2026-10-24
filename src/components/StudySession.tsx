@@ -4,6 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { MathText } from "@/components/MathText";
 import { reviewCard } from "@/app/act";
 import type { Card } from "@/lib/userdata";
+import Link from "next/link";
+import { CourseChip } from "@/components/CourseChip";
+import { Icon } from "@/components/Icon";
+import { ScrollRow } from "@/components/Fold";
 
 const GRADES: { g: 0 | 1 | 2 | 3; label: string; hint: string }[] = [
   { g: 0, label: "שוב", hint: "בעוד 10 דק׳" },
@@ -15,7 +19,10 @@ const GRADES: { g: 0 | 1 | 2 | 3; label: string; hint: string }[] = [
 export function StudySession({
   cards,
   courses,
+  total,
 }: {
+  /** all cards, due or not: 0 means none were made yet (a different empty state from "done for today") */
+  total?: number;
   cards: Card[];
   courses: { code: string; name: string; color: string }[];
 }) {
@@ -41,9 +48,23 @@ export function StudySession({
     start(() => reviewCard(id, g));
   };
 
+  if (total === 0)
+    return (
+      <div className="panel mt-6 max-w-2xl p-6 text-center sm:p-8">
+        <Icon name="list" className="mx-auto size-8 text-ink-soft" />
+        <h2 className="section-title mt-2">עוד אין כרטיסים</h2>
+        <p className="mx-auto mt-1 max-w-md text-ink-soft">הכרטיסים נבנים כל בוקר מהפרקים של השבוע בספרי הקורס. הראשונים יגיעו מחר בבוקר.</p>
+        <Link href="/books" className="btn mt-4">
+          <Icon name="book" className="size-4" />
+          לספרי הקורס
+        </Link>
+      </div>
+    );
+
   return (
     <div className="mt-6">
-      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="קורס">
+      <ScrollRow className="mb-4 pb-1 sm:flex-wrap">
+        <div role="tablist" aria-label="קורס" className="contents">
         {[{ code: "all", name: "כל הקורסים", color: "var(--ink)" }, ...courses].map((c) => (
           <button
             key={c.code}
@@ -55,14 +76,13 @@ export function StudySession({
               setRevealed(false);
               setPicked(null);
             }}
-            className={`rounded-full border px-3 py-1 text-sm ${
-              course === c.code ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft hover:border-ink"
-            }`}
+            className={`chip shrink-0 ${course === c.code ? "is-on" : ""}`}
           >
-            {c.name}
+            {c.code === "all" ? c.name : <CourseChip short={c.name} color={c.color} />}
           </button>
         ))}
-      </div>
+        </div>
+      </ScrollRow>
 
       {!card ? (
         <div className="panel max-w-2xl p-6">

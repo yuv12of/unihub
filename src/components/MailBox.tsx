@@ -89,7 +89,7 @@ export function MailBox({ mails, editable, initialOpen }: { mails: Mail[]; edita
               aria-selected={filter === k}
               onClick={() => setFilter(k)}
               className={`rounded-full border px-3 py-1 text-sm ${
-                filter === k ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft hover:border-ink"
+                filter === k ? "border-accent bg-accent text-on-accent" : "border-rule text-ink-soft hover:border-ink"
               }`}
             >
               {label}
@@ -222,7 +222,7 @@ function MailBody({ mail: original }: { mail: Mail }) {
                 role="tab"
                 aria-selected={mode === m}
                 onClick={() => setMode(m)}
-                className={`rounded-md px-2.5 py-1 ${mode === m ? "bg-ink text-bg" : "text-ink-soft"}`}
+                className={`rounded-md px-2.5 py-1 ${mode === m ? "bg-accent text-on-accent" : "text-ink-soft"}`}
               >
                 {m === "html" ? "מעוצב" : "טקסט"}
               </button>

@@ -73,20 +73,22 @@ export function RoutinesBoard({
           <button
             type="button"
             onClick={() => setEditing({ mode: "fixed", category: "other", days: [0, 1, 2, 3, 4], start_time: "08:00", minutes: 30, time_window: "any", blocks_study: true })}
-            className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-bg"
+            className="btn-primary"
           >
-            ＋ שגרה חדשה
+            <Icon name="plus" className="size-4" />
+            שגרה חדשה
           </button>
           <span className="text-sm text-ink-soft">או מהירות:</span>
-          <div className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:w-full sm:flex-wrap sm:px-0">
+          <div className="flex w-full flex-wrap gap-2">
             {TEMPLATES.filter((t) => !mine.some((r) => r.title === t.title)).map((t) => (
               <button
                 key={t.title}
                 type="button"
                 onClick={() => setEditing({ ...t, per_week: t.per_week ?? undefined })}
-                className="shrink-0 rounded-full border border-rule bg-surface px-3 py-1.5 text-sm hover:border-ink"
+                className="chip shrink-0"
               >
-                {t.emoji} {t.title}
+                <Icon name={CATEGORY[t.category].icon} className="size-4" style={{ color: CATEGORY[t.category].color }} />
+                {t.title}
               </button>
             ))}
           </div>
@@ -111,8 +113,9 @@ export function RoutinesBoard({
       ) : (
         groups.map(({ c, list }) => (
           <section key={c}>
-            <h2 className="section-title mb-3">
-              {CATEGORY[c].emoji} {CATEGORY[c].label}
+            <h2 className="section-title mb-3 flex items-center gap-2">
+              <Icon name={CATEGORY[c].icon} className="size-5" style={{ color: CATEGORY[c].color }} />
+              {CATEGORY[c].label}
             </h2>
             <ul className="grid gap-3 lg:grid-cols-2">
               {list.map((r) => (
@@ -273,9 +276,9 @@ function RoutineCard({
                     await toggleRoutine(r.id, d, !isDone);
                   })
                 }
-                className={`relative mx-auto mt-1 grid size-9 place-items-center rounded-full border-2 text-xs transition-colors disabled:cursor-default ${
+                className={`relative mx-auto mt-1 grid size-11 place-items-center rounded-full border-2 text-xs transition-colors disabled:cursor-default sm:size-10 ${
                   isDone ? "text-white" : o ? "" : "border-transparent"
-                } ${d === today ? "ring-2 ring-highlight ring-offset-1 ring-offset-surface" : ""}`}
+                } ${d === today ? "ring-2 ring-ink ring-offset-2 ring-offset-surface" : ""}`}
                 style={{
                   borderColor: isDone || o ? color : undefined,
                   background: isDone ? color : undefined,
@@ -285,7 +288,7 @@ function RoutineCard({
                 aria-label={`${DAY_LETTERS[i]}׳${o?.start ? ` ${o.start}` : ""}${isDone ? ", בוצע" : ""}`}
                 title={o?.start ? `\u2066${o.start}–${o.end}\u2069` : undefined}
               >
-                {isDone ? "✓" : o?.start ? <span className="text-[10px] tabular-nums text-ink-soft">{o.start}</span> : ""}
+                {isDone ? <Icon name="check" className="size-5" /> : o?.start ? <span className="text-[11px] font-medium tabular-nums text-ink-soft">{o.start}</span> : ""}
                 {others.length > 0 && (
                   <span className="absolute -bottom-1 -end-1 grid size-4 place-items-center rounded-full bg-surface text-[9px] ring-1 ring-rule" aria-label="גם השותף/ה סימן/ה">
                     <Icon name="users" className="size-2.5" />
@@ -369,9 +372,10 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                 role="radio"
                 aria-checked={f.category === c}
                 onClick={() => set("category", c)}
-                className={`rounded-full border px-3 py-1 text-sm ${f.category === c ? "border-ink bg-ink text-bg" : "border-rule text-ink-soft"}`}
+                className={`chip ${f.category === c ? "is-on" : ""}`}
               >
-                {CATEGORY[c].emoji} {CATEGORY[c].label}
+                <Icon name={CATEGORY[c].icon} className="size-4" />
+                {CATEGORY[c].label}
               </button>
             ))}
           </div>
@@ -428,7 +432,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                         type="button"
                         aria-pressed={f.days.includes(d)}
                         onClick={() => set("days", f.days.includes(d) ? f.days.filter((x) => x !== d) : [...f.days, d])}
-                        className={`size-9 rounded-full border text-sm ${f.days.includes(d) ? "border-ink bg-ink text-bg" : "border-rule"}`}
+                        className={`size-11 rounded-full border text-sm sm:size-9 ${f.days.includes(d) ? "border-accent bg-accent text-on-accent" : "border-rule-strong"}`}
                       >
                         {l}
                       </button>
@@ -512,7 +516,7 @@ function RoutineForm({ initial, people, onClose }: { initial: Partial<RoutineInp
                       type="button"
                       aria-pressed={on}
                       onClick={() => set("share_with", on ? f.share_with!.filter((x) => x !== p.id) : [...(f.share_with ?? []), p.id])}
-                      className={`flex items-center gap-1.5 rounded-full border py-1 pe-3 ps-1 text-sm ${on ? "border-ink bg-ink text-bg" : "border-rule"}`}
+                      className={`flex items-center gap-1.5 rounded-full border py-1 pe-3 ps-1 text-sm ${on ? "border-accent bg-accent text-on-accent" : "border-rule"}`}
                     >
                       <Avatar name={p.name} url={p.avatar_url} emoji={p.avatar_emoji} color={p.avatar_color} size={22} />
                       {p.name.split(" ")[0]}

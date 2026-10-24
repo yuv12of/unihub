@@ -88,10 +88,10 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
             {page}/{chapter.pages}
           </span>
           <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.25))} disabled={zoom <= 1} className="grid size-8 place-items-center rounded-full border border-rule disabled:opacity-40" aria-label="הקטנה">
+            <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.25))} disabled={zoom <= 1} className="grid size-11 place-items-center rounded-full border border-rule-strong disabled:opacity-40 sm:size-9" aria-label="הקטנה">
               <Icon name="minus" className="size-4" />
             </button>
-            <button type="button" onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))} className="grid size-8 place-items-center rounded-full border border-rule" aria-label="הגדלה">
+            <button type="button" onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))} className="grid size-11 place-items-center rounded-full border border-rule-strong sm:size-9" aria-label="הגדלה">
               <Icon name="plus" className="size-4" />
             </button>
           </div>
@@ -104,7 +104,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
               role="tab"
               aria-selected={side === k}
               onClick={() => setSide(k)}
-              className={`flex-1 rounded-full py-1.5 text-sm ${side === k ? "bg-ink text-bg" : "text-ink-soft"}`}
+              className={`flex-1 rounded-full py-1.5 text-sm ${side === k ? "bg-accent text-on-accent" : "text-ink-soft"}`}
             >
               {label}
             </button>
@@ -112,7 +112,7 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className={side === "read" ? "" : "hidden lg:block"}>
           {chapter.url ? (
             <Pages url={chapter.url} chapterId={chapter.id} initialPage={initialPage} zoom={zoom} onPage={setPage} jumpRef={jump} />
