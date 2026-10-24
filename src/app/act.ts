@@ -92,3 +92,13 @@ export const deleteHobbyLog = w(H.deleteHobbyLog);
 export const addHobbyItem = w(H.addHobbyItem);
 export const updateHobbyItem = w(H.updateHobbyItem);
 export const deleteHobbyItem = w(H.deleteHobbyItem);
+
+import * as P from "@/app/planActions";
+export const saveCourseExams = w(P.saveCourseExams);
+export const addPastExam = w(P.addPastExam);
+export const deletePastExam = w(P.deletePastExam);
+export const startMock = w(P.startMock);
+export const finishMock = w(P.finishMock);
+export const setQuestionCount = w(P.setQuestionCount);
+export const setQuestionState = w(P.setQuestionState);
+export const toggleCheck = w(P.toggleCheck);
