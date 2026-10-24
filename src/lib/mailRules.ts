@@ -11,6 +11,7 @@ import { range } from "@/lib/time";
  * Official notices arrive as scanned PDFs; their text comes from Drive OCR in the user's Apps Script.
  */
 import { semester, themeOf, typeLabel, addDays, type Course } from "@/lib/semester";
+import { submissionConfirmation } from "@/lib/tracker";
 
 export interface MailInput {
   subject: string;
@@ -262,6 +263,19 @@ export function runMailRules(mail: MailInput, tutorials: TutorialLike[], today: 
     } else {
       result.category ??= "קורס";
       result.summary ??= "אחת המטלות נבדקה. הציון במסמך המצורף ובשאילתא.";
+    }
+  }
+
+  // 3b. Submission confirmation from the assignment system: mark it submitted (strict matcher, lib/tracker).
+  const sub = submissionConfirmation({ subject, sender: mail.sender, body: mail.body ?? "" }, courses);
+  if (sub) {
+    const a = courses.find((c) => c.code === sub.course_code)?.assignments.find((x) => x.n === sub.n);
+    if (a) {
+      const label = `${typeLabel[a.type]} ${a.n} ב${themeOf(courses, sub.course_code).short}`;
+      // kind "grade" with no grade = mark submitted (the database applies it like a grade update)
+      result.updates.push({ kind: "grade", title: `${label} הוגש`, detail: "התקבל מייל אישור הגשה. המטלה סומנה כהוגשה.", payload: { course_code: sub.course_code, n: a.n, grade: null }, auto: true });
+      result.category ??= "קורס";
+      result.summary ??= `אישור הגשה: ${label}.`;
     }
   }
 

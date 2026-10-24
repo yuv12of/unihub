@@ -80,7 +80,8 @@ export async function getExams(): Promise<Exam[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("exams")
-    .select("course_code, moed, date, start_time")
+    // "*": also chosen / mocks once migration 0021 is applied (no error before it)
+    .select("*")
     .eq("semester", semester.semester)
     .order("date");
   return (data ?? []) as Exam[];

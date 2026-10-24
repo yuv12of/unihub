@@ -16,12 +16,20 @@ import { GradeCalculator } from "@/components/GradeCalculator";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
 import { CourseLook } from "@/components/CourseManager";
 import { PALETTE } from "@/lib/semester";
+import { ExamDates, ExamNag } from "@/components/ExamDates";
+import { PastExamBank } from "@/components/PastExamBank";
+import { AssignmentQuestions } from "@/components/AssignmentQuestions";
+import { StrategyPanel } from "@/components/Strategy";
+import { aimedExam, attemptScore, getMockAttempts, getPastExams, runway, semesterEnd, type Runway } from "@/lib/exams";
+import { getChecks, getQuestions } from "@/lib/trackerData";
+import { courseStrategy, crunches as findCrunches, freeMinutes } from "@/lib/strategy";
+import { busyFromEvents } from "@/lib/planfor";
 import { getBooks, readingByCourse } from "@/lib/books";
 import { getReadings, weekFor, type ReadingItem } from "@/lib/readings";
 import { getForumPosts } from "@/lib/forum";
 import { getCourseVideos, type VideoTopic } from "@/lib/videos";
 import { courseHours } from "@/lib/courseHours";
-import { sessionKey, type Session } from "@/lib/planner";
+import { MOCK_TITLE, prepMinutes, sessionKey, type Exam, type Session } from "@/lib/planner";
 import { progressKey, standing } from "@/lib/progress";
 import { getNotes, getReviews, getSessionRows, getSpentByAssignment, getStuck, getUserPlan, type UserEvent } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -43,7 +51,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
   await connection();
   const { code } = await params;
   const today = todayInIsrael();
-  const [{ progress, plan, events, status, courses, exams }, rows, books, forum, stuck, notes, spent, reviews] = await Promise.all([
+  const [{ progress, plan, events, status, courses, exams, prefs, offDays }, rows, books, forum, stuck, notes, spent, reviews, pastExams, questions, checks] = await Promise.all([
     getUserPlan(today),
     getSessionRows(),
     getBooks(),
@@ -52,10 +60,13 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
     getNotes(),
     getSpentByAssignment(),
     getReviews(),
+    getPastExams(code),
+    getQuestions(code),
+    getChecks(code),
   ]);
   const c = courses.find((x) => x.code === code);
   if (!c) notFound();
-  const [plans, videos, cardsDue] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code)]);
+  const [plans, videos, cardsDue, attempts] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code), getMockAttempts(pastExams.map((e) => e.id))]);
   const myBooks = books.filter((b) => b.course_code === code).sort((a, b) => a.position - b.position);
   const weeks = plans.weeks[code] ?? [];
   const thisWeek = weekFor(weeks, today);
@@ -71,7 +82,29 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
   const nextDue = c.assignments
     .filter((a) => a.due >= today && !["submitted", "skipped"].includes(progress[progressKey(code, a.n)]?.status ?? ""))
     .sort((a, b) => a.due.localeCompare(b.due))[0];
-  const exam = exams.filter((e) => e.course_code === code && e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+  const myExams = exams.filter((e) => e.course_code === code);
+  const exam = aimedExam(exams, code, today);
+  const run = exam ? runway(plan.sessions, code, exam, today) : null;
+  const mySpent = Object.fromEntries(Object.entries(spent).filter(([k]) => k.startsWith(code + "|")).map(([k, v]) => [k.split("|")[1], v]));
+  const strategy = courseStrategy({ course: c, progress, today, prep: prepMinutes, spent: mySpent });
+  const crunchList = findCrunches({ courses, progress, today, prep: prepMinutes, spent, free: freeMinutes(prefs, offDays, busyFromEvents(events)) }).filter(
+    (k) => k.items.some((i) => i.code === code) && k.last >= today && k.first <= addDays(today, 60),
+  );
+  const strategyAlert = strategy.lines.find((l) => l.tone === "warn") ?? crunchList.find((k) => k.tone === "warn" && k.from <= addDays(today, 7));
+  const bank = pastExams.map((e) => {
+    const mine = attempts.filter((a) => a.exam_id === e.id && a.finished_at);
+    return { id: e.id, label: e.label, url: e.url, duration_minutes: e.duration_minutes, questions: e.questions, attempts: mine.length, lastScore: mine[0] ? attemptScore(mine[0]) : null };
+  });
+  const tracked = c.assignments
+    .filter((a) => a.type === "file" && a.due >= today && !["submitted", "skipped"].includes(progress[progressKey(code, a.n)]?.status ?? ""))
+    .map((a) => ({
+      n: a.n,
+      label: `${typeLabel[a.type]} ${a.n}`,
+      dueLabel: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }),
+      daysLeft: daysBetween(today, a.due),
+      questions: questions[a.n] ?? [],
+      checks: checks[a.n] ?? [],
+    }));
   const upcoming = plan.sessions.filter((s) => s.courseCode === code && s.date >= today && s.date <= addDays(today, 13));
   const courseForum = forum.filter((f) => f.courseCode === code);
   const myStuck = stuck.filter((x) => x.course_code === code);
@@ -93,6 +126,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
         <h1 className="font-display text-4xl leading-tight sm:text-5xl">{c.name}</h1>
         <SemesterStrip weeks={weeks} meetups={tutorials} today={today} color={c.color} />
       </header>
+      {!myExams.length && <ExamNag code={code} editable={supabaseEnabled} />}
 
       <dl className="panel mt-6 grid grid-cols-2 divide-rule overflow-hidden sm:grid-cols-4 sm:divide-x sm:divide-x-reverse [&>div]:border-rule [&>div]:p-4 max-sm:[&>div:nth-child(odd)]:border-e max-sm:[&>div:nth-child(-n+2)]:border-b">
         <Fact label="המפגש הבא" value={nextMeetup ? day(nextMeetup.date) : "אין"} sub={nextMeetup ? range(nextMeetup.start_time, nextMeetup.end_time) : undefined} />
@@ -152,12 +186,9 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                       <h2 className="section-title">מצב במטלות</h2>
                       <WeightBar course={c} st={st} color={c.color} />
                       <StandingText st={st} min={c.assignmentWeight.min} max={c.assignmentWeight.max} />
-                      {exam && (
-                        <p className="mt-3 text-sm">
-                          בחינה, מועד {exam.moed}: <b>{day(exam.date)}</b> ({relDays(daysBetween(today, exam.date))})
-                        </p>
-                      )}
+                      {strategyAlert && <p className="mt-2 text-sm leading-relaxed">{strategyAlert.text}</p>}
                     </section>
+                    <ExamCard exam={exam} run={run} today={today} code={code} hasRows={myExams.length > 0} />
                     <section className="panel p-5">
                       <h2 className="section-title">ספרי הקורס</h2>
                       <ul className="mt-3 space-y-3">
@@ -205,6 +236,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               label: "מטלות",
               panel: (
                 <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+                  <div className="space-y-6">
                   <section className="panel px-5 pb-2 pt-5">
                     <h2 className="section-title">מטלות הקורס</h2>
                     <AssignmentChecklist
@@ -225,6 +257,14 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                       }))}
                     />
                   </section>
+                  <section className="panel px-5 pb-2 pt-5">
+                    <h2 className="section-title">איפה אני בממ״נים</h2>
+                    <p className="mt-1 text-sm text-ink-soft">שאלה אחר שאלה. יומיים לפני ההגשה מופיעה רשימת בדיקה.</p>
+                    <AssignmentQuestions code={code} color={c.color} items={tracked} editable={supabaseEnabled} />
+                  </section>
+                  </div>
+                  <div className="space-y-6">
+                  <StrategyPanel s={strategy} crunches={crunchList} color={c.color} />
                   <section className="panel overflow-hidden">
                     <GradeCalculator
                       color={c.color}
@@ -234,6 +274,32 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                         return { n: a.n, label: `${typeLabel[a.type]} ${a.n}`, weight: a.weight, grade: p?.status === "submitted" ? (p.grade ?? null) : null, status: p?.status ?? "todo" };
                       })}
                     />
+                  </section>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              key: "exams",
+              label: "בחינות",
+              panel: (
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="space-y-6">
+                    <section className="panel p-5">
+                      <h2 className="section-title">מועדי הבחינה</h2>
+                      <p className="mt-1 text-sm text-ink-soft">
+                        {myExams.length ? "מהשאילתא. אפשר לשנות בכל רגע." : "מועדי הבחינות עוד לא פורסמו. כשיתפרסמו בשאילתא, הזינו אותם כאן."}
+                      </p>
+                      <div className="mt-4">
+                        <ExamDates code={code} exams={myExams} editable={supabaseEnabled} />
+                      </div>
+                    </section>
+                    <RunwayPanel exam={exam} run={run} today={today} status={status} />
+                  </div>
+                  <section className="panel self-start p-5">
+                    <h2 className="section-title">בחינות קודמות</h2>
+                    <p className="mt-1 mb-3 text-sm text-ink-soft">הבחינות באוניברסיטה הפתוחה חוזרות על עצמן. לפתור אותן בזמן אמת זו ההכנה הכי טובה.</p>
+                    <PastExamBank code={code} rows={bank} editable={supabaseEnabled} />
                   </section>
                 </div>
               ),
@@ -397,7 +463,7 @@ function SemesterStrip({ weeks, meetups, today, color }: { weeks: ReadingItem[];
   );
 }
 
-function SessionRows({ sessions, status }: { sessions: Session[]; status: Record<string, "done" | "skipped"> }) {
+function SessionRows({ sessions, status, highlight }: { sessions: Session[]; status: Record<string, "done" | "skipped">; highlight?: string }) {
   if (!sessions.length) return <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">אין לימוד מתוכנן לקורס בשבועיים הקרובים.</p>;
   return (
     <ol className="mt-3 divide-y divide-rule border-t border-rule">
@@ -410,7 +476,7 @@ function SessionRows({ sessions, status }: { sessions: Session[]; status: Record
               {s.start}–{s.end}
             </bdi>
             <span className={`min-w-0 flex-1 ${st ? "text-ink-soft line-through" : ""}`}>
-              {s.title}
+              {highlight && s.title.startsWith(highlight) ? <b>{s.title}</b> : s.title}
               {s.why && <span className="block text-xs text-ink-soft no-underline">יותר זמן כאן: {s.why}</span>}
             </span>
           </li>
@@ -556,5 +622,74 @@ function Meetups({ meetups, weeks, today }: { meetups: UserEvent[]; weeks: Readi
         </section>
       )}
     </div>
+  );
+}
+
+/** Countdown to the exam I'm taking and the revision planned for it (or, before dates exist, the semester end). */
+function ExamCard({ exam, run, today, code, hasRows }: { exam: Exam | null; run: Runway | null; today: string; code: string; hasRows: boolean }) {
+  if (!exam) {
+    const end = semesterEnd();
+    return (
+      <section className="panel p-5">
+        <h2 className="section-title">הבחינה</h2>
+        <p className="mt-2 text-sm leading-relaxed">
+          {hasRows ? "מועד הבחינה שבחרת כבר עבר." : "מועדי הבחינות עוד לא פורסמו."} הסמסטר נגמר ב־<b>{formatHebrewDate(end, { day: "numeric", month: "numeric" })}</b> ({relDays(daysBetween(today, end))}), והבחינות אחריו.
+        </p>
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer underline decoration-rule underline-offset-4">להזנת המועדים כשיתפרסמו</summary>
+          <div className="mt-3">
+            <ExamDates code={code} exams={[]} editable={supabaseEnabled} />
+          </div>
+        </details>
+      </section>
+    );
+  }
+  const left = daysBetween(today, exam.date);
+  return (
+    <section className="panel p-5">
+      <h2 className="section-title">הבחינה · מועד {exam.moed}</h2>
+      <p className="mt-2 flex items-baseline gap-2">
+        <span className="font-display text-4xl tabular-nums">{left}</span>
+        <span className="text-ink-soft">{left === 1 ? "יום" : "ימים"}</span>
+      </p>
+      <p className="text-sm">
+        {day(exam.date)}
+        {exam.start_time ? `, ${range(exam.start_time)}` : ""}
+      </p>
+      {run && run.minutes > 0 ? (
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          חזרה מתוכננת: {duration(run.minutes)} ב־{run.sessions.length} מפגשים, החל מ־{day(run.first!)}
+          {run.mocks ? `, כולל ${run.mocks === 1 ? "בחינה לדוגמה אחת" : `${run.mocks} בחינות לדוגמה`}` : ""}.
+        </p>
+      ) : (
+        <p className="mt-3 text-sm text-ink-soft">החזרות מתחילות שלושה שבועות לפני הבחינה, ויופיעו כאן ובלוח השנה.</p>
+      )}
+    </section>
+  );
+}
+
+function RunwayPanel({ exam, run, today, status }: { exam: Exam | null; run: Runway | null; today: string; status: Record<string, "done" | "skipped"> }) {
+  return (
+    <section className="panel overflow-hidden">
+      <h2 className="section-title px-5 pt-5">החזרות לקראת הבחינה</h2>
+      {!exam ? (
+        <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">
+          אחרי שמזינים מועד, התוכנית שומרת זמן לחזרה בשלושת השבועות שלפניו, עם בחינה לדוגמה פעם בשבוע. עד אז היא מתכננת עד סוף הסמסטר ({formatHebrewDate(semesterEnd(), { day: "numeric", month: "numeric" })}).
+        </p>
+      ) : !run?.sessions.length ? (
+        <p className="px-5 pb-5 pt-2 text-sm text-ink-soft">
+          החזרות יתחילו ב־{day(addDays(exam.date, -21) > today ? addDays(exam.date, -21) : today)}.
+        </p>
+      ) : (
+        <>
+          <SessionRows sessions={run.sessions.slice(0, 40)} status={status} highlight={MOCK_TITLE} />
+          {run.sessions.some((s) => s.title.startsWith(MOCK_TITLE) && s.minutes < 180) && (
+            <p className="border-t border-rule px-5 py-3 text-xs text-ink-soft">
+              בחינה לדוגמה אורכת 3 שעות, אבל חלון הלימוד בימים האלה קצר יותר. אפשר להאריך אותו בהגדרות, או לפתור רק חלק מהשאלות.
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 }

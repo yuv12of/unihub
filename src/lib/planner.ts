@@ -5,7 +5,8 @@ import { duration } from "@/lib/time";
  * Pure and deterministic, so the app and the calendar feed always show the same plan.
  * Rules, in priority order each day:
  *   1. Assignment prep in the 14 days before a deadline (earliest deadline first).
- *   2. Exam revision in the 21 days before an exam.
+ *   2. Exam revision in the 21 days before the exam the user aims at (the chosen מועד, else the
+ *      earliest), with a timed mock exam once a week in those three weeks.
  *   3. Optional routine study, rotating between courses, in whatever time is left.
  * Work already done on earlier days (sessions marked done) is credited, and anything not done
  * simply stays in the remaining work, so missed sessions roll forward on their own.
@@ -51,6 +52,10 @@ export interface Exam {
   moed: string;
   date: string;
   start_time: string | null;
+  /** the מועד the user plans to take (null/undefined = not chosen: the earliest upcoming one counts) */
+  chosen?: boolean | null;
+  /** plan a timed mock exam once a week in the last three weeks (default on) */
+  mocks?: boolean | null;
 }
 
 export type SessionKind = "assignment" | "exam" | "routine";
@@ -115,16 +120,31 @@ const toHHMM = (min: number) =>
   `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 const weekday = (iso: string) => new Date(iso + "T00:00:00Z").getUTCDay();
 
-/** Next upcoming exam for each course (earliest moed on or after today). */
+/**
+ * The exam each course is aiming at: the chosen מועד when the user picked one (nothing once it has
+ * passed), otherwise the earliest upcoming one (so מועד א by default).
+ */
 export function nextExams(exams: Exam[], today: string): Exam[] {
   const byCourse = new Map<string, Exam>();
+  const picked = new Set(exams.filter((e) => e.chosen).map((e) => e.course_code));
   for (const e of exams) {
     if (e.date < today) continue;
+    if (picked.has(e.course_code) && !e.chosen) continue;
     const cur = byCourse.get(e.course_code);
     if (!cur || e.date < cur.date) byCourse.set(e.course_code, e);
   }
   return [...byCourse.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
+
+/** Exams the user sits: the chosen מועד of a course, or every מועד while none is chosen. */
+export function takenExams(exams: Exam[]): Exam[] {
+  const picked = new Set(exams.filter((e) => e.chosen).map((e) => e.course_code));
+  return exams.filter((e) => !picked.has(e.course_code) || e.chosen);
+}
+
+export const MOCK_TITLE = "בחינה לדוגמה";
+const MOCK_MINUTES = 180;
+const MOCK_MIN = 90;
 
 export interface Busy {
   date: string;
@@ -203,10 +223,12 @@ export function buildPlan({
     }
   }
 
-  for (const e of nextExams(exams, today)) {
+  const aimed = nextExams(exams, today);
+  for (const e of aimed) {
     const title = `בחינה ב${themeOf(courses, e.course_code).short}`;
     const sessionTitle = `חזרה ל${title}`;
-    const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, "exam");
+    // done mock exams count toward revision too
+    const remaining = EXAM_MINUTES - creditFor("exam", e.course_code, "exam") - creditFor("exam", e.course_code, "mock");
     if (remaining < MIN_CHUNK) continue;
     tasks.push({
       courseCode: e.course_code,
@@ -222,11 +244,12 @@ export function buildPlan({
   }
 
   const lastAssignment = courses.flatMap((c) => c.assignments.map((a) => a.due)).sort().at(-1) ?? today;
-  const horizon = [lastAssignment, ...tasks.map((t) => t.until)].sort().at(-1)!;
+  const horizon = [lastAssignment, ...tasks.map((t) => t.until), ...aimed.map((e) => addDays(e.date, -1))].sort().at(-1)!;
 
   const sessions: Session[] = [];
   const routineLoad = new Map<string, number>(courses.map((c) => [c.code, 0]));
-  const examDays = new Set(exams.map((e) => e.date));
+  const taken = takenExams(exams);
+  const examDays = new Set(taken.map((e) => e.date));
 
   // Weekly goal: study minutes per week (Sunday start), counting what was already done this week.
   const goal = prefs.weekly_goal_minutes && prefs.weekly_goal_minutes > 0 ? prefs.weekly_goal_minutes : null;
@@ -278,6 +301,21 @@ export function buildPlan({
     return left ? Math.ceil(Math.max(0, goal - (weekMinutes.get(weekOf(d)) ?? 0)) / left) : 0;
   };
 
+  // Mock exams: one a week in the last three weeks before the aimed exam, on the day of that week
+  // with the longest study window (a 3-hour exam wants one long sitting).
+  const mockDays = new Map<string, Exam>();
+  for (const e of aimed) {
+    if (e.mocks === false) continue;
+    for (let k = 3; k >= 1; k--) {
+      let best: string | null = null;
+      for (let d = addDays(e.date, -7 * k); d <= addDays(e.date, -7 * k + 6) && d < e.date; d = addDays(d, 1)) {
+        if (d < today || !studyDay(d) || mockDays.has(d)) continue;
+        if (!best || prefs.availability[String(weekday(d))].minutes >= prefs.availability[String(weekday(best))].minutes) best = d;
+      }
+      if (best) mockDays.set(best, e);
+    }
+  }
+
   for (let day = today; day <= horizon; day = addDays(day, 1)) {
     const slot = prefs.availability[String(weekday(day))];
     if (!slot || slot.minutes < MIN_CHUNK || examDays.has(day) || off.has(day)) continue;
@@ -315,6 +353,14 @@ export function buildPlan({
       return len;
     };
 
+    // 0: a mock exam day starts with the mock (it counts toward that exam's revision).
+    const mock = mockDays.get(day);
+    if (mock && capacity >= MOCK_MIN) {
+      const len = place(Math.min(MOCK_MINUTES, capacity), mock.course_code, "exam", `${MOCK_TITLE} ב${themeOf(courses, mock.course_code).short}`, "mock");
+      const t = tasks.find((x) => x.kind === "exam" && x.courseCode === mock.course_code);
+      if (t) t.remaining -= len;
+    }
+
     // 1 + 2: deadline-driven work, earliest deadline first, one session per task per day
     // unless a task is falling behind (more work left than sessions left before its deadline).
     for (let round = 0; round < 2 && capacity >= MIN_CHUNK; round++) {
@@ -334,7 +380,7 @@ export function buildPlan({
     // 3: routine study for the course that has had the least of it so far.
     //    Exam period: in the two weeks before an exam, the free time goes to that course instead.
     if (prefs.fill_routine && capacity >= MIN_CHUNK) {
-      const examSoon = exams
+      const examSoon = taken
         .filter((e) => e.date > day && e.date <= addDays(day, EXAM_PERIOD_DAYS))
         .sort((a, b) => a.date.localeCompare(b.date))[0];
       if (examSoon) {

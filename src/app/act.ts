@@ -110,3 +110,13 @@ export const stuckFromQuestion = w(P.stuckFromQuestion);
 
 export const acceptExamCandidate = w(Auto.acceptExamCandidate);
 export const dismissExamCandidate = w(Auto.dismissExamCandidate);
+
+import * as Plan from "@/app/planActions";
+export const saveCourseExams = w(Plan.saveCourseExams);
+export const addPastExam = w(Plan.addPastExam);
+export const deletePastExam = w(Plan.deletePastExam);
+export const startMock = w(Plan.startMock);
+export const finishMock = w(Plan.finishMock);
+export const setQuestionCount = w(Plan.setQuestionCount);
+export const setQuestionState = w(Plan.setQuestionState);
+export const toggleCheck = w(Plan.toggleCheck);
