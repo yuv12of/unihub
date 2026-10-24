@@ -117,3 +117,7 @@ export const finishMock = w(Plan.finishMock);
 export const setQuestionCount = w(Plan.setQuestionCount);
 export const setQuestionState = w(Plan.setQuestionState);
 export const toggleCheck = w(Plan.toggleCheck);
+
+import * as Check from "@/app/checkActions";
+export const saveDayCheck = w(Check.saveDayCheck);
+export const setRhythmOff = w(Check.setRhythmOff);

@@ -39,6 +39,7 @@ import { getForumPosts } from "@/lib/forum";
 import { SessionAgendaFor } from "@/components/SessionAgendaFor";
 import { PracticeMarksCard } from "@/components/PracticeMarks";
 import { ExamCandidates } from "@/components/ExamCandidates";
+import { DayCheckCard } from "@/components/DayCheckCard";
 import {
   addDays,
   allDeadlines,
@@ -376,6 +377,12 @@ async function Today() {
               הוספת זמני לימוד
             </Link>
           </details>
+        )}
+
+        {courses.length > 0 && (
+          <Suspense fallback={null}>
+            <DayCheckCard today={today} nowMin={nowMin} />
+          </Suspense>
         )}
 
         {show("weekstrip") && <WeekStrip days={strip} today={today} goal={profile?.weekly_goal_minutes ?? null} />}

@@ -110,8 +110,8 @@ function eveningPush(data: ReturnType<typeof buildFromFeed>, now: { date: string
   return {
     key: `eve|${now.date}`,
     title: left.length ? "סיכום היום ומחר" : "מחר אצלך",
-    body: [today, next, left.length ? "מה הספקת?" : ""].filter(Boolean).join(" "),
-    url: "/",
+    body: [today, next, "ואיך היה היום? 20 שניות ב־Unihub."].filter(Boolean).join(" "),
+    url: "/#daycheck-title",
   };
 }
 

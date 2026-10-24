@@ -14,6 +14,7 @@ import { duration } from "@/lib/time";
  */
 import { addDays, daysBetween, typeLabel, themeOf, type Course } from "@/lib/semester";
 import { progressKey, type ProgressMap } from "@/lib/progress";
+import { applyRhythm } from "@/lib/rhythm";
 
 export interface DaySlot {
   start: string; // "18:00"
@@ -31,6 +32,8 @@ export interface StudyPrefs {
   focus?: Record<string, number> | null;
   /** Hebcal settings (see lib/hebcal) */
   jewish?: import("@/lib/hebcal").JewishPrefs | null;
+  /** learned from the end-of-day checks: the hardest course goes into the best time band */
+  rhythm?: import("@/lib/rhythm").Rhythm | null;
 }
 
 export const defaultPrefs: StudyPrefs = {
@@ -413,6 +416,8 @@ export function buildPlan({
       }
     }
   }
+
+  applyRhythm(sessions, prefs.rhythm, today, (code) => `לימוד שוטף ב${themeOf(courses, code).short}`);
 
   const warnings = tasks
     .filter((t) => t.remaining > 0)
