@@ -92,3 +92,10 @@ export const deleteHobbyLog = w(H.deleteHobbyLog);
 export const addHobbyItem = w(H.addHobbyItem);
 export const updateHobbyItem = w(H.updateHobbyItem);
 export const deleteHobbyItem = w(H.deleteHobbyItem);
+
+import * as Auto from "@/app/autoActions";
+export const setSessionStep = w(Auto.setSessionStep);
+export const saveIfThen = w(Auto.saveIfThen);
+export const setIfThenActive = w(Auto.setIfThenActive);
+export const deleteIfThen = w(Auto.deleteIfThen);
+export const markPracticeSeen = w(Auto.markPracticeSeen);

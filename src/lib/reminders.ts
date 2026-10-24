@@ -6,11 +6,24 @@ import { sleepInFor } from "@/lib/sleepIn";
 import { sessionKey } from "@/lib/planner";
 import { progressKey } from "@/lib/progress";
 import { addDays, allDeadlines, typeLabel, themeOf } from "@/lib/semester";
+import { weekStart } from "@/lib/routines";
+import { evaluateIfThen, ifThenPush, type IfThenPlan, type TriggerContext } from "@/lib/ifthen";
+import { range } from "@/lib/time";
 
 const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-export const WRAP_UP_AT = 22 * 60;
+/** One evening push (replaces the 21:00 "tomorrow" and 22:00 wrap-up pushes): today's leftovers + tomorrow. */
+export const EVENING_AT = 21 * 60 + 30;
+/** The Saturday routine where if-then plans are written. */
+const WEEK_PLANNING = /תכנון (ה)?שבוע/;
 
-export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date: string; minutes: number }): PushItem[] {
+/** What the tick loads beyond the private feed (table if_then, study_live). */
+export interface ReminderExtras {
+  ifThen?: IfThenPlan[];
+  /** study_live.started_at of a running focus timer, if any */
+  liveStartedAt?: string | null;
+}
+
+export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date: string; minutes: number }, extras: ReminderExtras = {}): PushItem[] {
   const { feed, sessions, progress, courses, routines, logs, plan, offDays } = data;
   if (offDays.includes(now.date)) return []; // rough day: leave them alone
   const inWindow = (start: string) => {
@@ -30,7 +43,12 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
   const todayRoutines = occurrencesFor({ routines, logs, events: feed.events, plan, today: now.date, from: now.date, to: now.date, offDays });
   for (const o of todayRoutines)
     if (o.start && !o.done && o.category !== "sleep" && o.category !== "meal" && inWindow(o.start))
-      due.push({ key: `r|${o.routineId}|${o.date}`, title: `${o.start} · ${o.emoji} ${o.title}`, body: `עד ${o.end}`, url: "/routines" });
+      due.push({
+        key: `r|${o.routineId}|${o.date}`,
+        title: `${o.start} · ${o.emoji} ${o.title}`,
+        body: WEEK_PLANNING.test(o.title) ? `עד ${o.end}. כולל 2–3 תוכניות אם–אז לשבוע.` : `עד ${o.end}`,
+        url: WEEK_PLANNING.test(o.title) ? "/routines/plans" : "/routines",
+      });
 
   if (now.minutes >= 20 * 60 && now.minutes < 20 * 60 + 30) {
     const tomorrow = addDays(now.date, 1);
@@ -46,48 +64,87 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
     }
   }
 
-  // 21:00: a look at tomorrow (first study session and first event), so nothing surprises you.
-  if (now.minutes >= 21 * 60 && now.minutes < 21 * 60 + 30) {
-    const tomorrow = addDays(now.date, 1);
-    if (!offDays.includes(tomorrow)) {
-      const first = plan.sessions.find((x) => x.date === tomorrow);
-      const ev = feed.events
-        .filter((x) => x.date === tomorrow && x.start_time && !x.cancelled && x.kind !== "other")
-        .sort((a, b) => a.start_time!.localeCompare(b.start_time!))[0];
-      const count = plan.sessions.filter((x) => x.date === tomorrow).length;
-      const parts = [
-        ev ? `${ev.start_time} ${ev.title}` : "",
-        first ? `${first.start} ${first.title}${count > 1 ? ` (+${count - 1})` : ""}` : "",
-      ].filter(Boolean);
-      const sleep = sleepInFor({ today: now.date, routines, plan, events: feed.events, courses, exams: data.exams ?? [], offDays });
-      if (sleep && !sleep.accepted)
-        due.push({
-          key: `sleepin|${tomorrow}`,
-          title: "מחר אפשר לישון שעה יותר 😴",
-          body: `${sleep.reason}. ההשכמה יכולה לזוז ל־\u2066${sleep.until}\u2069. לאשר ב־Unihub.`,
-          url: "/",
-        });
-      else if (parts.length)
-        due.push({ key: `tmr|${tomorrow}`, title: "מחר אצלך 🗓️", body: `${parts.join(" · ")}. רוצה להזיז משהו?`, url: "/semester" });
-    }
+  // ~21:30: one evening push — what's still open today, tomorrow's first thing, and the sleep-in offer.
+  if (now.minutes >= EVENING_AT && now.minutes < EVENING_AT + 30) {
+    const e = eveningPush(data, now, todayRoutines);
+    if (e) due.push(e);
   }
 
-  // Evening wrap-up: what's still unticked today.
-  if (now.minutes >= WRAP_UP_AT && now.minutes < WRAP_UP_AT + 30) {
-    const studyLeft = plan.sessions.filter((s) => s.date === now.date && !feed.session_status[sessionKey(s)]).length;
-    const routinesLeft = todayRoutines.filter((o) => !o.done && o.category !== "sleep" && o.category !== "meal").length;
-    if (studyLeft + routinesLeft > 0) {
-      const parts = [
-        studyLeft ? (studyLeft === 1 ? "מפגש לימוד אחד" : `${studyLeft} מפגשי לימוד`) : "",
-        routinesLeft ? (routinesLeft === 1 ? "שגרה אחת" : `${routinesLeft} שגרות`) : "",
-      ].filter(Boolean);
-      due.push({
-        key: `wrap|${now.date}`,
-        title: "סיכום היום 🌙",
-        body: `${parts.join(" ו")} עוד לא סומנו. מה הספקת?`,
-        url: "/?wrap=1",
-      });
-    }
-  }
+  // If-then plans: the user's own fallback, quoted, once a day each.
+  if (extras.ifThen?.length) for (const f of evaluateIfThen(extras.ifThen, triggerContext(data, now, todayRoutines, extras))) due.push(ifThenPush(f));
   return due;
+}
+
+type Routines = ReturnType<typeof occurrencesFor>;
+
+function eveningPush(data: ReturnType<typeof buildFromFeed>, now: { date: string; minutes: number }, todayRoutines: Routines): PushItem | null {
+  const { feed, plan, routines, offDays, courses } = data;
+  const studyLeft = plan.sessions.filter((s) => s.date === now.date && !feed.session_status[sessionKey(s)]).length;
+  const routinesLeft = todayRoutines.filter((o) => !o.done && o.category !== "sleep" && o.category !== "meal" && (!o.start || toMin(o.start) < now.minutes)).length;
+  const left = [
+    studyLeft ? (studyLeft === 1 ? "מפגש לימוד אחד" : `${studyLeft} מפגשי לימוד`) : "",
+    routinesLeft ? (routinesLeft === 1 ? "שגרה אחת" : `${routinesLeft} שגרות`) : "",
+  ].filter(Boolean);
+  const today = left.length ? `היום: ${left.join(" ו")} עוד לא סומנו.` : "";
+
+  const tomorrow = addDays(now.date, 1);
+  let next = "";
+  let sleep: ReturnType<typeof sleepInFor> = null;
+  if (!offDays.includes(tomorrow)) {
+    const first = plan.sessions.find((x) => x.date === tomorrow);
+    const ev = feed.events
+      .filter((x) => x.date === tomorrow && x.start_time && !x.cancelled && x.kind !== "other")
+      .sort((a, b) => a.start_time!.localeCompare(b.start_time!))[0];
+    const firstThing = ev && (!first || ev.start_time! <= first.start) ? `${range(ev.start_time)} ${ev.title}` : first ? `${range(first.start)} ${first.title}` : "";
+    if (firstThing) next = `מחר מתחילים ב־${firstThing}.`;
+    sleep = sleepInFor({ today: now.date, routines, plan, events: feed.events, courses, exams: data.exams ?? [], offDays });
+  }
+  if (sleep && !sleep.accepted)
+    return {
+      key: `eve|${now.date}`,
+      title: "מחר אפשר לישון שעה יותר",
+      body: [`${sleep.reason}. ההשכמה יכולה לזוז ל־${range(sleep.until)}.`, today, "לאשר ב־Unihub."].filter(Boolean).join(" "),
+      url: "/",
+    };
+  if (!today && !next) return null;
+  return {
+    key: `eve|${now.date}`,
+    title: left.length ? "סיכום היום ומחר" : "מחר אצלך",
+    body: [today, next, left.length ? "מה הספקת?" : ""].filter(Boolean).join(" "),
+    url: "/",
+  };
+}
+
+/** Everything the if-then triggers look at, from the same feed the other reminders use. */
+export function triggerContext(data: ReturnType<typeof buildFromFeed>, now: { date: string; minutes: number }, todayRoutines: Routines, extras: ReminderExtras): TriggerContext {
+  const { feed, sessions, plan } = data;
+  const status = feed.session_status;
+  const doneMinutes = (pred: (date: string) => boolean) =>
+    Object.entries(status).reduce((n, [k, st]) => (st === "done" && pred(k.slice(0, 10)) ? n + Math.max(1, feed.session_minutes?.[k] ?? 0) : n), 0);
+  const ws = weekStart(now.date);
+  const we = addDays(ws, 6);
+  let liveStartedAt: number | null = null;
+  if (extras.liveStartedAt) {
+    const t = new Date(extras.liveStartedAt);
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(t);
+    const get = (k: string) => parts.find((p) => p.type === k)?.value ?? "0";
+    const date = `${get("year")}-${get("month")}-${get("day")}`;
+    liveStartedAt = date === now.date ? (Number(get("hour")) % 24) * 60 + Number(get("minute")) : 0;
+  }
+  return {
+    date: now.date,
+    minutes: now.minutes,
+    weekday: new Date(now.date + "T00:00:00Z").getUTCDay(),
+    sessions: sessions.filter((s) => s.date === now.date).map((s) => ({ key: sessionKey(s), start: s.start, end: s.end, title: s.title, status: status[sessionKey(s)] })),
+    liveStartedAt,
+    studiedToday: doneMinutes((d) => d === now.date),
+    routines: todayRoutines.map((o) => ({ routineId: o.routineId, title: o.title, start: o.start, end: o.end, done: o.done })),
+    week: {
+      goal: feed.prefs?.weekly_goal_minutes ?? null,
+      done: doneMinutes((d) => d >= ws && d <= now.date),
+      planned: plan.sessions
+        .filter((s) => s.date >= now.date && s.date <= we && !status[sessionKey(s)] && (s.date > now.date || toMin(s.end) > now.minutes))
+        .reduce((n, s) => n + s.minutes, 0),
+    },
+  };
 }

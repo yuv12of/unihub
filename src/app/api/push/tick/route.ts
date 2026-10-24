@@ -1,14 +1,16 @@
 import { connection } from "next/server";
-import { bearer, buildFromFeed, israelNow, loadPrivate, restForFeed, type PrivateFeed } from "@/lib/privateFeed";
+import { anonClient, bearer, buildFromFeed, israelNow, loadPrivate, restForFeed, type PrivateFeed } from "@/lib/privateFeed";
 import { deliverNotifications, sendPush, sendPushAsServer } from "@/lib/push";
-import { remindersFor } from "@/lib/reminders";
+import { remindersFor, type ReminderExtras } from "@/lib/reminders";
+import type { IfThenPlan } from "@/lib/ifthen";
 import { syncDueGoogle } from "@/lib/googleCal";
 import { adminClient } from "@/lib/supabase/admin";
 import { backfillAttachmentText } from "@/lib/pdfText";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
- * - Reminders for that user (sessions, tutorials, routines, tomorrow's deadlines, evening wrap-up).
+ * - Reminders for that user (sessions, tutorials, routines, tomorrow's deadlines, the ~21:30 evening
+ *   push, and the user's own if-then plans when their trigger fires).
  * - With the server key set: the same reminders for everyone else who turned on phone notifications
  *   (so friends get them without their own script), and pending notifications (follow requests,
  *   invites, cheers…). Every reminder is sent at most once, however many scripts call this.
@@ -22,7 +24,7 @@ export async function POST(req: Request) {
   const now = israelNow();
 
   let sent = 0;
-  if (data.feed.subscriptions.length) sent += await sendPush(token, data.feed.subscriptions, remindersFor(data, now));
+  if (data.feed.subscriptions.length) sent += await sendPush(token, data.feed.subscriptions, remindersFor(data, now, await extrasByToken(token)));
 
   const admin = adminClient();
   let others = 0;
@@ -43,11 +45,31 @@ export async function POST(req: Request) {
       if (!feed) continue;
       const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
       const built = buildFromFeed(full, await restForFeed(full));
-      others += await sendPushAsServer(userId, list, remindersFor(built, now));
+      others += await sendPushAsServer(userId, list, remindersFor(built, now, await extrasByUser(admin, userId)));
     }
     sent += others + (await deliverNotifications());
     google = await syncDueGoogle(admin);
     pdfs = await backfillAttachmentText(admin).catch(() => 0);
   }
   return Response.json({ sent, others, google, pdfs });
+}
+
+type Row = { id: string; kind?: string; trigger_kind?: string; params: IfThenPlan["params"] | null; action: string; active: boolean };
+const toPlans = (rows: Row[] | null | undefined): IfThenPlan[] =>
+  (rows ?? []).map((r) => ({ id: r.id, kind: (r.kind ?? r.trigger_kind) as IfThenPlan["kind"], params: r.params ?? {}, action: r.action, active: r.active }));
+
+/** If-then plans and a running timer for the caller (RPC from 0022; empty until it's applied). */
+async function extrasByToken(token: string): Promise<ReminderExtras> {
+  const { data, error } = await anonClient().rpc("automation_feed", { p_token: token });
+  if (error || !data) return {};
+  const d = data as { if_then?: Row[]; live_started_at?: string | null };
+  return { ifThen: toPlans(d.if_then), liveStartedAt: d.live_started_at ?? null };
+}
+
+async function extrasByUser(admin: NonNullable<ReturnType<typeof adminClient>>, userId: string): Promise<ReminderExtras> {
+  const [plans, live] = await Promise.all([
+    admin.from("if_then").select("id, trigger_kind, params, action, active").eq("user_id", userId).eq("active", true),
+    admin.from("study_live").select("started_at").eq("user_id", userId).gt("ends_at", new Date().toISOString()).maybeSingle(),
+  ]);
+  return { ifThen: plans.error ? [] : toPlans(plans.data as Row[]), liveStartedAt: live.data?.started_at ?? null };
 }
