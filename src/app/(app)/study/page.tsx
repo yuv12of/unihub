@@ -1,36 +1,35 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { StudySession } from "@/components/StudySession";
-import { getCardStats, getCourses } from "@/lib/userdata";
+import { getCourses } from "@/lib/userdata";
+import { getPracticeData } from "@/lib/practiceData";
 
-export default function StudyPage() {
+export default function StudyPage({ searchParams }: PageProps<"/study">) {
   return (
     <>
       <h1 className="font-display text-4xl">תרגול</h1>
-      <p className="mt-2 text-ink-soft">שאלות קצרות וכרטיסיות, עם חזרה מרווחת: מה שקשה חוזר מהר, מה שידוע חוזר רחוק.</p>
+      <p className="mt-2 text-ink-soft">כרטיסיות ושאלות מהפרקים שפתחת, מיקס בין פרקים, ותרגול אינסופי עם בדיקה מדויקת.</p>
       <Suspense fallback={<div className="mt-8 h-72 max-w-2xl animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
-        <Study />
+        <Study searchParams={searchParams} />
       </Suspense>
     </>
   );
 }
 
-async function Study() {
+async function Study({ searchParams }: Pick<PageProps<"/study">, "searchParams">) {
   await connection();
-  const [{ due, total, byCourse }, mine] = await Promise.all([getCardStats(), getCourses()]);
+  const [sp, data, mine] = await Promise.all([searchParams, getPracticeData(), getCourses()]);
   const courses = mine.map((c) => ({ code: c.code, name: c.short, color: c.color }));
+  const course = typeof sp.course === "string" ? sp.course : "all";
   return (
-    <>
-      <p className="mt-4 text-sm text-ink-soft">
-        {total === 0
-          ? "עוד אין כרטיסים. הראשונים ייווצרו בסבב הבוקר הקרוב."
-          : `${due.length} לחזרה עכשיו, מתוך ${total} כרטיסים. ` +
-            courses
-              .filter((c) => byCourse[c.code])
-              .map((c) => `${c.name}: ${byCourse[c.code].due}/${byCourse[c.code].total}`)
-              .join(" · ")}
-      </p>
-      <StudySession cards={due} courses={courses} />
-    </>
+    <StudySession
+      cards={data.cards}
+      questions={data.questions}
+      chapters={data.chapters}
+      answeredToday={data.answeredToday}
+      courses={courses}
+      initialCourse={course}
+      initialMode={sp.mode === "mix" ? "mix" : "today"}
+    />
   );
 }

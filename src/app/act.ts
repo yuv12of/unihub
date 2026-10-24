@@ -92,3 +92,11 @@ export const deleteHobbyLog = w(H.deleteHobbyLog);
 export const addHobbyItem = w(H.addHobbyItem);
 export const updateHobbyItem = w(H.updateHobbyItem);
 export const deleteHobbyItem = w(H.deleteHobbyItem);
+
+import * as P from "@/app/practiceActions";
+export const recordAttempt = w(P.recordAttempt);
+export const getPretest = w(P.getPretest);
+export const markPretest = w(P.markPretest);
+export const getAskContext = w(P.getAskContext);
+export const saveStuckQuestion = w(P.saveStuckQuestion);
+export const stuckFromQuestion = w(P.stuckFromQuestion);
