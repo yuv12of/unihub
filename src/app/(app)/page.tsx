@@ -6,7 +6,7 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { hasPushSubscription, getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { hasPushSubscription, getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getPrefs, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
 import { Fold } from "@/components/Fold";
 import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
@@ -89,19 +89,38 @@ async function Today() {
   await connection(); // "today" is computed per request, never at build time
   const today = todayInIsrael();
   // Everything in one round: the page waits for the slowest call, not for the sum of them.
-  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush, books] =
-    await Promise.all([getUserPlan(today), getUpdates(), getPendingInvites(), getPeople(), getStudyingNow(), getMyProfile(), getMyStudyDays(), getCheerCounts(), hasPushSubscription(), getBooks()]);
+  // (Calls that need another's result are chained inside the round instead of after it.)
+  const booksP = getBooks();
+  const invitesP = getPendingInvites();
+  const liveP = getStudyingNow();
+  const [{ progress, exams, plan, status, courses, events, routines, logs, offDays, manualOff, prefs }, updates, invites, people, live, profile, studyDays, cheers, hasPush, books, plans, forum, inviters, jdays] =
+    await Promise.all([
+      getUserPlan(today),
+      getUpdates(),
+      invitesP,
+      getPeople(),
+      liveP,
+      getMyProfile(),
+      getMyStudyDays(),
+      getCheerCounts(),
+      hasPushSubscription(),
+      booksP,
+      booksP.then(getReadings),
+      getForumPosts(),
+      Promise.all([invitesP, liveP]).then(([i, l]) => getNames([...i.map((x) => x.inviter), ...l.map((x) => x.user_id)])),
+      getPrefs().then((p) => {
+        const j = jewishPrefs(p.jewish);
+        return j.show || j.times ? jewishDays(j, today, addDays(today, 14)) : ({} as Awaited<ReturnType<typeof jewishDays>>);
+      }),
+    ]);
   const reading = readingByCourse(books);
-  const [plans, forum] = await Promise.all([getReadings(books), getForumPosts()]);
   const forumNew = forum.filter((f) => !f.isRead && daysBetween(f.at.slice(0, 10), today) <= 14).slice(0, 4);
   const weekOf = (code: string | null | undefined, date: string) => (code ? weekFor(plans.weeks[code], date) : null);
   const hidden = new Set(profile?.prefs?.hidden ?? []);
   const show = (k: string) => !hidden.has(k);
-  const inviters = await getNames([...invites.map((i) => i.inviter), ...live.map((l) => l.user_id)]);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
   const isOff = manualOff.includes(today);
   const jp = jewishPrefs(prefs.jewish);
-  const jdays = jp.show || jp.times ? await jewishDays(jp, today, addDays(today, 14)) : {};
   const jRaw = jdays[today];
   // Holidays and Shabbat times are separate choices; keep only what this user wants to see.
   const jToday = jRaw && {

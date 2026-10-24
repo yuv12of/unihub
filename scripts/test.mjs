@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const files = readdirSync(join(root, "src"), { recursive: true })
   .map(String)
-  .filter((f) => /__tests__[\\/].+\.test\.ts$/.test(f))
+  .filter((f) => /(__tests__[\\/].+|strategy|tracker)\.test\.ts$/.test(f))
   .map((f) => join("src", f));
 const r = spawnSync(process.execPath, ["--import", "jiti/register", "--test", ...files], {
   cwd: root,

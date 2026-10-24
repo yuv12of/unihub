@@ -20,24 +20,28 @@ const write = (k: string, v: string) => {
   } catch {}
 };
 
-/** Spotify state for a component, refreshed while `active` (and the tab is visible). */
-export function useSpotify(active = true, every = 5000) {
+/**
+ * Spotify state for a component. Polled (at most every 15 s) only while `active`, the tab is visible
+ * and something is playing; otherwise refreshed when the tab comes back and after each command.
+ */
+export function useSpotify(active = true, every = 15_000) {
   const [sp, setSp] = useState<SpotifyState | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const reload = useCallback(() => spotifyNow().then(setSp, () => setSp((s) => s ?? { enabled: false, connected: false })), []);
   useEffect(() => {
     reload();
   }, [reload]);
+  const playing = !!sp?.playing?.isPlaying;
   useEffect(() => {
     if (!active || !sp?.connected) return;
     const tick = () => document.visibilityState === "visible" && reload();
-    const t = setInterval(tick, every);
+    const t = playing ? setInterval(tick, Math.max(15_000, every)) : undefined;
     document.addEventListener("visibilitychange", tick);
     return () => {
       clearInterval(t);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [active, sp?.connected, reload, every]);
+  }, [active, sp?.connected, playing, reload, every]);
   const send = useCallback(
     async (c: SpotifyCommand) => {
       // Optimistic play/pause so the button reacts at once.

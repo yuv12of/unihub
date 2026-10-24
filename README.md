@@ -7,7 +7,7 @@ The full product plan is in [`docs/PLAN.md`](docs/PLAN.md).
 ## Stack
 - **Next.js 16** (App Router, Cache Components) + Tailwind 4, deployed on **Vercel**
 - **Supabase** for database, Google sign-in and file storage
-- Semester data lives in `src/data/semester-2027a.json` (also seeded into Supabase by `supabase/migrations/0002_seed_2027a.sql`)
+- The current semester is set in one place, `SEMESTERS` in `src/lib/semester.ts` (mirrored by the `semesters` table); demo course data lives in `src/data/semester-2027a.json`
 
 ## Run locally
 ```bash
@@ -20,7 +20,10 @@ npm run dev
 
 ### 1. Supabase
 1. Create a project at supabase.com (region: closest to Israel, e.g. Frankfurt).
-2. **SQL Editor** → run the files in `supabase/migrations/` in order (0001, 0002, 0003…).
+2. **SQL Editor** → on a fresh project run `supabase/migrations/0000_baseline.sql` (the whole schema: tables, functions, triggers, RLS policies, grants and the `books` storage bucket), then every later file in that folder in number order (0019, 0020…).
+   `supabase/migrations/archive/` is history only: those files were applied to the live database before the baseline and are already included in it. Don't run them.
+   Courses are added from the app (Settings → courses reads the official requirements page), so no seed data is needed.
+   Every new schema change goes in a new numbered file, committed together with the code that needs it.
 3. **Project Settings → API Keys**: copy the Project URL and the publishable key into the env vars below.
 
 ### 2. Google sign-in
@@ -38,9 +41,8 @@ Import the GitHub repo, then add the environment variables:
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
-| `ALLOWED_EMAILS` | your Gmail address (only this account can open the app) |
 
-Once the Supabase variables are set, every page requires sign-in.
+Once the Supabase variables are set, every page requires sign-in, and a new account waits on /pending until an admin approves it (`profiles.status`).
 
 ## Calendar sync
 Settings → **סנכרון ליומן Google** creates a private iCal link (`/api/calendar/<token>`).

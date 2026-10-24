@@ -20,14 +20,18 @@ export function StudyingNow({ rows }: { rows: LiveRow[] }) {
   const router = useRouter();
   const [join, setJoin] = useState<LiveRow | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const live = rows.filter((r) => Date.parse(r.ends_at) > now);
+  const anyone = live.length > 0;
+  // Only while someone is studying and the tab is visible: tick the minutes, re-read the list.
   useEffect(() => {
+    if (!anyone) return;
     const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       setNow(Date.now());
       router.refresh();
     }, 60_000);
     return () => clearInterval(id);
-  }, [router]);
-  const live = rows.filter((r) => Date.parse(r.ends_at) > now);
+  }, [router, anyone]);
   if (!live.length) return null;
   return (
     <div className="panel flex flex-col gap-2 p-4">

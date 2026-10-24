@@ -1,5 +1,3 @@
-import data from "@/data/semester-2027a.json";
-
 export type AssignmentType = "file" | "online" | "participation";
 
 export interface Assignment {
@@ -32,8 +30,20 @@ export interface Semester {
   notes: string;
 }
 
+/**
+ * Semesters and which one is current: the ONE place the app reads the semester code from.
+ * Mirrors the `semesters` table (supabase/migrations/0019_semesters.sql) and SQL current_semester().
+ * Dates: academic.openu.ac.il/yedion/timetable (see src/data/academic-2027.json).
+ * At the switch to 2027ב: flip `current` here and in the table (one update), add the new JSON data.
+ */
+export const SEMESTERS = [
+  { code: "2027א", starts: "2026-10-25", ends: "2027-01-31", current: true },
+  { code: "2027ב", starts: "2027-03-07", ends: "2027-06-25", current: false },
+] as const;
+export const CURRENT_SEMESTER = SEMESTERS.find((s) => s.current) ?? SEMESTERS[0];
+
 /** The current semester (all users share it). Courses are per user, from the database. */
-export const semester = { semester: (data as Semester).semester } as Pick<Semester, "semester">;
+export const semester: Pick<Semester, "semester"> = { semester: CURRENT_SEMESTER.code };
 
 /** Course colours a user can pick. Each has a light and dark variant in globals.css. */
 export const PALETTE: Record<string, { css: string; hex: string; label: string }> = {

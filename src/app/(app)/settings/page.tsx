@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { headers } from "next/headers";
 import { resetFeed, resetIngestToken, saveExams, saveJewish, savePrefs } from "@/app/actions";
 import { Tabs } from "@/components/Fold";
+import { ActionForm } from "@/components/ActionForm";
 import { GoogleCalImport } from "@/components/GoogleCalImport";
 import { CITIES, jewishPrefs } from "@/lib/hebcal";
 import { mailScript } from "@/lib/appsScript";
@@ -96,7 +97,7 @@ async function Settings() {
                     <WeeklyGoal initial={profileInput} />
                     <p className="mt-1 text-xs text-ink-soft">התוכנית ממלאת זמן פנוי עד היעד, ולוח השנה מראה כמה חסר.</p>
                   </div>
-                  <form action={savePrefs} className="mt-5 space-y-5">
+                  <ActionForm action={savePrefs} className="mt-5 space-y-5">
                     <div className="divide-y divide-rule border-y border-rule">
                       {DAYS.map((name, d) => {
                         const slot = prefs.availability[String(d)] ?? {
@@ -139,7 +140,7 @@ async function Settings() {
                       </span>
                     </label>
                     <SaveButton />
-                  </form>
+                  </ActionForm>
                 </section>
                 <section className="panel p-5 sm:p-6" aria-labelledby="exam-title">
                   <h2 id="exam-title" className="section-title">
@@ -149,7 +150,7 @@ async function Settings() {
                     המועדים לסמסטר {semester.semester} עוד לא פורסמו. כשיופיעו בשאילתא, הזינו אותם כאן והתוכנית תתחיל חזרות שלושה שבועות לפני כל
                     בחינה.
                   </p>
-                  <form action={saveExams} className="mt-5 space-y-5">
+                  <ActionForm action={saveExams} className="mt-5 space-y-5">
                     {courses.map((c) => (
                       <fieldset key={c.code}>
                         <legend className="font-medium">
@@ -183,7 +184,7 @@ async function Settings() {
                       </fieldset>
                     ))}
                     <SaveButton />
-                  </form>
+                  </ActionForm>
                 </section>
               </div>
             ),
@@ -215,16 +216,16 @@ async function Settings() {
                         Google מרענן יומנים כאלה פעם בכמה שעות, אז שינוי באפליקציה מגיע ליומן באיחור קטן. מי שמחזיק בקישור יכול לראות את התוכנית, אז
                         לא לשתף אותו.
                       </p>
-                      <form action={resetFeed}>
+                      <ActionForm action={resetFeed}>
                         <button className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
                           יצירת קישור חדש (הקישור הישן יפסיק לעבוד)
                         </button>
-                      </form>
+                      </ActionForm>
                     </div>
                   ) : (
-                    <form action={resetFeed} className="mt-4">
+                    <ActionForm action={resetFeed} className="mt-4">
                       <SaveButton done="הקישור מוכן">יצירת קישור ליומן</SaveButton>
-                    </form>
+                    </ActionForm>
                   )}
                   <h3 id="google" className="mt-6 scroll-mt-24 border-t border-rule pt-5 font-medium">
                     מ־Google ל־Unihub
@@ -251,7 +252,7 @@ async function Settings() {
                       חגים ושבת
                     </h2>
                     <p className="mt-1 text-sm text-ink-soft">חגים וראשי חודשים, ולמי שרוצה גם זמני כניסת ויציאת שבת, לפי Hebcal.</p>
-                    <form action={saveJewish} className="mt-4 space-y-4">
+                    <ActionForm action={saveJewish} className="mt-4 space-y-4">
                       <label className="flex items-start gap-3">
                         <input type="checkbox" name="show" defaultChecked={jp.show} className="mt-1 size-4" />
                         <span>להציג חגים וראשי חודשים בלוח ובמסך היום</span>
@@ -283,7 +284,7 @@ async function Settings() {
                         </select>
                       </label>
                       <SaveButton />
-                    </form>
+                    </ActionForm>
                   </section>
                 </div>
               </div>
@@ -355,16 +356,16 @@ async function Settings() {
                           <CopyField value={mailScript(origin, ingest)} multiline />
                         </div>
                       </details>
-                      <form action={resetIngestToken}>
+                      <ActionForm action={resetIngestToken}>
                         <button className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink">
                           יצירת מפתח חדש (הסקריפט הקיים יפסיק לעבוד עד שתדביקו קוד חדש)
                         </button>
-                      </form>
+                      </ActionForm>
                     </div>
                   ) : (
-                    <form action={resetIngestToken} className="mt-4">
+                    <ActionForm action={resetIngestToken} className="mt-4">
                       <SaveButton done="מוכן">התחלת חיבור הדואר</SaveButton>
-                    </form>
+                    </ActionForm>
                   )}
                 </section>
               </div>

@@ -249,9 +249,12 @@ export function expandRoutines({
       const need = Math.max(0, weekGoal - doneDays.length - pinned.length);
       // The week's days are chosen from the whole week, so they stay put as days pass. Only a chosen
       // day that went by without being done is moved to a later free day.
-      const usable = (d: string) => startedBy(r, d) && !off.has(d) && !ov[d] && !doneSet.has(`${r.id}|${d}`);
-      const ideal = spread(days.filter(usable), Math.max(0, weekGoal - pinned.length));
-      const keep = ideal.filter((d) => d >= today).slice(0, need);
+      // Ticking a day doesn't change the week's ideal days (done days are still candidates), so the
+      // remaining ones stay put.
+      const open = (d: string) => startedBy(r, d) && !off.has(d) && !ov[d];
+      const usable = (d: string) => open(d) && !doneSet.has(`${r.id}|${d}`);
+      const ideal = spread(days.filter(open), Math.max(0, weekGoal - pinned.length));
+      const keep = ideal.filter((d) => d >= today && usable(d)).slice(0, need);
       const spare = days.filter((d) => d >= today && usable(d) && !keep.includes(d));
       const chosen = [...keep, ...spread(spare, Math.max(0, need - keep.length))];
       for (const d0 of [...pinned, ...doneDays, ...chosen].sort()) {

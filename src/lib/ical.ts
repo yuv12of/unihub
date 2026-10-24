@@ -35,7 +35,7 @@ const VTIMEZONE = [
   "END:VTIMEZONE",
 ];
 
-const escape = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+const escape = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
 const d8 = (iso: string) => iso.replaceAll("-", "");
 const t6 = (hhmm: string) => hhmm.replace(":", "") + "00";
 

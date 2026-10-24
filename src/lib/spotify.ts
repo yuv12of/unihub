@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Spotify control (server only). Each user signs in once with Spotify (PKCE, no client secret);
  * tokens are kept in spotify_tokens (owner-only rows) and refreshed here.
