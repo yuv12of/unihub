@@ -70,11 +70,8 @@ export function assignmentOf(ref: string | undefined): string | null {
 
 export function sessionAgenda(session: SessionLike, d: AgendaData): AgendaStep[] {
   const steps: AgendaStep[] = [];
-  let left = session.minutes;
   const add = (s: AgendaStep) => {
-    if (steps.length >= MAX_STEPS) return;
-    steps.push(s);
-    if (s.minutes) left -= s.minutes;
+    if (steps.length < MAX_STEPS) steps.push(s);
   };
   const cards = Math.min(d.cardsDue ?? 0, MAX_CARDS);
   const cardsStep = (): AgendaStep | null =>

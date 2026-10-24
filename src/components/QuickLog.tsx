@@ -31,6 +31,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
     } catch {}
     const q = new URLSearchParams(location.search);
     if (q.get("log")) setOpen(true);
+    if (Number(q.get("min")) > 0) setMinutes(Math.min(180, Number(q.get("min")))); // ?focus=1&min=15 (if-then pushes)
     if (q.get("focus")) setTimer(true);
   }, [courses]);
 

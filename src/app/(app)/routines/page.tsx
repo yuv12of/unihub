@@ -6,6 +6,8 @@ import { getRoutines } from "@/lib/userdata";
 import { streak, weekProgress, weekStart } from "@/lib/routines";
 import { addDays, todayInIsrael } from "@/lib/semester";
 import { RoutinesBoard } from "@/components/RoutinesBoard";
+import Link from "next/link";
+import { Icon } from "@/components/Icon";
 
 export default function RoutinesPage() {
   return (
@@ -15,6 +17,10 @@ export default function RoutinesPage() {
         שינה, אוכל, ספורט, הרגלים, מטלות בית, תחביבים וזמן עם אנשים שאת/ה אוהב/ת. דברים בשעה קבועה נכנסים ללוח כמו שהם,
         ומטרות גמישות (&quot;3 פעמים בשבוע&quot;) משובצות בזמן הפנוי, מסביב ללימודים.
       </p>
+      <Link href="/routines/plans" className="mt-4 inline-flex items-center gap-2 rounded-lg border border-rule px-3 py-2 text-sm hover:border-ink-soft">
+        <Icon name="bulb" className="size-4" />
+        תוכניות אם–אז: מה עושים כשמשהו לא קורה
+      </Link>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-xl bg-rule/60" aria-hidden />}>
         <Board />
       </Suspense>

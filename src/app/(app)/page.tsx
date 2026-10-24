@@ -33,6 +33,8 @@ import { getReadings, weekFor, type ReadingItem } from "@/lib/readings";
 import { ReadChips } from "@/components/ReadChips";
 import { MathText } from "@/components/MathText";
 import { getForumPosts } from "@/lib/forum";
+import { SessionAgendaFor } from "@/components/SessionAgendaFor";
+import { PracticeMarksCard } from "@/components/PracticeMarks";
 import {
   addDays,
   allDeadlines,
@@ -247,6 +249,8 @@ async function Today() {
         {invites.length > 0 && <InvitesList invites={invites} names={inviters} />}
 
         {updates.length > 0 && <UpdatesList updates={updates} />}
+
+        <PracticeMarksCard />
 
         {show("forums") && forumNew.length > 0 && (
           <div>
@@ -541,6 +545,7 @@ function SessionList({ sessions, status, courses, reading, assignmentPlans }: { 
                 <span className="truncate underline decoration-rule underline-offset-2">{reading[x.courseCode].title}</span>
               </Link>
             )}
+            <SessionAgendaFor session={x} />
           </div>
           {supabaseEnabled && <SessionToggle sessionKey={sessionKey(x)} status={status[sessionKey(x)]} minutes={x.minutes} title={x.title} courseCode={x.courseCode} />}
         </li>
