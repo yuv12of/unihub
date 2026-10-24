@@ -254,7 +254,7 @@ export function MusicBar() {
     <>
       <div
         ref={bar}
-        className="relative z-30 shrink-0 border-t border-rule bg-surface lg:fixed lg:bottom-0 lg:end-0 lg:start-60 lg:border-s"
+        className="relative z-30 shrink-0 border-t border-rule bg-surface md:fixed md:bottom-0 md:end-0 md:start-[4.5rem] md:border-s lg:start-60"
       >
         {p && p.duration > 0 && (
           <div className="absolute inset-x-0 top-0 h-0.5 bg-rule" aria-hidden>

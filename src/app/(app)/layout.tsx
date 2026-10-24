@@ -16,20 +16,21 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
     // Phone: a fixed-height shell. Only the middle part scrolls, and the tab bar is a normal
     // element at the bottom (not position:fixed), so iOS can't drag it along when the page scrolls.
-    <div className="flex h-dvh flex-col lg:h-auto lg:min-h-dvh lg:flex-row">
-      {/* PC: sidebar on the start (right) side */}
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-60 lg:shrink-0 lg:flex-col lg:border-e lg:border-rule lg:bg-surface lg:px-5 lg:py-7">
-        <Link href="/" className="font-display text-2xl">
-          Unihub
+    <div className="flex h-dvh flex-col md:flex-row lg:h-auto lg:min-h-dvh">
+      {/* PC: sidebar on the start (right) side. iPad portrait (md): the same items as an icon rail. */}
+      <aside className="app-sidebar hidden overflow-y-auto [scrollbar-width:none] md:sticky md:top-0 md:flex md:h-dvh md:w-[4.5rem] md:shrink-0 md:flex-col md:border-e md:border-rule md:bg-surface md:px-2 md:py-5 lg:w-60 lg:px-5 lg:py-7">
+        <Link href="/" className="text-center font-display text-2xl lg:text-start" aria-label="Unihub">
+          <span className="lg:hidden" aria-hidden>U</span>
+          <span className="hidden lg:inline">Unihub</span>
         </Link>
-        <p className="mt-1 flex justify-between text-sm text-ink-soft">
+        <p className="mt-1 hidden justify-between text-sm text-ink-soft lg:flex">
           <span>סמסטר {semester.semester}</span>
           <LiveClock />
         </p>
         <Suspense fallback={<div className="mt-8 h-96" />}>
           <SideNavWithBadges />
         </Suspense>
-        <div className="mt-auto">
+        <div className="mt-auto hidden lg:block">
           <Suspense fallback={null}>
             <UserPanel />
           </Suspense>
@@ -54,14 +55,14 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Suspense>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 lg:px-12 lg:pb-[calc(4rem+var(--player-h,0px))] lg:pt-10">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 md:pb-[calc(4rem+var(--player-h,0px))] lg:px-12 lg:pt-10">{children}</main>
       </div>
 
       <Suspense fallback={null}>
         <MusicBarMount />
       </Suspense>
 
-      <Suspense fallback={<div className="h-[calc(env(safe-area-inset-bottom)+4.6rem)] shrink-0 border-t border-rule bg-surface lg:hidden" />}>
+      <Suspense fallback={<div className="h-[calc(env(safe-area-inset-bottom)+4.6rem)] shrink-0 border-t border-rule bg-surface md:hidden" />}>
         <TabBarWithBadges />
       </Suspense>
     </div>

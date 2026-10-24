@@ -52,7 +52,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
       }
     });
 
-  const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm ${on ? "border-ink bg-ink text-bg" : "border-rule"}`;
+  const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm ${on ? "border-accent bg-accent text-on-accent" : "border-rule"}`;
   const title = course ? `לימוד ב${courses.find((c) => c.code === course)?.short ?? ""}` : "לימוד";
 
   return (
@@ -61,7 +61,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
         type="button"
         onClick={() => setOpen(true)}
         aria-label="רישום לימוד"
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem+var(--player-h,0px))] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-bg shadow-lg lg:bottom-[calc(1.5rem+var(--player-h,0px))] lg:end-6"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.6rem+var(--player-h,0px))] end-4 z-30 grid size-14 place-items-center rounded-full bg-ink text-bg shadow-lg md:bottom-[calc(1.5rem+var(--player-h,0px))] md:end-6"
       >
         <Icon name="timer" className="size-6" />
       </button>

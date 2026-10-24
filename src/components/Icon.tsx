@@ -74,6 +74,29 @@ const PATHS = {
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   chevronRight: <path d="M9 5l7 7-7 7" />,
   chevronLeft: <path d="M15 5l-7 7 7 7" />,
+  chevronDown: <path d="M5 9l7 7 7-7" />,
+  meal: <path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M16 21V3c-2 0-3.5 2.5-3.5 6.5S14 14 16 14" />,
+  run: (
+    <>
+      <circle cx="14.5" cy="4.5" r="1.8" />
+      <path d="M8 21l3-6 3 2v5M6.5 11.5 9 8.5l4 .5 2.5 3.5 3 .5M11 15l2-6" />
+    </>
+  ),
+  pill: <path d="M10.5 20.5a4.95 4.95 0 0 1-7-7l6-6a4.95 4.95 0 0 1 7 7zM7.5 10.5l6 6" />,
+  sparkle: <path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8L12 17.5l-1.8-5.2L5 10.5l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />,
+  basket: <path d="M4 10h16l-1.6 9.2a1.5 1.5 0 0 1-1.5 1.3H7.1a1.5 1.5 0 0 1-1.5-1.3zM8 10l3-6M16 10l-3-6M9.5 14v3M14.5 14v3" />,
+  heart: <path d="M12 20s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 7.5 4.2 4.2 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" />,
+  dot: <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />,
+  speech: <path d="M4.5 5.5h15a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H11l-4.5 3.5v-3.5h-2a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" />,
+  palette: (
+    <>
+      <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.4-1.3-1.6-1.3-2.8 0-1 .8-1.6 1.8-1.6h2.2a4 4 0 0 0 4-4C20.5 6.6 16.7 3.5 12 3.5z" />
+      <circle cx="8" cy="11" r="1" fill="currentColor" />
+      <circle cx="11" cy="7.5" r="1" fill="currentColor" />
+      <circle cx="15.5" cy="8" r="1" fill="currentColor" />
+    </>
+  ),
+  pot: <path d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2.5 10h19M9 6.5c0-1 1-1 1-2M14 6.5c0-1 1-1 1-2" />,
   users: (
     <>
       <circle cx="9" cy="8.5" r="3.5" />
@@ -164,7 +187,7 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, className = "size-[1.15em]", label }: { name: IconName; className?: string; label?: string }) {
+export function Icon({ name, className = "size-[1.15em]", label, style }: { name: IconName; className?: string; label?: string; style?: React.CSSProperties }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -174,6 +197,7 @@ export function Icon({ name, className = "size-[1.15em]", label }: { name: IconN
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`inline-block shrink-0 align-[-0.15em] ${className}`}
+      style={style}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
@@ -181,4 +205,13 @@ export function Icon({ name, className = "size-[1.15em]", label }: { name: IconN
       {PATHS[name]}
     </svg>
   );
+}
+
+/**
+ * The one chevron. RTL aware: "forward" points left (next / open page), "back" points right.
+ * "down" is for disclosures; pass open to turn it up (it also turns inside an open <details>).
+ */
+export function Chevron({ dir = "down", open = false, className = "size-4" }: { dir?: "down" | "forward" | "back"; open?: boolean; className?: string }) {
+  const name: IconName = dir === "down" ? "chevronDown" : dir === "forward" ? "chevronLeft" : "chevronRight";
+  return <Icon name={name} className={`text-ink-soft transition-transform ${dir === "down" ? "chev-rot" : ""} ${open ? "rotate-180" : ""} ${className}`} />;
 }
