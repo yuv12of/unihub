@@ -11,7 +11,7 @@ export default function IfThenPage() {
   return (
     <>
       <Link href="/routines" className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink">
-        <Icon name="next" className="size-3.5" />
+        <Icon name="chevronRight" className="size-3.5" />
         שגרה
       </Link>
       <h1 className="mt-2 font-display text-4xl">תוכניות אם–אז</h1>

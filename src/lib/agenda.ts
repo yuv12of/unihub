@@ -125,7 +125,7 @@ export function sessionAgenda(session: SessionLike, d: AgendaData): AgendaStep[]
     add({
       id: `read:${r.bookId}:${r.idx}`,
       kind: "read",
-      text: r.lastPage ? `להמשיך מעמ׳ ${r.lastPage} (${r.title}), ~${duration(readMinutes)}` : `לקרוא: ${r.title}, ~${duration(readMinutes)}`,
+      text: r.lastPage ? `להמשיך מעמ׳ ${r.lastPage} (${r.title}), כ־${duration(readMinutes)}` : `לקרוא: ${r.title}, כ־${duration(readMinutes)}`,
       href: r.href, // the reader reopens at the saved page
       minutes: readMinutes,
     });

@@ -4,7 +4,6 @@ import { useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { setSessionStep } from "@/app/act";
 import { Icon } from "@/components/Icon";
-import { sessionKey, type Session } from "@/lib/planner";
 import type { AgendaStep, StepKind } from "@/lib/agenda";
 
 const ICON: Record<StepKind, Parameters<typeof Icon>[0]["name"]> = {
@@ -37,8 +36,8 @@ const read = (k: string) => {
  * (table session_steps, so phone and iPad agree); a copy in localStorage keeps them working before
  * the table exists and in demo mode.
  */
-export function SessionAgenda({ session, steps, done = [] }: { session: Pick<Session, "date" | "kind" | "courseCode" | "title" | "ref">; steps: AgendaStep[]; done?: string[] }) {
-  const key = sessionKey(session);
+/** `sessionKey` is lib/planner sessionKey(session), computed on the server (planner is server-only). */
+export function SessionAgenda({ sessionKey: key, steps, done = [] }: { sessionKey: string; steps: AgendaStep[]; done?: string[] }) {
   const store = `agenda:${key}`;
   // Local choices ({ stepId: ticked }) win over the server copy until the page reloads with it.
   const raw = useSyncExternalStore(subscribe, () => read(store), () => "{}");
