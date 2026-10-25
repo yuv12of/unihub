@@ -75,7 +75,8 @@ async function Semester() {
       minutes: s.minutes,
       sessionKey: key,
       status: status[key],
-      note: s.why ? `יותר זמן כאן: ${s.why}` : undefined,
+      note: [s.moved ? "הוזז ידנית" : "", s.why ? `יותר זמן כאן: ${s.why}` : ""].filter(Boolean).join(" · ") || undefined,
+      study: !status[key] && s.date >= today ? { moved: !!s.moved } : undefined,
     });
   }
   for (const ev of events) {

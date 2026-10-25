@@ -1,0 +1,39 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { action, must } from "@/app/guard";
+import { addDays, todayInIsrael } from "@/lib/semester";
+import type { SessionMove } from "@/lib/planner";
+
+const KEY = /^\d{4}-\d{2}-\d{2}\|(routine|assignment|exam)\|\d{5}\|[\w-]+$/;
+/** How far a session can be moved from its planned day. */
+const RANGE = 13;
+
+/**
+ * Move a planned study session (or change its length), or put it back (null). Stored by session key in
+ * study_prefs.moves; moves of sessions more than a week in the past are dropped on the way.
+ */
+export async function setSessionMove(key: string, move: SessionMove | null) {
+  return action("setSessionMove", async ({ supabase, userId }) => {
+    if (!KEY.test(key)) throw new Error("מפגש לא תקין");
+    const today = todayInIsrael();
+    if (move) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(move.date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(move.start)) throw new Error("זמן לא תקין");
+      const planned = key.slice(0, 10);
+      if (move.date < today) throw new Error("אפשר להזיז רק להיום או לימים הבאים");
+      if (move.date < addDays(planned, -RANGE) || move.date > addDays(planned, RANGE)) throw new Error(`אפשר להזיז עד שבועיים מהיום המקורי`);
+      const m = Math.round(Number(move.minutes));
+      if (!Number.isFinite(m) || m < 15 || m > 360) throw new Error("אורך בין רבע שעה ל־6 שעות");
+      const [h, mm] = move.start.split(":").map(Number);
+      if (h * 60 + mm + m > 24 * 60) throw new Error("המפגש צריך להסתיים עד חצות");
+      move = { date: move.date, start: move.start, minutes: m };
+    }
+    const { data } = await supabase.from("study_prefs").select("moves").eq("user_id", userId).maybeSingle();
+    if (!data) throw new Error("קודם צריך לשמור זמני לימוד בהגדרות");
+    const moves: Record<string, SessionMove> = { ...((data.moves as Record<string, SessionMove> | null) ?? {}) };
+    for (const k of Object.keys(moves)) if (k.slice(0, 10) < addDays(today, -7) && moves[k].date < today) delete moves[k];
+    if (move) moves[key] = move;
+    else delete moves[key];
+    must(await supabase.from("study_prefs").update({ moves }).eq("user_id", userId));
+    revalidatePath("/", "layout");
+  });
+}

@@ -141,3 +141,6 @@ export const addStudyEntry = w(Log.addStudyEntry);
 export const updateStudyEntry = w(Log.updateStudyEntry);
 export const deleteStudyEntry = w(Log.deleteStudyEntry);
 export const restoreStudyEntry = w(Log.restoreStudyEntry);
+
+import * as Move from "@/app/planMoveActions";
+export const setSessionMove = w(Move.setSessionMove);

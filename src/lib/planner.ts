@@ -34,6 +34,14 @@ export interface StudyPrefs {
   jewish?: import("@/lib/hebcal").JewishPrefs | null;
   /** learned from the end-of-day checks: the hardest course goes into the best time band */
   rhythm?: import("@/lib/rhythm").Rhythm | null;
+  /** sessions moved by hand: session key → new date, start and length */
+  moves?: Record<string, SessionMove> | null;
+}
+
+export interface SessionMove {
+  date: string;
+  start: string; // "HH:MM"
+  minutes: number;
 }
 
 export const defaultPrefs: StudyPrefs = {
@@ -75,6 +83,10 @@ export interface Session {
   ref?: string;
   /** why routine study went to this course ("ממ״ן 12 בעוד 5 ימים") */
   why?: string;
+  /** moved by hand (study_prefs.moves): shown with "הוזז" and a way back to the plan */
+  moved?: boolean;
+  /** the date the plan gave it, when moved to another day: the key keeps it, so marks stay */
+  keyDate?: string;
 }
 
 export interface PlanWarning {
@@ -159,8 +171,8 @@ export interface Busy {
 export const baseRef = (ref: string) => ref.replace(/-\d+$/, "");
 
 /** Stable identity for a planned session, used to remember done / skipped. */
-export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title" | "ref">) {
-  return `${s.date}|${s.kind}|${s.courseCode}|${s.ref ?? s.title}`;
+export function sessionKey(s: Pick<Session, "date" | "kind" | "courseCode" | "title" | "ref" | "keyDate">) {
+  return `${s.keyDate ?? s.date}|${s.kind}|${s.courseCode}|${s.ref ?? s.title}`;
 }
 
 export function buildPlan({
@@ -418,6 +430,7 @@ export function buildPlan({
   }
 
   applyRhythm(sessions, prefs.rhythm, today, (code) => `לימוד שוטף ב${themeOf(courses, code).short}`);
+  applyMoves(sessions, prefs.moves, busy);
 
   const warnings = tasks
     .filter((t) => t.remaining > 0)
@@ -443,4 +456,51 @@ export const minutesLabel = (min: number) => duration(min);
 
 export function daysUntil(today: string, iso: string) {
   return daysBetween(today, iso);
+}
+
+/**
+ * Sessions moved by hand go where they were put (same key, so "done" / "skipped" stay with them).
+ * A planned session they now overlap shifts to the next free time that day (after busy blocks and
+ * other sessions), or stays put if nothing fits before midnight.
+ */
+export function applyMoves(sessions: Session[], moves: Record<string, SessionMove> | null | undefined, busy: Busy[] = []) {
+  if (!moves || !Object.keys(moves).length) return sessions;
+  const touched = new Set<string>();
+  for (const s of sessions) {
+    const m = moves[sessionKey(s)];
+    if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(m.date) || !/^\d{2}:\d{2}$/.test(m.start)) continue;
+    const minutes = Math.max(MIN_CHUNK, Math.min(360, Math.round(m.minutes)));
+    const start = toMin(m.start);
+    if (m.date !== s.date) s.keyDate = s.date;
+    s.date = m.date;
+    s.start = toHHMM(start);
+    s.end = toHHMM(Math.min(start + minutes, 24 * 60 - 1));
+    s.minutes = toMin(s.end) - start;
+    s.moved = true;
+    touched.add(s.date);
+  }
+  for (const day of touched) {
+    const fixed: [number, number][] = [
+      ...busy.filter((b) => b.date === day).map((b) => [toMin(b.start), toMin(b.end)] as [number, number]),
+      ...sessions.filter((s) => s.date === day && s.moved).map((s) => [toMin(s.start), toMin(s.end)] as [number, number]),
+    ];
+    const free = (a: number, z: number, taken: [number, number][]) => taken.every(([x, y]) => z <= x || a >= y);
+    for (const s of sessions.filter((x) => x.date === day && !x.moved).sort((a, b) => a.start.localeCompare(b.start))) {
+      let a = toMin(s.start);
+      const len = s.minutes;
+      const clash = !free(a, a + len, fixed);
+      if (clash) {
+        // the next start after a fixed block that leaves room for the whole session
+        const starts = fixed.map(([, y]) => y + BREAK_MINUTES).filter((x) => x >= a).sort((p, q) => p - q);
+        const next = starts.find((x) => x + len <= 24 * 60 - 1 && free(x, x + len, fixed));
+        if (next != null) {
+          a = next;
+          s.start = toHHMM(a);
+          s.end = toHHMM(a + len);
+        }
+      }
+      fixed.push([toMin(s.start), toMin(s.end)]);
+    }
+  }
+  return sessions;
 }

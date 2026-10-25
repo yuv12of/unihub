@@ -10,10 +10,12 @@ import {
   setDayOff,
   setRoutineOccurrence,
   setRoutineTiming,
+  setSessionMove,
   setSessionStatus,
   updateEvent,
 } from "@/app/act";
 import { Icon } from "@/components/Icon";
+import { SessionEditor } from "@/components/SessionEditor";
 import { describeRepeat, type Repeat } from "@/lib/repeat";
 import { hoursLabel, weekBalance, type WeekBalance } from "@/lib/weekBalance";
 
@@ -47,6 +49,8 @@ export interface CalItem {
   blocks?: boolean;
   /** a routine occurrence: which routine, its override key, and whether I may change it */
   routine?: { id: string; key: string; flexible: boolean; mine: boolean; moved: boolean; title: string };
+  /** a planned study session I may move (key = sessionKey) */
+  study?: { moved: boolean };
   /** an optional slot (phone tutoring hours): shown, but the time still counts as free */
   optional?: boolean;
   /** repeating event */
@@ -64,11 +68,12 @@ type EditorState =
       allDay?: boolean;
     }
   | { mode: "edit"; item: CalItem }
-  | { mode: "routine"; item: CalItem };
+  | { mode: "routine"; item: CalItem }
+  | { mode: "study"; item: CalItem };
 type Placement = { date: string; start: string; end: string };
 /** Identity of a movable item (own event or routine occurrence). */
-const itemId = (i: CalItem) => i.eventId ?? (i.routine ? `r:${i.routine.id}:${i.routine.key}` : undefined);
-const canEdit = (i: CalItem) => !!(i.editable || i.routine?.mine);
+const itemId = (i: CalItem) => i.eventId ?? (i.routine ? `r:${i.routine.id}:${i.routine.key}` : i.study && i.sessionKey ? `s:${i.sessionKey}` : undefined);
+const canEdit = (i: CalItem) => !!(i.editable || i.routine?.mine || i.study);
 
 const WEEKDAYS = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
 const fmt = (iso: string, o: Intl.DateTimeFormatOptions) =>
@@ -186,7 +191,11 @@ export function SemesterCalendar({
     if (from.date === to.date && from.start === to.start && from.end === to.end)
       return;
     const save = (p: Placement, undo: boolean) =>
-      item.routine ? saveRoutineMove(item, p, undo) : updateEvent({ id: item.eventId!, ...p });
+      item.routine
+        ? saveRoutineMove(item, p, undo)
+        : item.study
+          ? setSessionMove(item.sessionKey!, undo && !item.study.moved ? null : { date: p.date, start: p.start, minutes: toMin(p.end) - toMin(p.start) })
+          : updateEvent({ id: item.eventId!, ...p });
     const go = (p: Placement, undo: boolean, after?: () => void) => {
       setMoved((m) => new Map(m).set(id, p));
       save(p, undo)
@@ -359,7 +368,7 @@ export function SemesterCalendar({
             onSelect={setSelected}
             editable={editable}
             onPlace={place}
-            onEdit={(item) => setEditor({ mode: item.routine ? "routine" : "edit", item })}
+            onEdit={(item) => setEditor({ mode: item.routine ? "routine" : item.study ? "study" : "edit", item })}
             onCreate={(p) => {
               setSelected(p.date);
               setEditor({ mode: "new", ...p });
@@ -390,7 +399,7 @@ export function SemesterCalendar({
         editable={editable}
         isOff={offDays.includes(selected)}
         today={today}
-        onEdit={(item) => setEditor({ mode: item.routine ? "routine" : "edit", item })}
+        onEdit={(item) => setEditor({ mode: item.routine ? "routine" : item.study ? "study" : "edit", item })}
         onNew={() =>
           setEditor({
             mode: "new",
@@ -405,7 +414,20 @@ export function SemesterCalendar({
         <RoutineEditor item={editor.item} onClose={() => setEditor(null)} onDone={(text) => setToast({ text })} />
       )}
 
-      {editor && editor.mode !== "routine" && (
+      {editor?.mode === "study" && (
+        <SessionEditor
+          sessionKey={editor.item.sessionKey!}
+          title={editor.item.label}
+          date={editor.item.date}
+          start={editor.item.start!}
+          minutes={toMin(editor.item.end!) - toMin(editor.item.start!)}
+          moved={editor.item.study!.moved}
+          today={today}
+          onClose={() => setEditor(null)}
+          onDone={(text) => setToast({ text })}
+        />
+      )}
+      {editor && editor.mode !== "routine" && editor.mode !== "study" && (
         <EventEditor
           state={editor}
           people={people}
@@ -1277,6 +1299,16 @@ function DayPanel({
                           דילוג
                         </button>
                       </>
+                    )}
+                    {it.study && !it.status && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(it)}
+                        className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 hover:border-ink"
+                      >
+                        <Icon name="pencil" className="size-3" />
+                        {it.study.moved ? "הוזז · שינוי" : "שינוי זמן"}
+                      </button>
                     )}
                   </div>
                 )}
