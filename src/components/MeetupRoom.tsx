@@ -337,7 +337,7 @@ function Notes({ data, now, live, body, setBody }: { data: MeetupData; now: numb
         value={body}
         onChange={(e) => change(e.target.value)}
         onBlur={(e) => save(e.target.value)}
-        dir="auto"
+        dir="rtl" style={{ unicodeBidi: "plaintext" }}
         rows={16}
         readOnly={!data.editable}
         placeholder={`מה המנחה הדגיש, דוגמאות, טריקים.\n${MARK_Q} בתחילת שורה = משהו שלא הבנתי (יהפוך לנקודת תקיעה בסוף)\n${MARK_EXAM} בתחילת שורה = חשוב לבחינה (יופיע במפגש הבא)`}

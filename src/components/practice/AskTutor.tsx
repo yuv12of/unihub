@@ -1,5 +1,6 @@
 "use client";
 
+import { MathText } from "@/components/MathText";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -65,7 +66,7 @@ export function AskTutor({
   const ta = "mt-1 w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm focus:border-ink focus:outline-none";
   return (
     <div className="mt-2 rounded-xl border border-rule bg-bg p-3 text-sm">
-      <p className="font-medium">{stuck.topic}</p>
+      <p className="font-medium"><MathText text={stuck.topic} /></p>
       {bookHref && (
         <Link href={bookHref} className="mt-1 inline-flex items-center gap-1 text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
           <Icon name="book" className="size-4" />
@@ -74,11 +75,11 @@ export function AskTutor({
       )}
       <label className="mt-3 block">
         <span className="text-ink-soft">מה ניסיתי</span>
-        <textarea dir="auto" value={tried} onChange={(e) => setTried(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="למשל: דירגתי ויצאה לי שורת אפסים, ניסיתי גם…" />
+        <textarea dir="rtl" style={{ unicodeBidi: "plaintext" }} value={tried} onChange={(e) => setTried(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="למשל: דירגתי ויצאה לי שורת אפסים, ניסיתי גם…" />
       </label>
       <label className="mt-2 block">
         <span className="text-ink-soft">איפה נתקעתי</span>
-        <textarea dir="auto" value={where} onChange={(e) => setWhere(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="השלב המדויק שלא ברור לי" />
+        <textarea dir="rtl" style={{ unicodeBidi: "plaintext" }} value={where} onChange={(e) => setWhere(e.target.value)} onBlur={() => save()} rows={2} className={ta} placeholder="השלב המדויק שלא ברור לי" />
       </label>
 
       <div className="mt-3 flex flex-wrap gap-2">

@@ -42,7 +42,7 @@ export function QuestionCard({
         {remaining !== undefined && <span className="shrink-0">נשארו {remaining}</span>}
       </div>
       <div className="px-5 pb-5 pt-3">
-        <p className="whitespace-pre-line text-lg leading-relaxed" dir="auto">
+        <p className="whitespace-pre-line text-lg leading-relaxed" dir="rtl">
           <MathText text={q.prompt} />
         </p>
 
@@ -51,13 +51,13 @@ export function QuestionCard({
             {q.hint && (
               <p className="flex gap-2 text-sm">
                 <Icon name="bulb" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-                <span className="whitespace-pre-line" dir="auto">
+                <span className="whitespace-pre-line" dir="rtl">
                   <MathText text={q.hint} />
                 </span>
               </p>
             )}
             {open === "answer" && (
-              <p className="whitespace-pre-line leading-relaxed" dir="auto">
+              <p className="whitespace-pre-line leading-relaxed" dir="rtl">
                 <MathText text={q.answer} />
               </p>
             )}

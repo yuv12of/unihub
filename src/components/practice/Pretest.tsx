@@ -48,7 +48,7 @@ export function PretestCard({ chapterId, questions, onDone }: { chapterId: strin
               <MathText text={q.prompt} />
             </p>
             <textarea
-              dir="auto"
+              dir="rtl" style={{ unicodeBidi: "plaintext" }}
               value={notes[q.id] ?? ""}
               onChange={(e) => setNotes((n) => ({ ...n, [q.id]: e.target.value }))}
               rows={2}

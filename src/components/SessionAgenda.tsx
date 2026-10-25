@@ -1,5 +1,6 @@
 "use client";
 
+import { MathText } from "@/components/MathText";
 import { useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
 import { setSessionStep } from "@/app/act";
@@ -87,15 +88,15 @@ export function SessionAgenda({ sessionKey: key, steps, done = [] }: { sessionKe
             {s.href ? (
               external ? (
                 <a href={s.href} target="_blank" rel="noreferrer" className={`min-w-0 underline decoration-rule underline-offset-2 hover:text-ink ${on ? "text-ink-soft line-through" : ""}`}>
-                  {s.text}
+                  <MathText text={s.text} />
                 </a>
               ) : (
                 <Link href={s.href} className={`min-w-0 underline decoration-rule underline-offset-2 hover:text-ink ${on ? "text-ink-soft line-through" : ""}`}>
-                  {s.text}
+                  <MathText text={s.text} />
                 </Link>
               )
             ) : (
-              <span className={`min-w-0 ${on ? "text-ink-soft line-through" : ""}`}>{s.text}</span>
+              <span className={`min-w-0 ${on ? "text-ink-soft line-through" : ""}`}><MathText text={s.text} /></span>
             )}
           </li>
         );

@@ -1,5 +1,6 @@
 "use client";
 
+import { MathText } from "@/components/MathText";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { addFocusTask, deleteFocusTask, getFocusTasks, pullFocusTask, setFocusTaskDone, setSessionStep } from "@/app/act";
 import type { FocusTask } from "@/app/focusActions";
@@ -230,7 +231,7 @@ function TaskRow({ text, done, onToggle, onRemove, hint, faded }: { text: string
         {done && <Icon name="check" className="size-4" />}
       </button>
       <span className={`min-w-0 flex-1 text-sm leading-6 ${done ? "text-ink-soft line-through" : ""}`}>
-        {text}
+        <MathText text={text} />
         {hint && <span className="ms-2 text-xs text-ink-soft no-underline">{hint}</span>}
       </span>
       {onRemove && (

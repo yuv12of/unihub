@@ -254,7 +254,7 @@ function CardView({ card, color, courseName, remaining, onGrade }: { card: Card;
         <span>נשארו {remaining}</span>
       </div>
       <div className="px-5 pb-5 pt-3">
-        <p className="whitespace-pre-wrap text-lg leading-relaxed" dir="auto">
+        <p className="whitespace-pre-wrap text-lg leading-relaxed" dir="rtl">
           <MathText text={card.front} />
         </p>
 
@@ -274,7 +274,7 @@ function CardView({ card, color, courseName, remaining, onGrade }: { card: Card;
                       setRevealed(true);
                     }}
                     className={`min-h-11 w-full rounded-lg border border-rule px-4 py-2.5 text-start hover:border-ink ${state}`}
-                    dir="auto"
+                    dir="rtl"
                   >
                     <MathText text={o} />
                   </button>
@@ -293,13 +293,13 @@ function CardView({ card, color, courseName, remaining, onGrade }: { card: Card;
         {revealed && (
           <div className="mt-4 rounded-xl bg-bg px-4 py-3">
             {card.kind === "flash" && card.back && (
-              <p className="whitespace-pre-wrap leading-relaxed" dir="auto">
+              <p className="whitespace-pre-wrap leading-relaxed" dir="rtl">
                 <MathText text={card.back} />
               </p>
             )}
             {card.kind === "mcq" && picked !== null && <p className="font-medium">{picked === card.answer_index ? "נכון." : "לא בדיוק."}</p>}
             {card.explanation && (
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-soft" dir="auto">
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-soft" dir="rtl">
                 <MathText text={card.explanation} />
               </p>
             )}

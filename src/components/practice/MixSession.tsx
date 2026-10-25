@@ -112,7 +112,7 @@ export function MixSession({ questions, chapters, courses }: { questions: Practi
         <article className="panel overflow-hidden" style={{ borderTop: "4px solid var(--ink-soft)" }}>
           <div className="px-5 pb-5 pt-4">
             <p className="text-xs text-ink-soft">שאלה מהמיקס</p>
-            <p className="mt-2 whitespace-pre-line text-lg leading-relaxed" dir="auto">
+            <p className="mt-2 whitespace-pre-line text-lg leading-relaxed" dir="rtl">
               <MathText text={q.prompt} />
             </p>
             <h3 className="mt-5 font-medium">מאיזה פרק זה? (איזו שיטה תעבוד כאן)</h3>

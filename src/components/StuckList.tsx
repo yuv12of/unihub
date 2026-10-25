@@ -1,5 +1,6 @@
 "use client";
 
+import { MathText } from "@/components/MathText";
 import { useOptimistic, useState, useTransition } from "react";
 import { resolveStuck } from "@/app/act";
 import type { StuckPoint } from "@/lib/userdata";
@@ -50,7 +51,7 @@ export function StuckList({
                 className="mt-1 size-4 shrink-0"
                 aria-label="נפתר"
               />
-              <span className={`min-w-0 flex-1 ${x.resolved ? "text-ink-soft line-through" : ""}`}>{x.topic}</span>
+              <span className={`min-w-0 flex-1 ${x.resolved ? "text-ink-soft line-through" : ""}`}><MathText text={x.topic} /></span>
               {!x.resolved && (
                 <button
                   type="button"

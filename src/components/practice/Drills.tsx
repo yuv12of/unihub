@@ -1,5 +1,6 @@
 "use client";
 
+import { MathText } from "@/components/MathText";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
@@ -572,7 +573,7 @@ function ExprAnswer({
       {error && <Verdict ok={false}>{error}</Verdict>}
       {state === "wrong" && <Verdict ok={false}>לא שווה לתשובה (בדקתי בכמה נקודות).</Verdict>}
       {state === "ok" && <Verdict ok>{missed ? "נכון עכשיו." : "נכון בניסיון ראשון."}</Verdict>}
-      {(hint || over) && <p className="mt-2 text-sm text-ink-soft">{why}</p>}
+      {(hint || over) && <p className="mt-2 text-sm text-ink-soft">{typeof why === "string" ? <MathText text={why} /> : why}</p>}
       {over && (
         <p className="mt-2 text-sm">
           תשובה אפשרית:{" "}
