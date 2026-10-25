@@ -42,7 +42,7 @@ async function Reader({ params, searchParams }: Pick<PageProps<"/books/[id]">, "
       key={ch.id}
       book={{ id: book.id, title: book.title, course: book.course_code, courseName: course?.short ?? book.course_code, color: course?.color ?? "var(--ink-soft)", forumHref: course?.opalId ? `https://opal.openu.ac.il/mod/ouilforum/index.php?id=${course.opalId}` : null }}
       chapters={book.chapters.map(lite)}
-      chapter={{ ...lite(ch), url, summary: ch.summary, key_points: ch.key_points, firstBookPage: ch.start_page }}
+      chapter={{ ...lite(ch), url, summary: ch.summary, key_points: ch.key_points, conclusion: ch.conclusion, firstBookPage: ch.start_page }}
       initialPage={initialPage}
       questions={questions}
       cardCount={cards}

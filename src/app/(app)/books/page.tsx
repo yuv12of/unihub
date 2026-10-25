@@ -116,7 +116,7 @@ function BookCard({ book, color, course }: { book: Book; color: string; course: 
                 <span className="block text-xs text-ink-soft">
                   {c.end_page - c.start_page + 1} עמ׳
                   {c.last_page && !c.done_at ? ` · עצרתם בעמ׳ ${c.last_page}` : ""}
-                  {c.summary ? " · יש סיכום ושאלות" : ""}
+                  {c.conclusion ? " · סיכום מלא ושאלות" : c.summary ? " · יש סיכום ושאלות" : ""}
                 </span>
               </span>
               <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
@@ -124,7 +124,10 @@ function BookCard({ book, color, course }: { book: Book; color: string; course: 
           </li>
         ))}
       </ol>
-      <div className="mt-2 text-end">
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <Link href={`/books/${book.id}/summary`} className="text-sm underline decoration-rule underline-offset-4 hover:text-ink">
+          סיכומי הפרקים בעמוד אחד
+        </Link>
         <RemoveBook id={book.id} />
       </div>
     </section>

@@ -28,7 +28,20 @@ type Row = Pick<FocusTask, "id" | "text" | "done"> & { pending?: boolean };
  * The to-do list inside the focus timer: the session's plan steps, my own tasks for this sitting,
  * and what I didn't finish last time in this course. Undone tasks wait for the next session.
  */
-export function FocusTasks({ taskKey, courseCode, minutes, title }: { taskKey: string; courseCode: string | null; minutes: number; title: string }) {
+export function FocusTasks({
+  taskKey,
+  courseCode,
+  minutes,
+  title,
+  onCounts,
+}: {
+  taskKey: string;
+  courseCode: string | null;
+  minutes: number;
+  title: string;
+  /** progress for the after-session summary */
+  onCounts?: (c: { done: number; total: number; open: number }) => void;
+}) {
   const [loaded, setLoaded] = useState(false);
   const [offline, setOffline] = useState(false);
   const [steps, setSteps] = useState<AgendaStep[]>([]);
@@ -126,6 +139,10 @@ export function FocusTasks({ taskKey, courseCode, minutes, title }: { taskKey: s
 
   const all = steps.length + tasks.length;
   const done = steps.filter((s) => ticks[s.id]).length + tasks.filter((t) => t.done).length;
+  const open = tasks.filter((t) => !t.done).length;
+  useEffect(() => {
+    onCounts?.({ done, total: all, open });
+  }, [onCounts, done, all, open]);
 
   return (
     <section className="w-full max-w-sm text-start" aria-label="משימות לזמן הזה">

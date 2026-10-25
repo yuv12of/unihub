@@ -6,9 +6,18 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Icon } from "@/components/Icon";
 import { MathText } from "@/components/MathText";
-import { CheckCard, PretestCard, usePretest } from "@/components/practice/Pretest";
-import { markChapterDone, savePlace, searchMyBooks, setQuestionStatus } from "@/app/act";
-import type { BookQuestion, SearchHit } from "@/lib/books";
+import {
+  CheckCard,
+  PretestCard,
+  usePretest,
+} from "@/components/practice/Pretest";
+import {
+  markChapterDone,
+  savePlace,
+  searchMyBooks,
+  setQuestionStatus,
+} from "@/app/act";
+import type { BookQuestion, ChapterConclusion, SearchHit } from "@/lib/books";
 
 interface ChapterLite {
   id: string;
@@ -20,9 +29,22 @@ interface ChapterLite {
 }
 
 interface Props {
-  book: { id: string; title: string; course: string; courseName: string; color: string; forumHref?: string | null };
+  book: {
+    id: string;
+    title: string;
+    course: string;
+    courseName: string;
+    color: string;
+    forumHref?: string | null;
+  };
   chapters: ChapterLite[];
-  chapter: ChapterLite & { url: string | null; summary: string | null; key_points: string[] | null; firstBookPage: number };
+  chapter: ChapterLite & {
+    url: string | null;
+    summary: string | null;
+    key_points: string[] | null;
+    conclusion: ChapterConclusion | null;
+    firstBookPage: number;
+  };
   initialPage: number;
   questions: BookQuestion[];
   cardCount: number;
@@ -35,7 +57,14 @@ type Side = "read" | "summary" | "questions";
  * chapters stay light on a phone), the place remembered, and the chapter's summary, practice
  * questions and flashcards beside it (under tabs on a phone).
  */
-export function BookReader({ book, chapters, chapter, initialPage, questions, cardCount }: Props) {
+export function BookReader({
+  book,
+  chapters,
+  chapter,
+  initialPage,
+  questions,
+  cardCount,
+}: Props) {
   const [side, setSide] = useState<Side>("read");
   const [page, setPage] = useState(initialPage);
   const [done, setDone] = useState(chapter.done);
@@ -46,7 +75,8 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
   const [pre, setPre] = usePretest(chapter.id);
   const next = chapters.find((c) => c.idx === chapter.idx + 1);
   const prev = chapters.find((c) => c.idx === chapter.idx - 1);
-  const go = (idx: number, p?: number) => router.push(`/books/${book.id}?ch=${idx}${p ? `&p=${p}` : ""}`);
+  const go = (idx: number, p?: number) =>
+    router.push(`/books/${book.id}?ch=${idx}${p ? `&p=${p}` : ""}`);
 
   const toPage = (p: number) => {
     setSide("read");
@@ -65,12 +95,20 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
       {/* Top bar: back to the library, chapter picker, page, zoom */}
       <div className="sticky top-[calc(env(safe-area-inset-top)+3.4rem)] z-[5] -mx-4 mb-4 border-b border-rule bg-bg/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-12 lg:px-12">
         <div className="flex items-center gap-2">
-          <Link href={`/books?course=${book.course}`} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-surface hover:text-ink" aria-label="לכל הספרים">
+          <Link
+            href={`/books?course=${book.course}`}
+            className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-surface hover:text-ink"
+            aria-label="לכל הספרים"
+          >
             <Icon name="chevronRight" className="size-5" />
           </Link>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-ink-soft">
-              <span className="me-1.5 inline-block size-2 rounded-full align-middle" style={{ background: book.color }} aria-hidden />
+              <span
+                className="me-1.5 inline-block size-2 rounded-full align-middle"
+                style={{ background: book.color }}
+                aria-hidden
+              />
               {book.courseName} · {book.title}
             </p>
             <select
@@ -87,14 +125,28 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
               ))}
             </select>
           </div>
-          <span className="shrink-0 text-sm tabular-nums text-ink-soft" aria-live="polite">
+          <span
+            className="shrink-0 text-sm tabular-nums text-ink-soft"
+            aria-live="polite"
+          >
             {page}/{chapter.pages}
           </span>
           <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.25))} disabled={zoom <= 1} className="grid size-11 place-items-center rounded-full border border-rule-strong disabled:opacity-40 sm:size-9" aria-label="הקטנה">
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+              disabled={zoom <= 1}
+              className="grid size-11 place-items-center rounded-full border border-rule-strong disabled:opacity-40 sm:size-9"
+              aria-label="הקטנה"
+            >
               <Icon name="minus" className="size-4" />
             </button>
-            <button type="button" onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))} className="grid size-11 place-items-center rounded-full border border-rule-strong sm:size-9" aria-label="הגדלה">
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))}
+              className="grid size-11 place-items-center rounded-full border border-rule-strong sm:size-9"
+              aria-label="הגדלה"
+            >
               <Icon name="plus" className="size-4" />
             </button>
           </div>
@@ -117,11 +169,26 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
 
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className={side === "read" ? "" : "hidden lg:block"}>
-          {pre.pretest && <PretestCard chapterId={chapter.id} questions={pre.pretest} onDone={(seen) => setPre({ pretest: null, check: seen })} />}
+          {pre.pretest && (
+            <PretestCard
+              chapterId={chapter.id}
+              questions={pre.pretest}
+              onDone={(seen) => setPre({ pretest: null, check: seen })}
+            />
+          )}
           {chapter.url ? (
-            <Pages url={chapter.url} chapterId={chapter.id} initialPage={initialPage} zoom={zoom} onPage={setPage} jumpRef={jump} />
+            <Pages
+              url={chapter.url}
+              chapterId={chapter.id}
+              initialPage={initialPage}
+              zoom={zoom}
+              onPage={setPage}
+              jumpRef={jump}
+            />
           ) : (
-            <p className="panel p-5 text-ink-soft">לא הצלחתי לפתוח את הקובץ. נסו לרענן את הדף.</p>
+            <p className="panel p-5 text-ink-soft">
+              לא הצלחתי לפתוח את הקובץ. נסו לרענן את הדף.
+            </p>
           )}
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
@@ -141,29 +208,78 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
               {done ? "סומן כנקרא" : "סיימתי את הפרק"}
             </button>
             {next && (
-              <button type="button" onClick={() => go(next.idx)} className="inline-flex items-center gap-1 rounded-full border border-rule px-4 py-2.5 hover:border-ink">
+              <button
+                type="button"
+                onClick={() => go(next.idx)}
+                className="inline-flex items-center gap-1 rounded-full border border-rule px-4 py-2.5 hover:border-ink"
+              >
                 לפרק הבא
                 <Icon name="chevronLeft" className="size-4" />
               </button>
             )}
             {prev && (
-              <button type="button" onClick={() => go(prev.idx)} className="text-sm text-ink-soft underline decoration-rule underline-offset-4">
+              <button
+                type="button"
+                onClick={() => go(prev.idx)}
+                className="text-sm text-ink-soft underline decoration-rule underline-offset-4"
+              >
                 לפרק הקודם
               </button>
             )}
           </div>
-          {done && pre.check && pre.check.length > 0 && <CheckCard chapterId={chapter.id} questions={pre.check} onDone={() => setPre((p) => ({ ...p, check: null }))} />}
+          {chapter.conclusion?.bottom_line && (
+            <section className="panel mt-6 p-5">
+              <h2 className="section-title">סיכום הפרק</h2>
+              <p className="mt-2 leading-relaxed">
+                <MathText text={chapter.conclusion.bottom_line} />
+              </p>
+              <button
+                type="button"
+                onClick={() => setSide("summary")}
+                className="mt-3 text-sm underline decoration-rule underline-offset-4 lg:hidden"
+              >
+                לסיכום המלא: הגדרות, משפטים ובדיקה עצמית
+              </button>
+              <p className="mt-3 hidden text-sm text-ink-soft lg:block">
+                הסיכום המלא בצד: מה חייבים לדעת, טעויות נפוצות ובדיקה עצמית.
+              </p>
+            </section>
+          )}
+          {done && pre.check && pre.check.length > 0 && (
+            <CheckCard
+              chapterId={chapter.id}
+              questions={pre.check}
+              onDone={() => setPre((p) => ({ ...p, check: null }))}
+            />
+          )}
         </div>
 
-        <aside className={`space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto ${side === "read" ? "hidden lg:block" : ""}`}>
+        <aside
+          className={`space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto ${side === "read" ? "hidden lg:block" : ""}`}
+        >
           <div className={side === "questions" ? "hidden lg:block" : ""}>
-            <Summary chapter={chapter} cardCount={cardCount} course={book.course} forumHref={book.forumHref ?? null} />
+            <Summary
+              chapter={chapter}
+              cardCount={cardCount}
+              course={book.course}
+              forumHref={book.forumHref ?? null}
+              onPage={toPage}
+              bookId={book.id}
+            />
           </div>
           <div className={side === "summary" ? "hidden lg:block" : ""}>
             <Questions questions={questions} onPage={toPage} />
           </div>
           <div className="hidden lg:block">
-            <Search course={book.course} onHit={(h) => (h.book_id === book.id && h.chapter_idx === chapter.idx ? toPage(h.page) : go(h.chapter_idx, h.page))} bookId={book.id} />
+            <Search
+              course={book.course}
+              onHit={(h) =>
+                h.book_id === book.id && h.chapter_idx === chapter.idx
+                  ? toPage(h.page)
+                  : go(h.chapter_idx, h.page)
+              }
+              bookId={book.id}
+            />
           </div>
         </aside>
       </div>
@@ -171,42 +287,207 @@ export function BookReader({ book, chapters, chapter, initialPage, questions, ca
   );
 }
 
-function Summary({ chapter, cardCount, course, forumHref }: { chapter: Props["chapter"]; cardCount: number; course: string; forumHref: string | null }) {
+function Summary({
+  chapter,
+  cardCount,
+  course,
+  forumHref,
+  onPage,
+  bookId,
+}: {
+  chapter: Props["chapter"];
+  cardCount: number;
+  course: string;
+  forumHref: string | null;
+  onPage: (p: number) => void;
+  bookId: string;
+}) {
+  return (
+    <>
+      <section className="panel p-5">
+        <h2 className="section-title">על הפרק</h2>
+        {chapter.summary ? (
+          <p className="mt-2 leading-relaxed">
+            <MathText text={chapter.summary} />
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-ink-soft">
+            הסיכום והשאלות של הפרק ייכתבו בסבב הבוקר הקרוב.
+          </p>
+        )}
+        {chapter.key_points && chapter.key_points.length > 0 && (
+          <ul className="mt-3 space-y-1.5 text-sm">
+            {chapter.key_points.map((k, i) => (
+              <li key={i} className="flex gap-2">
+                <span
+                  className="mt-2 size-1.5 shrink-0 rounded-full bg-ink-soft"
+                  aria-hidden
+                />
+                <span>
+                  <MathText text={k} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {cardCount > 0 && (
+          <Link
+            href={`/study?course=${course}`}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm underline decoration-rule underline-offset-4"
+          >
+            <Icon name="list" className="size-4" />
+            {cardCount} כרטיסיות מהפרק בתרגול
+          </Link>
+        )}
+        {forumHref && (
+          <a
+            href={forumHref}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
+          >
+            <Icon name="help" className="size-4" />
+            שאלה על הפרק? לפורומי הקורס
+          </a>
+        )}
+      </section>
+      {chapter.conclusion && (
+        <Conclusion c={chapter.conclusion} onPage={onPage} />
+      )}
+      <Link
+        href={`/books/${bookId}/summary`}
+        className="block text-center text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
+      >
+        כל סיכומי הספר בעמוד אחד
+      </Link>
+    </>
+  );
+}
+
+const KIND: Record<ChapterConclusion["must_know"][number]["kind"], string> = {
+  def: "הגדרה",
+  thm: "משפט",
+  method: "שיטה",
+};
+
+/** "סיכום הפרק": the bottom line, what to know (jumps to its page), common mistakes, a self-check. */
+export function Conclusion({
+  c,
+  onPage,
+  link,
+}: {
+  c: ChapterConclusion;
+  onPage?: (p: number) => void;
+  /** on the book's summaries page: page numbers link into the reader */
+  link?: { bookId: string; idx: number };
+}) {
   return (
     <section className="panel p-5">
-      <h2 className="section-title">על הפרק</h2>
-      {chapter.summary ? (
-        <p className="mt-2 leading-relaxed"><MathText text={chapter.summary} /></p>
-      ) : (
-        <p className="mt-2 text-sm text-ink-soft">הסיכום והשאלות של הפרק ייכתבו בסבב הבוקר הקרוב.</p>
+      <h2 className="section-title">סיכום הפרק</h2>
+      {c.bottom_line && (
+        <p className="mt-2 rounded-lg bg-bg p-3 font-medium leading-relaxed">
+          <MathText text={c.bottom_line} />
+        </p>
       )}
-      {chapter.key_points && chapter.key_points.length > 0 && (
-        <ul className="mt-3 space-y-1.5 text-sm">
-          {chapter.key_points.map((k, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-ink-soft" aria-hidden />
-              <span><MathText text={k} /></span>
-            </li>
-          ))}
-        </ul>
+      {c.must_know.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">חייבים לדעת</h3>
+          <ul className="mt-2 space-y-2.5 text-sm">
+            {c.must_know.map((m, i) => (
+              <li key={i}>
+                <span className="me-1.5 rounded bg-bg px-1.5 py-0.5 text-[11px] text-ink-soft">
+                  {KIND[m.kind]}
+                </span>
+                <b>
+                  <MathText text={m.title} />
+                </b>
+                {m.page && onPage && (
+                  <button
+                    type="button"
+                    onClick={() => onPage(m.page!)}
+                    className="ms-1.5 text-xs text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
+                  >
+                    עמ׳ {m.page}
+                  </button>
+                )}
+                {m.page && !onPage && link && (
+                  <Link
+                    href={`/books/${link.bookId}?ch=${link.idx}&p=${m.page}`}
+                    className="ms-1.5 text-xs text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink"
+                  >
+                    עמ׳ {m.page}
+                  </Link>
+                )}
+                {m.text && (
+                  <span className="mt-0.5 block leading-relaxed text-ink-soft">
+                    <MathText text={m.text} />
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      {cardCount > 0 && (
-        <Link href={`/study?course=${course}`} className="mt-4 inline-flex items-center gap-1.5 text-sm underline decoration-rule underline-offset-4">
-          <Icon name="list" className="size-4" />
-          {cardCount} כרטיסיות מהפרק בתרגול
-        </Link>
+      {c.pitfalls.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">טעויות נפוצות</h3>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            {c.pitfalls.map((p, i) => (
+              <li key={i} className="flex gap-2">
+                <Icon
+                  name="alert"
+                  className="mt-0.5 size-4 shrink-0 text-ink-soft"
+                />
+                <span>
+                  <MathText text={p} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      {forumHref && (
-        <a href={forumHref} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-1.5 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
-          <Icon name="help" className="size-4" />
-          שאלה על הפרק? לפורומי הקורס
-        </a>
+      {c.self_check.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-semibold">בדיקה עצמית</h3>
+          <ol className="mt-2 space-y-2 text-sm">
+            {c.self_check.map((x, i) => (
+              <li key={i}>
+                <details className="group rounded-lg border border-rule px-3 py-2">
+                  <summary className="cursor-pointer list-none">
+                    <span className="me-1 tabular-nums text-ink-soft">
+                      {i + 1}.
+                    </span>
+                    <MathText text={x.q} />
+                    <span className="ms-2 text-xs text-ink-soft underline decoration-rule underline-offset-4 group-open:hidden">
+                      תשובה
+                    </span>
+                  </summary>
+                  <p className="mt-2 border-t border-rule pt-2 leading-relaxed text-ink-soft">
+                    <MathText text={x.a} />
+                  </p>
+                </details>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+      {c.next && (
+        <p className="mt-4 text-sm text-ink-soft">
+          <b className="font-medium text-ink">ומה הלאה: </b>
+          <MathText text={c.next} />
+        </p>
       )}
     </section>
   );
 }
 
-function Questions({ questions, onPage }: { questions: BookQuestion[]; onPage: (p: number) => void }) {
+function Questions({
+  questions,
+  onPage,
+}: {
+  questions: BookQuestion[];
+  onPage: (p: number) => void;
+}) {
   if (!questions.length) return null;
   return (
     <section>
@@ -222,7 +503,15 @@ function Questions({ questions, onPage }: { questions: BookQuestion[]; onPage: (
 
 const LEVEL = ["", "קלה", "בינונית", "מאתגרת"];
 
-function QuestionItem({ q, n, onPage }: { q: BookQuestion; n: number; onPage: (p: number) => void }) {
+function QuestionItem({
+  q,
+  n,
+  onPage,
+}: {
+  q: BookQuestion;
+  n: number;
+  onPage: (p: number) => void;
+}) {
   const [open, setOpen] = useState<"none" | "hint" | "answer">("none");
   const [status, setStatus] = useState(q.status);
   const [, start] = useTransition();
@@ -243,39 +532,72 @@ function QuestionItem({ q, n, onPage }: { q: BookQuestion; n: number; onPage: (p
           שאלה {n} · {LEVEL[q.difficulty]}
         </span>
         {q.page && (
-          <button type="button" onClick={() => onPage(q.page!)} className="underline decoration-rule underline-offset-4 hover:text-ink">
+          <button
+            type="button"
+            onClick={() => onPage(q.page!)}
+            className="underline decoration-rule underline-offset-4 hover:text-ink"
+          >
             עמ׳ {q.page} בפרק
           </button>
         )}
       </div>
-      <p className="mt-1.5 whitespace-pre-line leading-relaxed"><MathText text={q.prompt} /></p>
+      <p className="mt-1.5 whitespace-pre-line leading-relaxed">
+        <MathText text={q.prompt} />
+      </p>
       {open !== "none" && (
         <div className="mt-3 space-y-2 border-t border-rule pt-3 text-sm">
           {q.hint && (
             <p className="flex gap-2">
-              <Icon name="bulb" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
-              <span className="whitespace-pre-line"><MathText text={q.hint} /></span>
+              <Icon
+                name="bulb"
+                className="mt-0.5 size-4 shrink-0 text-ink-soft"
+              />
+              <span className="whitespace-pre-line">
+                <MathText text={q.hint} />
+              </span>
             </p>
           )}
-          {open === "answer" && <p className="whitespace-pre-line leading-relaxed"><MathText text={q.answer} /></p>}
+          {open === "answer" && (
+            <p className="whitespace-pre-line leading-relaxed">
+              <MathText text={q.answer} />
+            </p>
+          )}
         </div>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         {open === "none" && q.hint && (
-          <button type="button" onClick={() => setOpen("hint")} className="rounded-full border border-rule px-3 py-1 hover:border-ink">
+          <button
+            type="button"
+            onClick={() => setOpen("hint")}
+            className="rounded-full border border-rule px-3 py-1 hover:border-ink"
+          >
             רמז
           </button>
         )}
         {open !== "answer" && (
-          <button type="button" onClick={() => setOpen("answer")} className="rounded-full border border-rule px-3 py-1 hover:border-ink">
+          <button
+            type="button"
+            onClick={() => setOpen("answer")}
+            className="rounded-full border border-rule px-3 py-1 hover:border-ink"
+          >
             פתרון
           </button>
         )}
         <span className="ms-auto flex gap-1">
-          <button type="button" onClick={() => mark(status === "solved" ? null : "solved")} aria-pressed={status === "solved"} className={`rounded-full px-3 py-1 ${status === "solved" ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`}>
+          <button
+            type="button"
+            onClick={() => mark(status === "solved" ? null : "solved")}
+            aria-pressed={status === "solved"}
+            className={`rounded-full px-3 py-1 ${status === "solved" ? "bg-ink text-bg" : "text-ink-soft hover:text-ink"}`}
+          >
             פתרתי
           </button>
-          <button type="button" onClick={() => mark(status === "stuck" ? null : "stuck")} aria-pressed={status === "stuck"} className={`rounded-full px-3 py-1 ${status === "stuck" ? "bg-highlight text-highlight-ink" : "text-ink-soft hover:text-ink"}`}>
+          <button
+            type="button"
+            onClick={() => mark(status === "stuck" ? null : "stuck")}
+            aria-pressed={status === "stuck"}
+            className={`rounded-full px-3 py-1 ${status === "stuck" ? "bg-highlight text-highlight-ink" : "text-ink-soft hover:text-ink"}`}
+          >
             נתקעתי
           </button>
         </span>
@@ -284,7 +606,15 @@ function QuestionItem({ q, n, onPage }: { q: BookQuestion; n: number; onPage: (p
   );
 }
 
-export function Search({ course, onHit, bookId }: { course?: string; onHit?: (h: SearchHit) => void; bookId?: string }) {
+export function Search({
+  course,
+  onHit,
+  bookId,
+}: {
+  course?: string;
+  onHit?: (h: SearchHit) => void;
+  bookId?: string;
+}) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [pending, start] = useTransition();
@@ -305,17 +635,31 @@ export function Search({ course, onHit, bookId }: { course?: string; onHit?: (h:
         className="flex items-center gap-2 rounded-full border border-rule bg-surface px-3 focus-within:border-ink"
       >
         <Icon name="search" className="size-4 text-ink-soft" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש בספרים" className="min-w-0 flex-1 bg-transparent py-2 focus:outline-none" aria-label="חיפוש בספרים" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="חיפוש בספרים"
+          className="min-w-0 flex-1 bg-transparent py-2 focus:outline-none"
+          aria-label="חיפוש בספרים"
+        />
       </form>
       {pending && <p className="mt-2 text-sm text-ink-soft">מחפש…</p>}
       {hits && !pending && (
         <ul className="mt-2 divide-y divide-rule text-sm">
-          {hits.length === 0 && <li className="py-2 text-ink-soft">לא נמצא.</li>}
+          {hits.length === 0 && (
+            <li className="py-2 text-ink-soft">לא נמצא.</li>
+          )}
           {hits.map((h, i) => (
             <li key={i}>
               <button
                 type="button"
-                onClick={() => (onHit ? onHit(h) : router.push(`/books/${h.book_id}?ch=${h.chapter_idx}&p=${h.page}`))}
+                onClick={() =>
+                  onHit
+                    ? onHit(h)
+                    : router.push(
+                        `/books/${h.book_id}?ch=${h.chapter_idx}&p=${h.page}`,
+                      )
+                }
                 className="block w-full py-2 text-start hover:bg-bg"
               >
                 <span className="block text-xs text-ink-soft">
@@ -355,7 +699,9 @@ function Pages({
   const [width, setWidth] = useState(0);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const [current, setCurrent] = useState(initialPage);
-  const drawn = useRef(new Map<number, { zoomKey: string; canvas: HTMLCanvasElement }>());
+  const drawn = useRef(
+    new Map<number, { zoomKey: string; canvas: HTMLCanvasElement }>(),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -406,7 +752,10 @@ function Pages({
       if (!doc || !slot || !pageWidth) return;
       const key = String(pageWidth);
       if (drawn.current.get(n)?.zoomKey === key) return;
-      drawn.current.set(n, { zoomKey: key, canvas: document.createElement("canvas") });
+      drawn.current.set(n, {
+        zoomKey: key,
+        canvas: document.createElement("canvas"),
+      });
       try {
         const page = await doc.getPage(n);
         const base = page.getViewport({ scale: 1 });
@@ -442,7 +791,8 @@ function Pages({
     if (!doc) return;
     // On a phone the app scrolls inside #scroller, not the window: watch that box.
     const sc = document.getElementById("scroller");
-    const root = sc && /(auto|scroll)/.test(getComputedStyle(sc).overflowY) ? sc : null;
+    const root =
+      sc && /(auto|scroll)/.test(getComputedStyle(sc).overflowY) ? sc : null;
     const near = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -478,29 +828,48 @@ function Pages({
 
   // Jumping to a page, and opening at the remembered one.
   useEffect(() => {
-    jumpRef.current = (p: number) => slots.current[Math.max(0, Math.min((doc?.numPages ?? 1) - 1, p - 1))]?.scrollIntoView({ block: "start" });
+    jumpRef.current = (p: number) =>
+      slots.current[
+        Math.max(0, Math.min((doc?.numPages ?? 1) - 1, p - 1))
+      ]?.scrollIntoView({ block: "start" });
   }, [doc, jumpRef]);
   const opened = useRef(false);
   useEffect(() => {
     if (doc && width && !opened.current) {
       opened.current = true;
-      if (initialPage > 1) requestAnimationFrame(() => jumpRef.current(initialPage));
+      if (initialPage > 1)
+        requestAnimationFrame(() => jumpRef.current(initialPage));
     }
   }, [doc, width, initialPage, jumpRef]);
 
   // Save the place a moment after scrolling stops.
   useEffect(() => {
     if (!doc) return;
-    const t = setTimeout(() => savePlace(chapterId, current).catch(() => {}), 1500);
+    const t = setTimeout(
+      () => savePlace(chapterId, current).catch(() => {}),
+      1500,
+    );
     return () => clearTimeout(t);
   }, [current, chapterId, doc]);
 
   const pages = doc?.numPages ?? 0;
   return (
     <div ref={box} className={zoom > 1 ? "overflow-x-auto" : ""} dir="ltr">
-      {err && <p className="panel p-5 text-ink-soft" dir="rtl">{err}</p>}
-      {!doc && !err && <div className="aspect-[1/1.414] w-full animate-pulse rounded-lg bg-rule/50" aria-hidden />}
-      <div style={{ width: pageWidth || undefined }} className="mx-auto space-y-3">
+      {err && (
+        <p className="panel p-5 text-ink-soft" dir="rtl">
+          {err}
+        </p>
+      )}
+      {!doc && !err && (
+        <div
+          className="aspect-[1/1.414] w-full animate-pulse rounded-lg bg-rule/50"
+          aria-hidden
+        />
+      )}
+      <div
+        style={{ width: pageWidth || undefined }}
+        className="mx-auto space-y-3"
+      >
         {Array.from({ length: pages }, (_, i) => (
           <div
             key={i}

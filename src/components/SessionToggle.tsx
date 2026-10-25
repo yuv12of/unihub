@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   addStuck,
@@ -10,6 +10,7 @@ import {
 } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks, freeTaskKey } from "@/components/FocusTasks";
+import { pace, readHistory, recordFocus, wrapUp } from "@/lib/focusStats";
 import { Icon } from "@/components/Icon";
 
 export function SessionToggle({
@@ -187,6 +188,9 @@ export function FocusTimer({
     },
   );
   const [now, setNow] = useState(() => Date.now());
+  // the task list's progress, and the after-session summary (minutes studied) once "סיימתי" is pressed
+  const [counts, setCounts] = useState({ done: 0, total: 0, open: 0 });
+  const [wrap, setWrap] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -220,6 +224,15 @@ export function FocusTimer({
   const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, "0");
   const studied = Math.max(1, Math.round(elapsed / 60_000));
   const pct = Math.min(1, elapsed / total);
+
+  if (wrap != null)
+    return createPortal(
+      <FocusWrap
+        summary={wrapUp({ studied: wrap, planned: minutes, done: counts.done, total: counts.total, open: counts.open, rate: pace(readHistory(), courseCode ?? null) })}
+        onClose={() => onFinish(wrap)}
+      />,
+      document.body,
+    );
 
   return createPortal(
     <div
@@ -292,7 +305,9 @@ export function FocusTimer({
               type="button"
               onClick={() => {
                 clear();
-                onFinish(Math.min(studied, minutes + 60));
+                const s = Math.min(studied, minutes + 60);
+                recordFocus({ date: new Date().toISOString().slice(0, 10), course: courseCode ?? null, minutes: s, planned: minutes, done: counts.done, total: counts.total });
+                setWrap(s);
               }}
               className="rounded-full bg-ink px-5 py-2.5 font-medium text-bg"
             >
@@ -320,6 +335,7 @@ export function FocusTimer({
           courseCode={courseCode ?? null}
           minutes={minutes}
           title={title}
+          onCounts={setCounts}
         />
       </div>
     </div>,
@@ -381,5 +397,36 @@ function Stuck({
         שמירה
       </button>
     </form>
+  );
+}
+
+/** A few seconds after "סיימתי": what got done, what moves on, and a length to aim for next time. */
+function FocusWrap({ summary, onClose }: { summary: { headline: string; lines: string[] }; onClose: () => void }) {
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    navigator.vibrate?.(40);
+    const t = setTimeout(() => close.current(), 7000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-surface px-6 text-center" role="dialog" aria-modal aria-label="סיכום זמן הריכוז">
+      <div className="max-w-sm">
+        <span className="mx-auto grid size-14 place-items-center rounded-full bg-ink text-bg">
+          <Icon name="check" className="size-7" />
+        </span>
+        <p className="mt-5 font-display text-3xl">{summary.headline}</p>
+        {summary.lines.map((l, i) => (
+          <p key={i} className="mt-3 leading-relaxed text-ink-soft">
+            {l}
+          </p>
+        ))}
+        <button type="button" onClick={() => close.current()} className="btn mt-6 rounded-full px-6">
+          סגירה
+        </button>
+      </div>
+    </div>
   );
 }

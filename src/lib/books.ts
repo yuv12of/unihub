@@ -11,10 +11,54 @@ export interface Chapter {
   storage_path: string;
   summary: string | null;
   key_points: string[] | null;
+  /** "סיכום הפרק", written by the morning task (null until then) */
+  conclusion: ChapterConclusion | null;
   last_page: number | null;
   read_at: string | null;
   done_at: string | null;
   has_text: boolean;
+}
+
+export interface ChapterConclusion {
+  /** the chapter in one sentence */
+  bottom_line: string;
+  /** definitions, theorems and methods to know, with the page inside the chapter */
+  must_know: { kind: "def" | "thm" | "method"; title: string; text: string; page?: number | null }[];
+  /** common mistakes */
+  pitfalls: string[];
+  /** quick questions to check yourself */
+  self_check: { q: string; a: string }[];
+  /** how it leads into the next chapter */
+  next?: string | null;
+}
+
+/** Tolerant read of the jsonb (written by a scheduled task). */
+export function readConclusion(v: unknown): ChapterConclusion | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const str = (x: unknown) => (typeof x === "string" ? x.trim() : "");
+  const arr = (x: unknown) => (Array.isArray(x) ? x : []);
+  const bottom = str(o.bottom_line);
+  const must = arr(o.must_know)
+    .map((m) => m as Record<string, unknown>)
+    .map((m) => ({
+      kind: (["def", "thm", "method"].includes(String(m.kind)) ? m.kind : "thm") as "def" | "thm" | "method",
+      title: str(m.title),
+      text: str(m.text),
+      page: Number.isFinite(Number(m.page)) && Number(m.page) > 0 ? Number(m.page) : null,
+    }))
+    .filter((m) => m.title || m.text);
+  if (!bottom && !must.length) return null;
+  return {
+    bottom_line: bottom,
+    must_know: must,
+    pitfalls: arr(o.pitfalls).map(str).filter(Boolean),
+    self_check: arr(o.self_check)
+      .map((x) => x as Record<string, unknown>)
+      .map((x) => ({ q: str(x.q), a: str(x.a) }))
+      .filter((x) => x.q && x.a),
+    next: str(o.next) || null,
+  };
 }
 
 export interface Book {
@@ -38,10 +82,10 @@ export interface BookQuestion {
   status: "solved" | "stuck" | "skipped" | null;
 }
 
-const CHAPTER_COLS = "id, book_id, idx, title, start_page, end_page, storage_path, summary, key_points, last_page, read_at, done_at, has_text:text_content";
+const CHAPTER_COLS = "id, book_id, idx, title, start_page, end_page, storage_path, summary, key_points, conclusion, last_page, read_at, done_at, has_text:text_content";
 
 type ChapterRow = Omit<Chapter, "has_text"> & { has_text: string | null };
-const toChapter = (r: ChapterRow): Chapter => ({ ...r, has_text: !!r.has_text });
+const toChapter = (r: ChapterRow): Chapter => ({ ...r, conclusion: readConclusion(r.conclusion), has_text: !!r.has_text });
 
 /** My books (all courses, or one), chapters in order. Never other users' books (RLS). */
 export async function getBooks(course?: string): Promise<Book[]> {
@@ -54,12 +98,12 @@ export async function getBooks(course?: string): Promise<Book[]> {
   // has_text: only whether text exists. Selecting a short slice keeps the payload small.
   const { data: chapters } = await sb
     .from("book_chapters")
-    .select("id, book_id, idx, title, start_page, end_page, storage_path, summary, key_points, last_page, read_at, done_at")
+    .select("id, book_id, idx, title, start_page, end_page, storage_path, summary, key_points, conclusion, last_page, read_at, done_at")
     .in("book_id", books.map((b) => b.id))
     .order("idx");
   return books.map((b) => ({
     ...b,
-    chapters: (chapters ?? []).filter((c) => c.book_id === b.id).map((c) => ({ ...c, has_text: true }) as Chapter),
+    chapters: (chapters ?? []).filter((c) => c.book_id === b.id).map((c) => ({ ...c, conclusion: readConclusion(c.conclusion), has_text: true }) as Chapter),
   }));
 }
 
