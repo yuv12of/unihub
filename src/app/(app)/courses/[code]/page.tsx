@@ -586,11 +586,18 @@ function ChapterTrack({ topics, weeks, today, watched, total, color }: { topics:
 }
 
 async function Meetups({ meetups, weeks, today, code }: { meetups: UserEvent[]; weeks: ReadingItem[]; today: string; code: string }) {
-  const notes = new Map<string, { body: string; attended: boolean | null }>();
+  const notes = new Map<string, { body: string; attended: boolean | null; files?: number }>();
   if (supabaseEnabled) {
     const sb = await createClient();
-    const { data } = await sb.from("meetup_notes").select("date, body, attended").eq("course_code", code);
+    const [{ data }, { data: files }] = await Promise.all([
+      sb.from("meetup_notes").select("date, body, attended").eq("course_code", code),
+      sb.from("meetup_files").select("date").eq("course_code", code),
+    ]);
     for (const n of data ?? []) notes.set(n.date, { body: n.body, attended: n.attended });
+    for (const f of files ?? []) {
+      const n = notes.get(f.date) ?? { body: "", attended: null };
+      notes.set(f.date, { ...n, files: (n.files ?? 0) + 1 });
+    }
   }
   const next = meetups.filter((m) => m.date >= today);
   const past = meetups.filter((m) => m.date < today);
@@ -707,7 +714,7 @@ function RunwayPanel({ exam, run, today, status }: { exam: Exam | null; run: Run
   );
 }
 
-function MeetupLine({ href, note, past }: { href: string; note?: { body: string; attended: boolean | null }; past: boolean }) {
+function MeetupLine({ href, note, past }: { href: string; note?: { body: string; attended: boolean | null; files?: number }; past: boolean }) {
   const stars = note ? examLines(note.body).length : 0;
   const qs = note ? questionLines(note.body).length : 0;
   const bits = [
@@ -715,6 +722,7 @@ function MeetupLine({ href, note, past }: { href: string; note?: { body: string;
     note?.body.trim() ? "יש הערות" : "",
     stars ? `${stars} ⭐` : "",
     qs ? `${qs} ❓` : "",
+    note?.files ? (note.files === 1 ? "קובץ אחד" : `${note.files} קבצים`) : past ? "בלי קבצים" : "",
   ].filter(Boolean);
   return (
     <Link href={href} className="mt-1 inline-flex items-center gap-1.5 text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">

@@ -40,6 +40,7 @@ import { SessionAgendaFor } from "@/components/SessionAgendaFor";
 import { PracticeMarksCard } from "@/components/PracticeMarks";
 import { ExamCandidates } from "@/components/ExamCandidates";
 import { DayCheckCard } from "@/components/DayCheckCard";
+import { MeetupFilesCard } from "@/components/MeetupFilesCard";
 import { MeetupBanner } from "@/components/MeetupBanner";
 import { SessionMoveButton } from "@/components/SessionMoveButton";
 import { currentMeetup } from "@/lib/meetup";
@@ -400,6 +401,12 @@ async function Today() {
         {courses.length > 0 && (
           <Suspense fallback={null}>
             <DayCheckCard today={today} nowMin={nowMin} />
+          </Suspense>
+        )}
+
+        {courses.length > 0 && (
+          <Suspense fallback={null}>
+            <MeetupFilesCard today={today} nowMin={nowMin} />
           </Suspense>
         )}
 

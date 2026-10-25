@@ -45,6 +45,17 @@ export function remindersFor(data: ReturnType<typeof buildFromFeed>, now: { date
         url: meetupHref(e.course_code!, e.date),
       });
   }
+  // Meetup over: save its files (my notes, the tutor's files, the recording later).
+  for (const e of feed.events.filter((x) => x.date === now.date && x.kind === "tutorial" && x.course_code && x.start_time && !x.cancelled)) {
+    const end = e.end_time ? toMin(e.end_time) : toMin(e.start_time!) + 120;
+    if (now.minutes >= end && now.minutes < end + 20)
+      due.push({
+        key: `mf|${e.id}`,
+        title: `המפגש ב${themeOf(courses, e.course_code!).short} הסתיים`,
+        body: "להעלות את ההערות מ־Notability ואת קבצי המנחה?",
+        url: `${meetupHref(e.course_code!, e.date)}#files`,
+      });
+  }
   for (const e of feed.events.filter((x) => x.date === now.date && x.start_time && x.kind !== "other" && x.kind !== "tutorial" && !x.cancelled && inWindow(x.start_time)))
     due.push({
       key: `e|${e.id}`,

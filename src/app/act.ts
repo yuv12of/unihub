@@ -144,3 +144,10 @@ export const restoreStudyEntry = w(Log.restoreStudyEntry);
 
 import * as Move from "@/app/planMoveActions";
 export const setSessionMove = w(Move.setSessionMove);
+
+import * as MeetFiles from "@/app/meetupFileActions";
+export const meetupUploadUrl = w(MeetFiles.meetupUploadUrl);
+export const addMeetupFile = w(MeetFiles.addMeetupFile);
+export const addMeetupLink = w(MeetFiles.addMeetupLink);
+export const deleteMeetupFile = w(MeetFiles.deleteMeetupFile);
+export const setMeetupFilesDone = w(MeetFiles.setMeetupFilesDone);

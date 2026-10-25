@@ -6,6 +6,8 @@ import { meetupQuestionsToStuck, saveMeetupLinks, saveMeetupNote, setMeetupAsked
 import { Icon } from "@/components/Icon";
 import { MathText } from "@/components/MathText";
 import { ReadChips } from "@/components/ReadChips";
+import { MeetupFiles } from "@/components/MeetupFiles";
+import type { MeetupFile } from "@/lib/meetupFiles";
 import { MARK_EXAM, MARK_Q, MATH_KEYS, MEETUP_LEAD, examLines, questionLines, stamp } from "@/lib/meetup";
 import type { ReadLink } from "@/lib/readings";
 import { duration, range } from "@/lib/time";
@@ -27,6 +29,10 @@ export interface MeetupData {
   group: string | null;
   note: string;
   attended: boolean | null;
+  /** my notes, the tutor's files, the recording link */
+  files: MeetupFile[];
+  /** marked "no files for this meetup" */
+  filesDone: boolean;
   asked: string[];
   prevDate: string | null;
   prevStars: string[];
@@ -96,7 +102,9 @@ export function MeetupRoom({ data }: { data: MeetupData }) {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           {phase === "after" && <WrapUp data={data} body={body} />}
+          {phase === "after" && <Files data={data} ended />}
           <Notes data={data} now={now} live={phase === "live"} body={body} setBody={setBody} />
+          {phase !== "after" && <Files data={data} ended={false} />}
         </div>
         <aside className="space-y-6">
           <Questions data={data} />
@@ -394,6 +402,20 @@ function Questions({ data }: { data: MeetupData }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function Files({ data, ended }: { data: MeetupData; ended: boolean }) {
+  return (
+    <MeetupFiles
+      code={data.code}
+      date={data.date}
+      files={data.files}
+      filesDone={data.filesDone}
+      recordingsUrl={data.recordingsUrl}
+      ended={ended}
+      editable={data.editable}
+    />
   );
 }
 
