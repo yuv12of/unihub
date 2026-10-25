@@ -1120,7 +1120,7 @@ export async function saveLook(patch: import("@/lib/themes").LookPrefs) {
     if (next.music && !/^[A-Za-z0-9]{22}$/.test(next.music)) next.music = null;
     if (next.hidden) next.hidden = next.hidden.filter((h) => /^[a-z]{2,20}$/.test(h)).slice(0, 20);
     if (next.tabs) {
-      const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/books", "/study", "/hobbies", "/mail", "/profile", "/settings"];
+      const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/books", "/study", "/log", "/hobbies", "/mail", "/profile", "/settings"];
       next.tabs = [...new Set(next.tabs.filter((t) => ok.includes(t)))].slice(0, 4);
     }
     const { error } = await supabase.from("profiles").update({ prefs: next }).eq("id", userId);

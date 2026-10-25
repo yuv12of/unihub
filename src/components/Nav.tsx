@@ -21,6 +21,7 @@ const items: Item[] = [
   { href: "/courses", label: "קורסים", icon: IconCourses, group: "study" },
   { href: "/books", label: "ספרים", icon: IconBooks, group: "study" },
   { href: "/study", label: "תרגול", icon: IconStudy, group: "study" },
+  { href: "/log", label: "יומן שעות", icon: IconLog, group: "study" },
   { href: "/routines", label: "שגרה", icon: IconRoutine, group: "life" },
   { href: "/hobbies", label: "תחביבים", icon: IconHobbies, group: "life" },
   { href: "/friends", label: "חברים", icon: IconFriends, badge: "friends", group: "social" },
@@ -192,6 +193,15 @@ const iconProps = {
   strokeLinejoin: "round" as const,
   "aria-hidden": true,
 };
+
+function IconLog() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
 
 function IconToday() {
   return (

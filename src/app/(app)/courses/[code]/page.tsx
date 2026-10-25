@@ -491,7 +491,12 @@ function HoursPanel({ hours }: { hours: ReturnType<typeof courseHours> }) {
   const max = Math.max(60, ...hours.history.map((h) => h.minutes));
   return (
     <section className="panel p-5">
-      <h2 className="section-title">שעות לימוד</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="section-title">שעות לימוד</h2>
+        <Link href="/log" className="text-sm text-ink-soft underline decoration-rule underline-offset-4 hover:text-ink">
+          ליומן השעות
+        </Link>
+      </div>
       <div className="mt-4 flex h-20 items-end gap-1.5" role="img" aria-label="שעות לימוד בשמונת השבועות האחרונים">
         {hours.history.map((h, i) => (
           <span key={h.week} className="flex flex-1 flex-col items-center gap-1">

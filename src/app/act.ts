@@ -135,3 +135,9 @@ export const addFocusTask = w(Focus.addFocusTask);
 export const setFocusTaskDone = w(Focus.setFocusTaskDone);
 export const deleteFocusTask = w(Focus.deleteFocusTask);
 export const pullFocusTask = w(Focus.pullFocusTask);
+
+import * as Log from "@/app/logActions";
+export const addStudyEntry = w(Log.addStudyEntry);
+export const updateStudyEntry = w(Log.updateStudyEntry);
+export const deleteStudyEntry = w(Log.deleteStudyEntry);
+export const restoreStudyEntry = w(Log.restoreStudyEntry);

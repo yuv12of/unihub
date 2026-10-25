@@ -701,7 +701,10 @@ function WeekStrip({ days, today, goal }: { days: { d: string; planned: number; 
           השבוע שלי <span className="font-normal text-ink-soft">(שעות)</span>
         </h2>
         <p className="text-xs text-ink-soft">
-          {durationShort(done)} נעשו · {durationShort(planned)} עוד בתוכנית{goal ? ` · יעד ${durationShort(goal)}` : ""}
+          {durationShort(done)} נעשו · {durationShort(planned)} עוד בתוכנית{goal ? ` · יעד ${durationShort(goal)}` : ""} ·{" "}
+          <Link href="/log" className="underline decoration-rule underline-offset-4 hover:text-ink">
+            יומן שעות
+          </Link>
         </p>
       </div>
       <ol className="mt-2 grid grid-cols-7 gap-1.5">
