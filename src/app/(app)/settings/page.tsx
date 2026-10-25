@@ -80,6 +80,7 @@ async function Settings() {
           google: "calendars",
           jewish: "calendars",
           mail: "connect",
+          share: "connect",
           spotify: "music",
         }}
         tabs={[
@@ -368,6 +369,7 @@ async function Settings() {
                     </ActionForm>
                   )}
                 </section>
+                <ShareShortcut origin={origin} token={ingest} />
               </div>
             ),
           },
@@ -402,5 +404,54 @@ async function Settings() {
         ]}
       />
     </div>
+  );
+}
+
+/** Settings → Google tab: the iPad Shortcut that puts Notability's share sheet into meetup files. */
+function ShareShortcut({ origin, token }: { origin: string; token: string | null }) {
+  const step = "rounded bg-bg px-1.5 py-0.5 font-medium";
+  return (
+    <section id="share" className="panel mt-6 scroll-mt-24 p-5 sm:p-6" aria-labelledby="share-title">
+      <h2 id="share-title" className="section-title">
+        שיתוף מ־Notability ישר למפגש
+      </h2>
+      <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+        קיצור דרך ב־iPad: ב־Notability בוחרים <b>שיתוף</b> ← <b>Unihub</b>, וה־PDF נשמר כהערות של המפגש האחרון (בשבוע האחרון, מ־15 דקות לפני תחילתו).
+        אם שם הפתק כולל את שם הקורס (אינפי, לינארית…), הוא נשמר במפגש של הקורס הזה. בטלפון אנדרואיד או במחשב, אחרי התקנת Unihub, הוא מופיע
+        ברשימת השיתוף בלי הגדרה.
+      </p>
+      {token ? (
+        <ol className="mt-4 max-w-2xl list-decimal space-y-3 ps-5 text-sm leading-relaxed">
+          <li>
+            באפליקציית <b>קיצורים</b> (Shortcuts) צרו קיצור חדש בשם <b>Unihub</b>. בהגדרות שלו (סמל i) הפעילו <span className={step}>הצג בגיליון השיתוף</span>{" "}
+            (Show in Share Sheet) וסמנו רק <b>PDF</b> ו<b>קבצים</b>.
+          </li>
+          <li>
+            הוסיפו <span className={step}>קבלת תוכן מ־URL</span> (Get Contents of URL) עם הכתובת:
+            <CopyField value={`${origin}/api/share/meetup`} />
+            שיטה <b dir="ltr">POST</b>. בכותרות (Headers) הוסיפו <b dir="ltr">Authorization</b> עם הערך:
+            <CopyField value={`Bearer ${token}`} />
+            גוף הבקשה <b dir="ltr">JSON</b>, שדה <b dir="ltr">name</b> מסוג טקסט עם המשתנה <b>קלט הקיצור</b> ← <b>שם</b>.
+          </li>
+          <li>
+            <span className={step}>קבלת ערך מילון</span> (Get Dictionary Value) עם המפתח <b dir="ltr">upload</b>, ואחריו <span className={step}>קבלת תוכן מ־URL</span>{" "}
+            לכתובת שהתקבלה: שיטה <b dir="ltr">PUT</b>, גוף <b>קובץ</b> (File) עם <b>קלט הקיצור</b>.
+          </li>
+          <li>
+            עוד <span className={step}>קבלת ערך מילון</span> עם המפתח <b dir="ltr">finish</b>, מתוך התוצאה של שלב 2 (לחיצה על המשתנה ← בחירת &quot;תוכן
+            ה־URL&quot; הראשון), ואחריו <span className={step}>קבלת תוכן מ־URL</span> לכתובת הזו בשיטה <b dir="ltr">POST</b>.
+          </li>
+          <li>
+            לסיום <span className={step}>הצגת הודעה</span> (Show Notification) עם התוצאה האחרונה: &quot;נשמר ב־Unihub: הערות, מפגש אינפי היום&quot;.
+          </li>
+          <li className="text-ink-soft">
+            לקבצי מנחה: שכפלו את הקיצור, קראו לו &quot;Unihub מנחה&quot; והוסיפו ל־JSON שדה <b dir="ltr">kind</b> עם הערך <b dir="ltr">slides</b>. אפשר גם שדה{" "}
+            <b dir="ltr">course</b> (מספר או שם קצר) כדי לבחור קורס.
+          </li>
+        </ol>
+      ) : (
+        <p className="mt-3 text-sm">קודם צריך מפתח: לחצו &quot;התחלת חיבור הדואר&quot; למעלה.</p>
+      )}
+    </section>
   );
 }

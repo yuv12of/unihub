@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { currentMeetup, examLines, meetupPhase, questionLines, stamp } from "@/lib/meetup";
 import { remindersFor } from "@/lib/reminders";
-import { meetupsMissingFiles } from "@/lib/meetupFiles";
+import { guessCourse, meetupsMissingFiles, pickMeetup } from "@/lib/meetupFiles";
 
 const ev = (over: Partial<Parameters<typeof meetupPhase>[0]> = {}) => ({
   date: "2026-11-08",
@@ -82,4 +82,25 @@ test("meetups missing files: ended, last 7 days, no notes/slides, not marked 'no
   // today's meetup only once it ended; a recording alone doesn't count; older than a week drops out
   assert.deepEqual(out(m(20, 0)), ["20474 2026-11-05"]);
   assert.deepEqual(out(m(21, 0)), ["20109 2026-11-08", "20474 2026-11-05"]);
+});
+
+test("shared files: course from the file name, then the latest meetup that started", () => {
+  const add = (d: string, n: number) => {
+    const x = new Date(d + "T12:00:00Z");
+    x.setUTCDate(x.getUTCDate() + n);
+    return x.toISOString().slice(0, 10);
+  };
+  const courses = [
+    { code: "20109", short: "לינארית", name: "אלגברה לינארית 1" },
+    { code: "20474", short: "אינפי", name: "חשבון אינפיניטסימלי 1" },
+  ];
+  assert.equal(guessCourse("סיכום אינפי מפגש 3.pdf", courses), "20474");
+  assert.equal(guessCourse("Note 12.pdf", courses), null);
+  const mt = (course_code: string, date: string, start_time = "18:00") => ({ course_code, date, start_time, end_time: "21:00" });
+  const list = [mt("20109", "2026-11-04"), mt("20474", "2026-11-06"), mt("20109", "2026-11-08"), mt("20109", "2026-10-20")];
+  // 17:40 on the 8th: today's meetup hasn't started → the 6th
+  assert.equal(pickMeetup(list, "2026-11-08", 17 * 60 + 40, add)?.date, "2026-11-06");
+  assert.equal(pickMeetup(list, "2026-11-08", 17 * 60 + 50, add)?.date, "2026-11-08");
+  assert.equal(pickMeetup(list, "2026-11-08", 22 * 60, add, "20474")?.date, "2026-11-06");
+  assert.equal(pickMeetup(list, "2026-11-20", 12 * 60, add), null);
 });

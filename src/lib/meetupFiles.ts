@@ -60,3 +60,31 @@ export function meetupsMissingFiles(
 
 export const fileSize = (n: number | null) =>
   n == null ? "" : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)}MB`;
+
+export interface ShareMeetup {
+  course_code: string;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+}
+
+/** "סיכום אינפי 3.pdf" → the course whose short name, name or number is in the file name. */
+export function guessCourse(fileName: string, courses: { code: string; short: string; name: string }[]): string | null {
+  const n = fileName.normalize("NFC");
+  const hit = courses.filter((c) => n.includes(c.code) || (c.short && n.includes(c.short)) || (c.name && n.includes(c.name)));
+  return hit.length === 1 ? hit[0].code : null;
+}
+
+/**
+ * Which meetup a shared file belongs to: the latest meetup that has started (from 15 minutes
+ * before its start) in the last FILES_ASK_DAYS days, of `course` when known.
+ */
+export function pickMeetup<M extends ShareMeetup>(meetups: M[], today: string, nowMin: number, addDays: (d: string, n: number) => string, course?: string | null): M | null {
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const from = addDays(today, -FILES_ASK_DAYS);
+  const started = meetups
+    .filter((m) => (!course || m.course_code === course) && m.date >= from && m.date <= today)
+    .filter((m) => m.date < today || !m.start_time || nowMin >= toMin(m.start_time) - 15)
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.start_time ?? "").localeCompare(a.start_time ?? ""));
+  return started[0] ?? null;
+}

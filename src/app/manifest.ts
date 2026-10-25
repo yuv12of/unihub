@@ -18,6 +18,14 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
+    // "Share → Unihub" on Android / desktop Chrome: a shared PDF goes to the latest meetup's notes.
+    // (iPad Safari has no share targets: there the Shortcut from Settings does it.)
+    share_target: {
+      action: "/share",
+      method: "POST",
+      enctype: "multipart/form-data",
+      params: { title: "title", files: [{ name: "files", accept: ["application/pdf", ".pdf", "image/*"] }] },
+    },
     // Long-press the home-screen icon.
     shortcuts: [
       { name: "רישום לימוד", short_name: "רישום", url: "/?log=1", icons: [{ src: "/icon-192.png", sizes: "192x192" }] },

@@ -139,7 +139,19 @@ export function MeetupFiles({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{slot.title}</p>
-                  {!mine.length && <p className="text-xs text-ink-soft">{slot.hint}</p>}
+                  {!mine.length && (
+                    <p className="text-xs text-ink-soft">
+                      {slot.hint}
+                      {slot.kind === "notes" && editable && (
+                        <>
+                          {" "}
+                          <a href="/settings#share" className="underline decoration-rule underline-offset-2 hover:text-ink">
+                            או שיתוף ישר מ־Notability
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  )}
                   {mine.length > 0 && (
                     <ul className="mt-1 space-y-1 text-sm">
                       {mine.map((f) => (
