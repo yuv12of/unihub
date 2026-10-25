@@ -20,7 +20,7 @@ export interface MeetupFile {
 
 /** The three things asked for after each meetup, in order. */
 export const FILE_SLOTS: { kind: Exclude<MeetupFileKind, "other">; title: string; hint: string }[] = [
-  { kind: "notes", title: "ההערות שלי", hint: "ייצוא PDF מ־Notability (שיתוף → PDF → שמירה בקבצים) והעלאה מכאן." },
+  { kind: "notes", title: "ההערות שלי", hint: "ייצוא PDF מ־Notability (שיתוף ← PDF ← שמירה בקבצים) והעלאה מכאן." },
   { kind: "slides", title: "קבצי המנחה", hint: "מצגת, דף תרגילים או פתרונות, כפי שהועלו לאתר הקורס." },
   { kind: "recording", title: "הקלטה", hint: "קישור להקלטה כשהיא עולה, בדרך כלל תוך יום-יומיים." },
 ];
