@@ -42,6 +42,8 @@ export interface SessionMove {
   date: string;
   start: string; // "HH:MM"
   minutes: number;
+  /** study another course in this slot instead (it becomes plain study of that course) */
+  code?: string;
 }
 
 export const defaultPrefs: StudyPrefs = {
@@ -87,6 +89,10 @@ export interface Session {
   moved?: boolean;
   /** the date the plan gave it, when moved to another day: the key keeps it, so marks stay */
   keyDate?: string;
+  /** the key the plan gave it, under which study_prefs.moves stores its change (set once moved) */
+  moveKey?: string;
+  /** the course the plan gave it, when changed to another course by hand */
+  fromCode?: string;
 }
 
 export interface PlanWarning {
@@ -430,7 +436,7 @@ export function buildPlan({
   }
 
   applyRhythm(sessions, prefs.rhythm, today, (code) => `לימוד שוטף ב${themeOf(courses, code).short}`);
-  applyMoves(sessions, prefs.moves, busy);
+  applyMoves(sessions, prefs.moves, busy, (code) => (courses.some((c) => c.code === code) ? `לימוד שוטף ב${themeOf(courses, code).short}` : null));
 
   const warnings = tasks
     .filter((t) => t.remaining > 0)
@@ -460,15 +466,35 @@ export function daysUntil(today: string, iso: string) {
 
 /**
  * Sessions moved by hand go where they were put (same key, so "done" / "skipped" stay with them).
+ * A session changed to another course becomes plain study of that course, with its own key
+ * ("<planned date>|routine|<new course>|sw-<old course>-<old ref>"), so the hours it logs count
+ * for the new course; its move stays stored under the planned key (Session.moveKey).
  * A planned session they now overlap shifts to the next free time that day (after busy blocks and
  * other sessions), or stays put if nothing fits before midnight.
  */
-export function applyMoves(sessions: Session[], moves: Record<string, SessionMove> | null | undefined, busy: Busy[] = []) {
+export function applyMoves(
+  sessions: Session[],
+  moves: Record<string, SessionMove> | null | undefined,
+  busy: Busy[] = [],
+  /** title for plain study of a course, or null when it isn't one of the user's courses */
+  titleFor?: (code: string) => string | null,
+) {
   if (!moves || !Object.keys(moves).length) return sessions;
   const touched = new Set<string>();
   for (const s of sessions) {
-    const m = moves[sessionKey(s)];
+    const key = sessionKey(s);
+    const m = moves[key];
     if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(m.date) || !/^\d{2}:\d{2}$/.test(m.start)) continue;
+    s.moveKey = key;
+    const title = m.code && m.code !== s.courseCode ? titleFor?.(m.code) : null;
+    if (title) {
+      s.fromCode = s.courseCode;
+      s.ref = `sw-${s.courseCode}-${s.ref ?? s.kind}`;
+      s.courseCode = m.code!;
+      s.kind = "routine";
+      s.title = title;
+      s.why = undefined;
+    }
     const minutes = Math.max(MIN_CHUNK, Math.min(360, Math.round(m.minutes)));
     const start = toMin(m.start);
     if (m.date !== s.date) s.keyDate = s.date;

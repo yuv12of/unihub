@@ -14,9 +14,12 @@ const addDays = (iso: string, n: number) => {
 };
 const LENGTHS = [30, 45, 60, 90, 120];
 
+export type EditorCourse = { code: string; short: string; color: string };
+
 /**
- * Change one planned study session: another day (up to two weeks from the planned one), another time,
- * another length; or put it back where the plan had it.
+ * Change one planned study session: another course, another day (up to two weeks from the planned
+ * one), another time, another length; or put it back where the plan had it.
+ * `sessionKey` is the key the plan gave the session (Session.moveKey ?? sessionKey(session)).
  */
 export function SessionEditor({
   sessionKey,
@@ -26,10 +29,16 @@ export function SessionEditor({
   minutes: minutes0,
   moved,
   today,
+  courseCode,
+  courses = [],
   onClose,
   onDone,
 }: {
   sessionKey: string;
+  /** the course the session is for now */
+  courseCode: string;
+  /** the user's courses, to study another one in this slot */
+  courses?: EditorCourse[];
   title: string;
   date: string;
   start: string;
@@ -40,6 +49,10 @@ export function SessionEditor({
   onDone: (text: string) => void;
 }) {
   const planned = sessionKey.slice(0, 10);
+  const [, plannedKind, plannedCode] = sessionKey.split("|");
+  const [code, setCode] = useState(courseCode);
+  const swapped = code !== plannedCode;
+  const short = (c: string) => courses.find((x) => x.code === c)?.short ?? c;
   const [date, setDate] = useState(date0);
   const [start, setStart] = useState(start0);
   const [minutes, setMinutes] = useState(minutes0);
@@ -81,7 +94,10 @@ export function SessionEditor({
         onSubmit={(e) => {
           e.preventDefault();
           if (tooLate) return setError("המפגש צריך להסתיים עד חצות");
-          go(() => setSessionMove(sessionKey, { date, start, minutes }), date !== date0 ? "המפגש הוזז ליום אחר" : "המפגש עודכן");
+          go(
+            () => setSessionMove(sessionKey, { date, start, minutes, code: swapped ? code : null }),
+            code !== courseCode ? `המפגש עכשיו ב${short(code)}` : date !== date0 ? "המפגש הוזז ליום אחר" : "המפגש עודכן",
+          );
         }}
       >
         <div className="flex items-center justify-between gap-3">
@@ -97,6 +113,25 @@ export function SessionEditor({
         </p>
 
         <div className="mt-4 space-y-4 text-sm">
+          {courses.length > 1 && (
+            <fieldset>
+              <legend className="mb-2 text-ink-soft">קורס</legend>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {courses.map((c) => (
+                  <button key={c.code} type="button" aria-pressed={code === c.code} onClick={() => setCode(c.code)} className="chip gap-1.5 text-sm">
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden />
+                    {c.short}
+                    {c.code === plannedCode && <span className="text-xs text-ink-soft">(בתוכנית)</span>}
+                  </button>
+                ))}
+              </div>
+              {swapped && plannedKind !== "routine" && (
+                <p className="mt-2 text-xs text-ink-soft">
+                  המפגש הזה תוכנן כהכנה ל{plannedKind === "exam" ? "בחינה" : "מטלה"} ב{short(plannedCode)}. הזמן הזה לא יתוכנן מחדש, אז כדאי לוודא שנשאר מספיק זמן לפני המועד.
+                </p>
+              )}
+            </fieldset>
+          )}
           <label className="flex items-center gap-3">
             <Icon name="calendar" className="size-4 text-ink-soft" />
             <input type="date" required dir="ltr" value={date} min={min} max={addDays(planned, 13)} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="תאריך" className={field} />

@@ -75,8 +75,8 @@ async function Semester() {
       minutes: s.minutes,
       sessionKey: key,
       status: status[key],
-      note: [s.moved ? "הוזז ידנית" : "", s.why ? `יותר זמן כאן: ${s.why}` : ""].filter(Boolean).join(" · ") || undefined,
-      study: !status[key] && s.date >= today ? { moved: !!s.moved } : undefined,
+      note: [s.fromCode ? `במקום ${themeOf(courses, s.fromCode).short}` : s.moved ? "הוזז ידנית" : "", s.why ? `יותר זמן כאן: ${s.why}` : ""].filter(Boolean).join(" · ") || undefined,
+      study: !status[key] && s.date >= today ? { moved: !!s.moved, moveKey: s.moveKey ?? key, code: s.courseCode } : undefined,
     });
   }
   for (const ev of events) {
@@ -150,6 +150,7 @@ async function Semester() {
         balance={{ studied, goal: me?.weekly_goal_minutes ?? null, wake, bed, nowMin: nh * 60 + nm }}
         repeatUntil={courses.flatMap((c) => c.assignments.map((a) => a.due)).sort().at(-1) ?? addDays(today, 90)}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}
+        courses={courses.map((c) => ({ code: c.code, short: themeOf(courses, c.code).short, color: themeOf(courses, c.code).color }))}
       />
       {exams.length === 0 && (
         <p className="mt-4 text-sm text-ink-soft">

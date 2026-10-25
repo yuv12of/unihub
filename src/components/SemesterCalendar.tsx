@@ -15,7 +15,7 @@ import {
   updateEvent,
 } from "@/app/act";
 import { Icon } from "@/components/Icon";
-import { SessionEditor } from "@/components/SessionEditor";
+import { SessionEditor, type EditorCourse } from "@/components/SessionEditor";
 import { describeRepeat, type Repeat } from "@/lib/repeat";
 import { hoursLabel, weekBalance, type WeekBalance } from "@/lib/weekBalance";
 
@@ -50,7 +50,8 @@ export interface CalItem {
   /** a routine occurrence: which routine, its override key, and whether I may change it */
   routine?: { id: string; key: string; flexible: boolean; mine: boolean; moved: boolean; title: string };
   /** a planned study session I may move (key = sessionKey) */
-  study?: { moved: boolean };
+  /** a future planned study session: moveKey = the key its changes are stored under, code = its course now */
+  study?: { moved: boolean; moveKey: string; code: string };
   /** an optional slot (phone tutoring hours): shown, but the time still counts as free */
   optional?: boolean;
   /** repeating event */
@@ -152,7 +153,10 @@ export function SemesterCalendar({
   offDays = [],
   repeatUntil,
   balance,
+  courses = [],
 }: {
+  /** the user's courses, for changing a study session's course */
+  courses?: EditorCourse[];
   /** default last date for a repeating event (the semester's end) */
   repeatUntil: string;
   /** for the week's free time vs study goal strip */
@@ -194,7 +198,7 @@ export function SemesterCalendar({
       item.routine
         ? saveRoutineMove(item, p, undo)
         : item.study
-          ? setSessionMove(item.sessionKey!, undo && !item.study.moved ? null : { date: p.date, start: p.start, minutes: toMin(p.end) - toMin(p.start) })
+          ? setSessionMove(item.study.moveKey, undo && !item.study.moved ? null : { date: p.date, start: p.start, minutes: toMin(p.end) - toMin(p.start) })
           : updateEvent({ id: item.eventId!, ...p });
     const go = (p: Placement, undo: boolean, after?: () => void) => {
       setMoved((m) => new Map(m).set(id, p));
@@ -416,7 +420,9 @@ export function SemesterCalendar({
 
       {editor?.mode === "study" && (
         <SessionEditor
-          sessionKey={editor.item.sessionKey!}
+          sessionKey={editor.item.study!.moveKey}
+          courseCode={editor.item.study!.code}
+          courses={courses}
           title={editor.item.label}
           date={editor.item.date}
           start={editor.item.start!}

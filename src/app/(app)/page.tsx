@@ -668,7 +668,7 @@ function SessionRow({
       <div className="min-w-0 flex-1">
         <div className={`truncate font-medium ${status ? "text-ink-soft line-through decoration-rule-strong" : ""}`}>{x.title}</div>
         <div className="text-xs text-ink-soft">
-          {!ask && x.moved ? "הוזז ידנית · " : ""}{ask ? "עבר. בוצע או דולג?" : x.kind === "assignment" ? `הכנה למטלה, עד ${range(x.end)}` : x.kind === "exam" ? `חזרה לבחינה, עד ${range(x.end)}` : x.why ? `יותר זמן כאן: ${x.why}. עד ${range(x.end)}` : `עד ${range(x.end)}`}
+          {!ask && x.fromCode ? `במקום ${themeOf(courses, x.fromCode).short} · ` : !ask && x.moved ? "הוזז ידנית · " : ""}{ask ? "עבר. בוצע או דולג?" : x.kind === "assignment" ? `הכנה למטלה, עד ${range(x.end)}` : x.kind === "exam" ? `חזרה לבחינה, עד ${range(x.end)}` : x.why ? `יותר זמן כאן: ${x.why}. עד ${range(x.end)}` : `עד ${range(x.end)}`}
         </div>
         {!status && !ask && (x.kind === "assignment" && x.ref && assignmentPlans[x.courseCode]?.[baseRef(x.ref).replace(/^a/, "")] ? (
           <ReadChips links={assignmentPlans[x.courseCode][baseRef(x.ref).replace(/^a/, "")].links} className="mt-1" />
@@ -684,7 +684,17 @@ function SessionRow({
         // a past session's two buttons get their own line on the phone, so the title stays readable
         <div className={`flex items-center gap-1 ${ask ? "max-sm:basis-full max-sm:ps-[4.75rem]" : ""}`}>
           {!status && !past && (
-            <SessionMoveButton sessionKey={sessionKey(x)} title={x.title} date={x.date} start={x.start} minutes={x.minutes} moved={!!x.moved} today={x.date} />
+            <SessionMoveButton
+              sessionKey={x.moveKey ?? sessionKey(x)}
+              title={x.title}
+              date={x.date}
+              start={x.start}
+              minutes={x.minutes}
+              moved={!!x.moved}
+              today={x.date}
+              courseCode={x.courseCode}
+              courses={courses.map((c) => ({ code: c.code, short: themeOf(courses, c.code).short, color: themeOf(courses, c.code).color }))}
+            />
           )}
           <SessionToggle sessionKey={sessionKey(x)} status={status} minutes={x.minutes} title={x.title} courseCode={x.courseCode} past={past} />
         </div>

@@ -38,3 +38,19 @@ test("no moves → untouched; unknown keys ignored", () => {
   assert.deepEqual(applyMoves([a], null), [a]);
   assert.equal(applyMoves([a], { "x|y": { date: "2026-11-05", start: "10:00", minutes: 60 } })[0].date, "2026-11-01");
 });
+
+test("a session changed to another course becomes plain study of it, with its own key", () => {
+  const a = s("2026-11-01", "09:00", "10:30", "20109", "a01");
+  a.kind = "assignment";
+  const planned = sessionKey(a);
+  const titleFor = (c: string) => (c === "20474" ? "לימוד שוטף באינפי" : null);
+  const [out] = applyMoves([a], { [planned]: { date: "2026-11-03", start: "10:00", minutes: 60, code: "20474" } }, [], titleFor);
+  assert.deepEqual([out.courseCode, out.kind, out.title, out.fromCode, out.moveKey, out.date], ["20474", "routine", "לימוד שוטף באינפי", "20109", planned, "2026-11-03"]);
+  assert.equal(sessionKey(out), "2026-11-01|routine|20474|sw-20109-a01");
+});
+
+test("a course that isn't one of the user's is ignored (time still moves)", () => {
+  const a = s("2026-11-01", "09:00", "10:30", "20109");
+  const [out] = applyMoves([a], { [sessionKey(a)]: { date: "2026-11-01", start: "11:00", minutes: 90, code: "99999" } }, [], () => null);
+  assert.deepEqual([out.courseCode, out.start, out.fromCode], ["20109", "11:00", undefined]);
+});

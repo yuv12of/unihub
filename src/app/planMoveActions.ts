@@ -12,7 +12,7 @@ const RANGE = 13;
  * Move a planned study session (or change its length), or put it back (null). Stored by session key in
  * study_prefs.moves; moves of sessions more than a week in the past are dropped on the way.
  */
-export async function setSessionMove(key: string, move: SessionMove | null) {
+export async function setSessionMove(key: string, move: (Omit<SessionMove, "code"> & { code?: string | null }) | null) {
   return action("setSessionMove", async ({ supabase, userId }) => {
     if (!KEY.test(key)) throw new Error("מפגש לא תקין");
     const today = todayInIsrael();
@@ -25,14 +25,23 @@ export async function setSessionMove(key: string, move: SessionMove | null) {
       if (!Number.isFinite(m) || m < 15 || m > 360) throw new Error("אורך בין רבע שעה ל־6 שעות");
       const [h, mm] = move.start.split(":").map(Number);
       if (h * 60 + mm + m > 24 * 60) throw new Error("המפגש צריך להסתיים עד חצות");
-      move = { date: move.date, start: move.start, minutes: m };
     }
     const { data } = await supabase.from("study_prefs").select("moves").eq("user_id", userId).maybeSingle();
     if (!data) throw new Error("קודם צריך לשמור זמני לימוד בהגדרות");
     const moves: Record<string, SessionMove> = { ...((data.moves as Record<string, SessionMove> | null) ?? {}) };
+    if (move) {
+      // code: a course → study it here; null → back to the planned course; left out → keep what was set
+      const planned = key.split("|")[2];
+      let code = move.code === undefined ? moves[key]?.code : move.code;
+      if (code === planned) code = undefined;
+      if (code) {
+        if (!/^\d{5}$/.test(code)) throw new Error("קורס לא תקין");
+        const { data: mine } = await supabase.from("user_courses").select("course_code").eq("user_id", userId).eq("course_code", code).limit(1);
+        if (!mine?.length) throw new Error("הקורס הזה לא ברשימת הקורסים שלך");
+      }
+      moves[key] = { date: move.date, start: move.start, minutes: Math.round(Number(move.minutes)), ...(code ? { code } : {}) };
+    } else delete moves[key];
     for (const k of Object.keys(moves)) if (k.slice(0, 10) < addDays(today, -7) && moves[k].date < today) delete moves[k];
-    if (move) moves[key] = move;
-    else delete moves[key];
     must(await supabase.from("study_prefs").update({ moves }).eq("user_id", userId));
     revalidatePath("/", "layout");
   });
