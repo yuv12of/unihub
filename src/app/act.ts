@@ -128,3 +128,10 @@ export const setMeetupAttended = w(Meet.setMeetupAttended);
 export const setMeetupAsked = w(Meet.setMeetupAsked);
 export const meetupQuestionsToStuck = w(Meet.meetupQuestionsToStuck);
 export const saveMeetupLinks = w(Meet.saveMeetupLinks);
+
+import * as Focus from "@/app/focusActions";
+export const getFocusTasks = w(Focus.getFocusTasks);
+export const addFocusTask = w(Focus.addFocusTask);
+export const setFocusTaskDone = w(Focus.setFocusTaskDone);
+export const deleteFocusTask = w(Focus.deleteFocusTask);
+export const pullFocusTask = w(Focus.pullFocusTask);
