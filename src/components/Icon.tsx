@@ -199,6 +199,16 @@ const PATHS = {
     </>
   ),
   undo: <path d="M9 14 4.5 9.5 9 5M4.5 9.5H15a5 5 0 0 1 0 10h-3" />,
+  // full screen (four corners) and its way back
+  expand: <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />,
+  shrink: <path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" />,
+  // a small window floating over a big one (picture in picture)
+  pip: (
+    <>
+      <rect x="3" y="4.5" width="18" height="14" rx="2" />
+      <rect x="11.5" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

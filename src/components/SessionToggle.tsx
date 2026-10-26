@@ -10,6 +10,7 @@ import {
 } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks, freeTaskKey } from "@/components/FocusTasks";
+import { FocusDesktop, useWide, type FocusClock } from "@/components/FocusDesktop";
 import { pace, readHistory, recordFocus, wrapUp } from "@/lib/focusStats";
 import { Icon } from "@/components/Icon";
 
@@ -220,10 +221,42 @@ export function FocusTimer({
       localStorage.removeItem(storageKey);
     } catch {}
   };
-  const mm = String(Math.floor(left / 60_000)).padStart(2, "0");
-  const ss = String(Math.floor((left % 60_000) / 1000)).padStart(2, "0");
+  // counts down; once the planned time is over it counts the extra time up ("+03:12")
+  const shown = over ? elapsed - total : left;
+  const mm = String(Math.floor(shown / 60_000)).padStart(2, "0");
+  const ss = String(Math.floor((shown % 60_000) / 1000)).padStart(2, "0");
+  const clock = `${over ? "+" : ""}${mm}:${ss}`;
   const studied = Math.max(1, Math.round(elapsed / 60_000));
   const pct = Math.min(1, elapsed / total);
+  const wide = useWide();
+
+  // the tab shows the time, so it's in sight from the PDF or notebook in the next tab
+  useEffect(() => {
+    const before = document.title;
+    return () => {
+      document.title = before;
+    };
+  }, []);
+  useEffect(() => {
+    if (wrap == null) document.title = `${clock} · ${state.since || over ? title : "מושהה"}`;
+  }, [clock, title, state.since, over, wrap]);
+
+  const toggle = () =>
+    setState((s) =>
+      s.since
+        ? { acc: s.acc + Date.now() - s.since, since: null }
+        : { acc: s.acc, since: Date.now() },
+    );
+  const finish = () => {
+    clear();
+    const s = Math.min(studied, minutes + 60);
+    recordFocus({ date: new Date().toISOString().slice(0, 10), course: courseCode ?? null, minutes: s, planned: minutes, done: counts.done, total: counts.total });
+    setWrap(s);
+  };
+  const cancel = () => {
+    clear();
+    onClose();
+  };
 
   if (wrap != null)
     return createPortal(
@@ -234,6 +267,27 @@ export function FocusTimer({
       document.body,
     );
 
+  if (wide) {
+    const c: FocusClock = {
+      title,
+      withName,
+      clock,
+      over,
+      running: !!state.since,
+      pct,
+      minutes,
+      studied,
+      endsAt: state.since && !over ? new Date(now + left).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }) : null,
+      onToggle: toggle,
+      onFinish: finish,
+      onCancel: cancel,
+    };
+    return createPortal(
+      <FocusDesktop c={c} courseCode={courseCode ?? null} taskKey={taskKey ?? freeTaskKey(courseCode)} onCounts={setCounts} stuck={<Stuck inline courseCode={courseCode ?? null} title={title} />} />,
+      document.body,
+    );
+  }
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-surface"
@@ -241,7 +295,7 @@ export function FocusTimer({
       aria-modal
       aria-label="טיימר ריכוז"
     >
-      <div className="flex min-h-full flex-col items-center justify-center gap-10 px-6 py-8 lg:flex-row lg:items-start lg:justify-center lg:gap-20 lg:pt-[12vh]">
+      <div className="flex min-h-full flex-col items-center justify-center gap-10 px-6 py-8">
         <div className="flex flex-col items-center text-center">
           <p className="text-sm text-ink-soft">
             {over
@@ -278,20 +332,14 @@ export function FocusTimer({
               />
             </svg>
             <span className="font-display text-5xl tabular-nums sm:text-6xl" dir="ltr">
-              {mm}:{ss}
+              {clock}
             </span>
           </div>
           <div className="mt-6 flex flex-wrap justify-center gap-3 sm:mt-8">
             {!over && (
               <button
                 type="button"
-                onClick={() =>
-                  setState((s) =>
-                    s.since
-                      ? { acc: s.acc + Date.now() - s.since, since: null }
-                      : { acc: s.acc, since: Date.now() },
-                  )
-                }
+                onClick={toggle}
                 className="inline-flex items-center rounded-full border border-rule px-5 py-2.5 hover:border-ink"
               >
                 <Icon
@@ -303,22 +351,14 @@ export function FocusTimer({
             )}
             <button
               type="button"
-              onClick={() => {
-                clear();
-                const s = Math.min(studied, minutes + 60);
-                recordFocus({ date: new Date().toISOString().slice(0, 10), course: courseCode ?? null, minutes: s, planned: minutes, done: counts.done, total: counts.total });
-                setWrap(s);
-              }}
+              onClick={finish}
               className="rounded-full bg-ink px-5 py-2.5 font-medium text-bg"
             >
               סיימתי ({studied} דק׳)
             </button>
             <button
               type="button"
-              onClick={() => {
-                clear();
-                onClose();
-              }}
+              onClick={cancel}
               className="rounded-full px-4 py-2.5 text-ink-soft hover:text-ink"
             >
               ביטול
@@ -326,9 +366,6 @@ export function FocusTimer({
           </div>
           <Stuck courseCode={courseCode ?? null} title={title} />
           <FocusMusic running={!!state.since && !over} over={over} />
-          <p className="mt-6 hidden max-w-xs text-xs text-ink-soft lg:block">
-            הזמן שלמדת נספר לטובת המטלה. מה שנשאר יתוזמן מחדש בימים הבאים.
-          </p>
         </div>
         <FocusTasks
           taskKey={taskKey ?? freeTaskKey(courseCode)}
@@ -347,14 +384,61 @@ export function FocusTimer({
 function Stuck({
   courseCode,
   title,
+  inline = false,
 }: {
   courseCode: string | null;
   title: string;
+  /** always open, with a heading (the desktop side panel) */
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [saved, setSaved] = useState(0);
   const [pending, start] = useTransition();
+  const placeholder = `על מה נתקעת ב${title.replace(/^(הכנה ל|חזרה ל|לימוד שוטף ב)/, "")}?`;
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    start(async () => {
+      await addStuck({ topic: text, course_code: courseCode }).catch(() => {});
+      setSaved((n) => n + 1);
+      setText("");
+      setOpen(false);
+    });
+  };
+  if (inline)
+    return (
+      <section aria-labelledby="focus-stuck-h">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 id="focus-stuck-h" className="font-medium">
+            נתקעתי
+          </h3>
+          {saved > 0 && (
+            <span className="text-sm text-ink-soft" aria-live="polite">
+              {saved === 1 ? "נשמר" : `${saved} נשמרו`}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-ink-soft">כותבים בשורה אחת וממשיכים. זה יחכה בכרטיס הקורס.</p>
+        <form className="mt-2 flex gap-2" onSubmit={submit}>
+          <label htmlFor="focus-stuck" className="sr-only">
+            על מה נתקעת
+          </label>
+          <input
+            id="focus-stuck"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
+            maxLength={300}
+            placeholder={placeholder}
+            className="min-w-0 flex-1 rounded-lg border border-rule-strong bg-bg px-3 py-2 text-sm"
+          />
+          <button disabled={pending || !text.trim()} className="btn rounded-lg px-3 text-sm">
+            שמירה
+          </button>
+        </form>
+      </section>
+    );
   if (!open)
     return (
       <button
@@ -367,27 +451,13 @@ function Stuck({
       </button>
     );
   return (
-    <form
-      className="mt-4 flex w-full max-w-sm gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!text.trim()) return;
-        start(async () => {
-          await addStuck({ topic: text, course_code: courseCode }).catch(
-            () => {},
-          );
-          setSaved((n) => n + 1);
-          setText("");
-          setOpen(false);
-        });
-      }}
-    >
+    <form className="mt-4 flex w-full max-w-sm gap-2" onSubmit={submit}>
       <input
         autoFocus
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={300}
-        placeholder={`על מה נתקעת ב${title.replace(/^(הכנה ל|חזרה ל|לימוד שוטף ב)/, "")}?`}
+        placeholder={placeholder}
         className="min-w-0 flex-1 rounded-lg border border-rule bg-bg px-3 py-2 text-sm"
       />
       <button

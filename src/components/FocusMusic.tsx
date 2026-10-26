@@ -18,7 +18,7 @@ const read = (k: string) => {
  * Music inside the focus timer. With Spotify connected: the full player, and (optionally) the music
  * starts with the timer, pauses with it and stops when the session ends. Without: the embedded player.
  */
-export function FocusMusic({ running, over }: { running: boolean; over: boolean }) {
+export function FocusMusic({ running, over, className = "mt-5 w-full max-w-sm" }: { running: boolean; over: boolean; className?: string }) {
   const [id, setId] = useChosenPlaylist();
   const [auto, setAuto] = useState(true);
   const [picking, setPicking] = useState(false);
@@ -57,7 +57,7 @@ export function FocusMusic({ running, over }: { running: boolean; over: boolean 
 
   if (connected)
     return (
-      <div className="mt-5 w-full max-w-sm">
+      <div className={className}>
         <SpotifyControls
           sp={sp}
           err={err}
@@ -90,7 +90,7 @@ export function FocusMusic({ running, over }: { running: boolean; over: boolean 
   };
   if (!id && !picking)
     return (
-      <div className="mt-5 flex flex-col items-center gap-1.5 text-sm">
+      <div className={`flex flex-col items-center gap-1.5 text-sm ${className}`}>
         <button type="button" onClick={() => setPicking(true)} className="text-ink-soft underline underline-offset-4 decoration-rule">
           <Icon name="headphones" className="me-1 size-4" />
           מוזיקה לריכוז
@@ -103,7 +103,7 @@ export function FocusMusic({ running, over }: { running: boolean; over: boolean 
       </div>
     );
   return (
-    <div className="mt-5 w-full max-w-sm">
+    <div className={className}>
       {picking || !id ? (
         <PlaylistPicker current={id} onPick={choose} mine={false} />
       ) : (

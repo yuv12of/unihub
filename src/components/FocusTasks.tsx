@@ -35,7 +35,10 @@ export function FocusTasks({
   minutes,
   title,
   onCounts,
+  className = "w-full max-w-sm",
 }: {
+  /** layout of the list's box (the desktop focus page gives it the whole side panel) */
+  className?: string;
   taskKey: string;
   courseCode: string | null;
   minutes: number;
@@ -146,7 +149,7 @@ export function FocusTasks({
   }, [onCounts, done, all, open]);
 
   return (
-    <section className="w-full max-w-sm text-start" aria-label="משימות לזמן הזה">
+    <section className={`text-start ${className}`} aria-label="משימות לזמן הזה">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="font-medium">מה עושים בזמן הזה</h3>
         {all > 0 && (
