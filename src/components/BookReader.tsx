@@ -18,6 +18,7 @@ import {
   setQuestionStatus,
 } from "@/app/act";
 import type { BookQuestion, ChapterConclusion, SearchHit } from "@/lib/books";
+import { FOCUS_EVENT, useMinWidth } from "@/components/focusShared";
 
 interface ChapterLite {
   id: string;
@@ -68,8 +69,25 @@ export function BookReader({
   const [side, setSide] = useState<Side>("read");
   const [page, setPage] = useState(initialPage);
   const [done, setDone] = useState(chapter.done);
-  const [zoom, setZoom] = useState(1);
+  // fit, zoom and the side panel: from a tablet up (a phone always fits the width)
+  const [view, setView] = useReaderView();
+  const roomy = useMinWidth(640);
+  const wide = useMinWidth(1024);
+  const xl = useMinWidth(1280);
+  // the summary panel: docked beside the pages on a big screen, a drawer on a small laptop (where
+  // docking it would squeeze the page), and tabs on a phone
+  const [drawer, setDrawer] = useState(false);
+  const docked = xl && view.panel;
+  const panelShown = !wide || (xl ? view.panel : drawer);
+  const togglePanel = () => (xl ? setView({ panel: !view.panel }) : setDrawer(!drawer));
+  useEffect(() => {
+    if (!drawer) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [drawer]);
   const jump = useRef<(p: number) => void>(() => {});
+  useReaderKeys({ page, pages: chapter.pages, jump: (p) => jump.current(p), zoom: view.zoom, setZoom: (zoom) => setView({ zoom }) });
   const router = useRouter();
   // pretest: two questions before the first read, the same ones again once the chapter is done
   const [pre, setPre] = usePretest(chapter.id);
@@ -91,9 +109,10 @@ export function BookReader({
   ];
 
   return (
-    <div>
-      {/* Top bar: back to the library, chapter picker, page, zoom */}
-      <div className="sticky top-[calc(env(safe-area-inset-top)+3.4rem)] z-[5] -mx-4 mb-4 border-b border-rule bg-bg/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-12 lg:px-12">
+    // data-wide: on a computer the app's main column lets this page use the whole width
+    <div data-wide>
+      {/* Top bar: back to the library, chapter picker, page, fit and zoom, panel, timer */}
+      <div className="sticky top-[calc(env(safe-area-inset-top)+3.4rem)] z-[5] -mx-4 mb-4 border-b border-rule bg-bg/90 px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-8 lg:px-8 lg:py-3">
         <div className="flex items-center gap-2">
           <Link
             href={`/books?course=${book.course}`}
@@ -131,25 +150,29 @@ export function BookReader({
           >
             {page}/{chapter.pages}
           </span>
-          <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
-              disabled={zoom <= 1}
-              className="grid size-11 place-items-center rounded-full border border-rule-strong disabled:opacity-40 sm:size-9"
-              aria-label="הקטנה"
-            >
-              <Icon name="minus" className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.min(2.5, z + 0.25))}
-              className="grid size-11 place-items-center rounded-full border border-rule-strong sm:size-9"
-              aria-label="הגדלה"
-            >
-              <Icon name="plus" className="size-4" />
-            </button>
+          <div className="hidden sm:flex">
+            <FitControls fit={view.fit} zoom={view.zoom} onChange={setView} />
           </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent(FOCUS_EVENT, { detail: { course: book.course, book: book.id, idx: chapter.idx } }))}
+            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-rule-strong px-3 py-1.5 text-sm hover:border-ink sm:inline-flex"
+            aria-label="לקרוא עם טיימר"
+            title="לקרוא עם טיימר ריכוז"
+          >
+            <Icon name="timer" className="size-4" />
+            <span className="sm:max-lg:hidden lg:max-xl:hidden">לקרוא עם טיימר</span>
+          </button>
+          <button
+            type="button"
+            onClick={togglePanel}
+            aria-pressed={panelShown}
+            aria-label="סיכום ושאלות"
+            className="hidden shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-ink-soft hover:text-ink lg:inline-flex"
+          >
+            <Icon name="list" className="size-4" />
+            <span className="hidden xl:inline">{panelShown ? "הסתרת הסיכום" : "סיכום ושאלות"}</span>
+          </button>
         </div>
         <div className="mt-2 flex gap-1 lg:hidden" role="tablist">
           {tabs.map(([k, label]) => (
@@ -167,7 +190,7 @@ export function BookReader({
         </div>
       </div>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={`grid items-start gap-8 ${docked ? "xl:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_26rem]" : ""}`}>
         <div className={side === "read" ? "" : "hidden lg:block"}>
           {pre.pretest && (
             <PretestCard
@@ -181,7 +204,9 @@ export function BookReader({
               url={chapter.url}
               chapterId={chapter.id}
               initialPage={initialPage}
-              zoom={zoom}
+              zoom={roomy ? view.zoom : 1}
+              fit={roomy ? view.fit : "width"}
+              topOffset={wide ? 72 : roomy ? 160 : 0}
               onPage={setPage}
               jumpRef={jump}
             />
@@ -254,9 +279,23 @@ export function BookReader({
           )}
         </div>
 
+        {wide && !xl && drawer && <div className="fixed inset-0 z-30 bg-black/30" onClick={() => setDrawer(false)} aria-hidden />}
         <aside
-          className={`space-y-6 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto ${side === "read" ? "hidden lg:block" : ""}`}
+          className={`space-y-6 ${side === "read" ? "hidden lg:block" : ""} ${
+            wide && !panelShown
+              ? "lg:hidden"
+              : docked
+                ? "xl:sticky xl:top-20 xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto"
+                : "lg:fixed lg:inset-y-0 lg:end-0 lg:z-40 lg:w-[min(26rem,90vw)] lg:overflow-y-auto lg:border-s lg:border-rule lg:bg-bg lg:p-6 lg:shadow-2xl"
+          }`}
+          aria-label="סיכום ושאלות"
         >
+          {wide && !xl && (
+            <button type="button" onClick={() => setDrawer(false)} className="btn-ghost -mt-1 ms-auto flex rounded-lg px-2 text-sm text-ink-soft">
+              <Icon name="close" className="size-4" />
+              סגירה
+            </button>
+          )}
           <div className={side === "questions" ? "hidden lg:block" : ""}>
             <Summary
               chapter={chapter}
@@ -676,14 +715,100 @@ export function Search({
   );
 }
 
+export type Fit = "width" | "page";
+
+/**
+ * Reader view settings on a computer: how pages fit (the column's width, or a whole page in view),
+ * the zoom on top of that, and whether the summary panel is open. Kept in this browser.
+ */
+export function useReaderView(key = "reader:view") {
+  const [view, setView] = useState<{ fit: Fit; zoom: number; panel: boolean }>({ fit: "width", zoom: 1, panel: true });
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(key) ?? "null");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a browser-only preference, read once after mount
+      if (v && (v.fit === "width" || v.fit === "page")) setView({ fit: v.fit, zoom: Number(v.zoom) || 1, panel: v.panel !== false });
+    } catch {}
+  }, [key]);
+  const update = (p: Partial<typeof view>) =>
+    setView((v) => {
+      const n = { ...v, ...p, zoom: Math.round(Math.min(3, Math.max(0.5, p.zoom ?? v.zoom)) * 100) / 100 };
+      try {
+        localStorage.setItem(key, JSON.stringify(n));
+      } catch {}
+      return n;
+    });
+  return [view, update] as const;
+}
+
+/** Fit (width / whole page) and zoom buttons for the reader's bar. */
+export function FitControls({ fit, zoom, onChange }: { fit: Fit; zoom: number; onChange: (p: { fit?: Fit; zoom?: number }) => void }) {
+  const seg = (on: boolean) => `rounded-full px-3 py-1.5 text-sm ${on ? "bg-accent text-on-accent" : "text-ink-soft hover:text-ink"}`;
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <div className="flex rounded-full border border-rule p-0.5" role="group" aria-label="התאמת העמוד">
+        <button type="button" onClick={() => onChange({ fit: "width", zoom: 1 })} aria-pressed={fit === "width"} className={seg(fit === "width")}>
+          לרוחב
+        </button>
+        <button type="button" onClick={() => onChange({ fit: "page", zoom: 1 })} aria-pressed={fit === "page"} className={seg(fit === "page")}>
+          עמוד שלם
+        </button>
+      </div>
+      <button type="button" onClick={() => onChange({ zoom: zoom - 0.1 })} disabled={zoom <= 0.5} className="grid size-9 place-items-center rounded-full border border-rule-strong disabled:opacity-40" aria-label="הקטנה">
+        <Icon name="minus" className="size-4" />
+      </button>
+      <span className="w-11 text-center text-sm tabular-nums text-ink-soft" aria-live="polite">
+        {Math.round(zoom * 100)}%
+      </span>
+      <button type="button" onClick={() => onChange({ zoom: zoom + 0.1 })} disabled={zoom >= 3} className="grid size-9 place-items-center rounded-full border border-rule-strong disabled:opacity-40" aria-label="הגדלה">
+        <Icon name="plus" className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Reader keys on a computer: ← / → the next / previous page (right-to-left book), + / − zoom,
+ * 0 back to 100%. Ignored while typing.
+ */
+export function useReaderKeys({ page, pages, jump, zoom, setZoom, inDialog = false }: { page: number; pages: number; jump: (p: number) => void; zoom: number; setZoom: (z: number) => void; inDialog?: boolean }) {
+  const live = useRef({ page, pages, jump, zoom, setZoom });
+  useEffect(() => {
+    live.current = { page, pages, jump, zoom, setZoom };
+  });
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const t = e.target;
+      if (e.metaKey || e.ctrlKey || e.altKey || (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+      // the page's own reader stays still while the focus timer covers it
+      if (!inDialog && document.querySelector("[role=dialog][aria-modal]")) return;
+      const l = live.current;
+      const go = (f: () => void) => {
+        e.preventDefault();
+        f();
+      };
+      if (e.key === "ArrowLeft") go(() => l.jump(Math.min(l.pages, l.page + 1)));
+      else if (e.key === "ArrowRight") go(() => l.jump(Math.max(1, l.page - 1)));
+      else if (e.key === "+" || e.key === "=") go(() => l.setZoom(l.zoom + 0.1));
+      else if (e.key === "-") go(() => l.setZoom(l.zoom - 0.1));
+      else if (e.key === "0") go(() => l.setZoom(1));
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [inDialog]);
+}
+
 /** The chapter's pages, drawn when they come near the screen and dropped when far away. */
-function Pages({
+export function Pages({
   url,
   chapterId,
   initialPage,
   zoom,
   onPage,
   jumpRef,
+  fit = "width",
+  scrollRoot = null,
+  topOffset = 0,
 }: {
   url: string;
   chapterId: string;
@@ -691,12 +816,19 @@ function Pages({
   zoom: number;
   onPage: (p: number) => void;
   jumpRef: React.RefObject<(p: number) => void>;
+  /** "page": a whole page fits the height that's left under the bars */
+  fit?: Fit;
+  /** the box that scrolls (inside the focus timer); default: the app's scroller or the window */
+  scrollRoot?: HTMLElement | null;
+  /** height of the bars stuck above the pages, for "whole page" and for jumping */
+  topOffset?: number;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [ratio, setRatio] = useState(1.414);
   const [err, setErr] = useState<string | null>(null);
   const [width, setWidth] = useState(0);
+  const [viewH, setViewH] = useState(0);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const [current, setCurrent] = useState(initialPage);
   const drawn = useRef(
@@ -738,13 +870,24 @@ function Pages({
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => {
+      setWidth(el.clientWidth);
+      setViewH(scrollRoot ? scrollRoot.clientHeight : window.innerHeight);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setWidth(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
+    if (scrollRoot) ro.observe(scrollRoot);
+    window.addEventListener("resize", measure);
+    measure();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [scrollRoot]);
 
-  const pageWidth = Math.round(width * zoom);
+  // "page": as wide as a whole page can be while it still fits under the bars
+  const fitWidth = fit === "page" && viewH ? Math.min(width, Math.max(240, (viewH - topOffset - 24) / ratio)) : width;
+  const pageWidth = Math.round(fitWidth * zoom);
 
   const draw = useCallback(
     async (n: number) => {
@@ -790,7 +933,7 @@ function Pages({
   useEffect(() => {
     if (!doc) return;
     // On a phone the app scrolls inside #scroller, not the window: watch that box.
-    const sc = document.getElementById("scroller");
+    const sc = scrollRoot ?? document.getElementById("scroller");
     const root =
       sc && /(auto|scroll)/.test(getComputedStyle(sc).overflowY) ? sc : null;
     const near = new IntersectionObserver(
@@ -824,7 +967,7 @@ function Pages({
       near.disconnect();
       seen.disconnect();
     };
-  }, [doc, draw, onPage]);
+  }, [doc, draw, onPage, scrollRoot]);
 
   // Jumping to a page, and opening at the remembered one.
   useEffect(() => {
@@ -841,6 +984,17 @@ function Pages({
         requestAnimationFrame(() => jumpRef.current(initialPage));
     }
   }, [doc, width, initialPage, jumpRef]);
+  // a new page size (fit, zoom, a resized window) keeps the page being read in view
+  const reading = useRef(current);
+  useEffect(() => {
+    reading.current = current;
+  }, [current]);
+  const lastWidth = useRef(0);
+  useEffect(() => {
+    const was = lastWidth.current;
+    lastWidth.current = pageWidth;
+    if (opened.current && was && pageWidth && was !== pageWidth) requestAnimationFrame(() => jumpRef.current(reading.current));
+  }, [pageWidth, jumpRef]);
 
   // Save the place a moment after scrolling stops.
   useEffect(() => {
@@ -854,7 +1008,7 @@ function Pages({
 
   const pages = doc?.numPages ?? 0;
   return (
-    <div ref={box} className={zoom > 1 ? "overflow-x-auto" : ""} dir="ltr">
+    <div ref={box} className={pageWidth > width ? "overflow-x-auto" : ""} dir="ltr">
       {err && (
         <p className="panel p-5 text-ink-soft" dir="rtl">
           {err}
@@ -877,8 +1031,8 @@ function Pages({
               slots.current[i] = el;
             }}
             data-page={i + 1}
-            className="relative scroll-mt-40 overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-rule lg:scroll-mt-24"
-            style={{ aspectRatio: `1 / ${ratio}` }}
+            className={`relative overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-rule ${topOffset ? "" : "scroll-mt-40 lg:scroll-mt-24"}`}
+            style={{ aspectRatio: `1 / ${ratio}`, scrollMarginTop: topOffset ? topOffset + 8 : undefined }}
             aria-label={`עמוד ${i + 1}`}
             role="img"
           />

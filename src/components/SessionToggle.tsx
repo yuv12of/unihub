@@ -11,6 +11,7 @@ import {
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks, freeTaskKey } from "@/components/FocusTasks";
 import { FocusDesktop, useWide, type FocusClock } from "@/components/FocusDesktop";
+import { FocusReader, useFocusBook } from "@/components/FocusReader";
 import { pace, readHistory, recordFocus, wrapUp } from "@/lib/focusStats";
 import { Icon } from "@/components/Icon";
 
@@ -156,6 +157,7 @@ export function FocusTimer({
   withName,
   courseCode,
   taskKey,
+  book,
 }: {
   storageKey: string;
   title: string;
@@ -169,7 +171,13 @@ export function FocusTimer({
   courseCode?: string | null;
   /** the to-do list's key: a planned session's key, else a free timer of today in this course */
   taskKey?: string;
+  /** a chapter to read in the timer; without it, what the course's plan says to read next */
+  book?: { bookId: string; idx: number } | null;
 }) {
+  const fbook = useFocusBook(courseCode ?? null, book ?? null);
+  const fb = fbook.state === "ready" ? fbook.fb : null;
+  const [reading, setReading] = useState(!!book);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     startStudyLive({ title, minutes, with_user: withUser ?? null }).catch(
       () => {},
@@ -283,19 +291,55 @@ export function FocusTimer({
       onCancel: cancel,
     };
     return createPortal(
-      <FocusDesktop c={c} courseCode={courseCode ?? null} taskKey={taskKey ?? freeTaskKey(courseCode)} onCounts={setCounts} stuck={<Stuck inline courseCode={courseCode ?? null} title={title} />} />,
+      <FocusDesktop
+        c={c}
+        courseCode={courseCode ?? null}
+        taskKey={taskKey ?? freeTaskKey(courseCode)}
+        onCounts={setCounts}
+        stuck={<Stuck inline courseCode={courseCode ?? null} title={title} />}
+        book={fbook}
+        reading={reading}
+        onReading={setReading}
+      />,
       document.body,
     );
   }
 
+  // Phone: the book takes the screen under a slim timer bar. The timer view stays mounted (hidden)
+  // so the music and the task list carry on.
+  const inBook = reading && !!fb;
   return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-surface"
+      className={`fixed inset-0 z-50 bg-surface ${inBook ? "flex flex-col" : "overflow-y-auto"}`}
       role="dialog"
       aria-modal
       aria-label="טיימר ריכוז"
     >
-      <div className="flex min-h-full flex-col items-center justify-center gap-10 px-6 py-8">
+      {inBook && fb && (
+        <>
+          <div className="flex shrink-0 items-center gap-2 border-b border-rule px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <button type="button" onClick={() => setReading(false)} className="inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm text-ink-soft">
+              <Icon name="chevronRight" className="size-4" />
+              טיימר
+            </button>
+            <span className={`ms-auto font-display text-2xl tabular-nums ${state.since || over ? "" : "text-ink-soft"}`} dir="ltr">
+              {clock}
+            </span>
+            {!over && (
+              <button type="button" onClick={toggle} className="grid size-11 place-items-center rounded-full border border-rule" aria-label={state.since ? "השהיה" : "המשך"}>
+                <Icon name={state.since ? "pause" : "play"} className="size-4" />
+              </button>
+            )}
+            <button type="button" onClick={finish} className="min-h-11 rounded-full bg-ink px-4 text-sm font-medium text-bg">
+              סיימתי
+            </button>
+          </div>
+          <div ref={setScrollEl} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-bg">
+            <FocusReader key={fb.chapterId} fb={fb} onChapter={fbook.open} scrollRoot={scrollEl} wide={false} />
+          </div>
+        </>
+      )}
+      <div className={`min-h-full flex-col items-center justify-center gap-10 px-6 py-8 ${inBook ? "hidden" : "flex"}`}>
         <div className="flex flex-col items-center text-center">
           <p className="text-sm text-ink-soft">
             {over
@@ -364,6 +408,19 @@ export function FocusTimer({
               ביטול
             </button>
           </div>
+          {fb && (
+            <button type="button" onClick={() => setReading(true)} className="mt-5 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-rule px-4 py-3 text-start">
+              <Icon name="book" className="size-5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">לקרוא בזמן הזה</span>
+                <span className="block truncate text-sm text-ink-soft">
+                  {fb.title}
+                  {fb.page > 1 ? `, מעמ׳ ${fb.page}` : ""}
+                </span>
+              </span>
+              <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
+            </button>
+          )}
           <Stuck courseCode={courseCode ?? null} title={title} />
           <FocusMusic running={!!state.since && !over} over={over} />
         </div>

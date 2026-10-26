@@ -135,6 +135,7 @@ export const addFocusTask = w(Focus.addFocusTask);
 export const setFocusTaskDone = w(Focus.setFocusTaskDone);
 export const deleteFocusTask = w(Focus.deleteFocusTask);
 export const pullFocusTask = w(Focus.pullFocusTask);
+export const getFocusBook = w(B.getFocusBook);
 
 import * as Log from "@/app/logActions";
 export const addStudyEntry = w(Log.addStudyEntry);

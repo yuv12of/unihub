@@ -55,7 +55,8 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Suspense>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 md:pb-[calc(4rem+var(--player-h,0px))] lg:px-12 lg:pt-10">{children}</main>
+        {/* A page that marks itself data-wide (the book reader) gets the whole width on a computer. */}
+        <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-6 md:pb-[calc(4rem+var(--player-h,0px))] lg:px-12 lg:pt-10 lg:has-[[data-wide]]:max-w-none lg:has-[[data-wide]]:px-8 lg:has-[[data-wide]]:pt-0">{children}</main>
       </div>
 
       <Suspense fallback={null}>

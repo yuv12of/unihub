@@ -2,9 +2,59 @@
 
 import { refresh } from "next/cache";
 import { action, must } from "@/app/guard";
-import { searchBooks as search, type SearchHit } from "@/lib/books";
+import { chapterUrl, getBooks, readingByCourse, searchBooks as search, type SearchHit } from "@/lib/books";
 import type { Failed } from "@/app/guard";
 
+export interface FocusBook {
+  bookId: string;
+  bookTitle: string;
+  chapterId: string;
+  idx: number;
+  title: string;
+  /** signed PDF link of the chapter (1 hour) */
+  url: string;
+  pages: number;
+  /** where to open: the saved place, or 1 */
+  page: number;
+  /** the book's chapters, to move on without leaving the timer */
+  chapters: { idx: number; title: string; done: boolean }[];
+}
+
+/**
+ * The chapter to read inside the focus timer: the one the session's plan points at (bookId + idx
+ * from its reading step), else the chapter to continue in this course, opened at the saved page.
+ */
+export async function getFocusBook(input: { courseCode: string | null; bookId?: string | null; idx?: number | null }): Promise<FocusBook | null | Failed> {
+  return action("getFocusBook", async () => {
+    const code = input.courseCode && /^\d{5}$/.test(input.courseCode) ? input.courseCode : null;
+    const books = await getBooks(code ?? undefined);
+    let bookId = input.bookId && /^[0-9a-f-]{36}$/.test(input.bookId) ? input.bookId : null;
+    let idx = Number.isInteger(input.idx) ? Number(input.idx) : null;
+    if (!bookId || idx == null) {
+      const r = code ? readingByCourse(books)[code] : null;
+      if (!r) return null;
+      bookId = r.bookId;
+      idx = r.idx;
+    }
+    const book = books.find((b) => b.id === bookId);
+    const ch = book?.chapters.find((c) => c.idx === idx);
+    if (!book || !ch) return null;
+    const url = await chapterUrl(ch.storage_path);
+    if (!url) return null;
+    const pages = ch.end_page - ch.start_page + 1;
+    return {
+      bookId: book.id,
+      bookTitle: book.title,
+      chapterId: ch.id,
+      idx: ch.idx,
+      title: ch.title,
+      url,
+      pages,
+      page: ch.last_page && !ch.done_at ? Math.min(ch.last_page, pages) : 1,
+      chapters: book.chapters.map((c) => ({ idx: c.idx, title: c.title, done: !!c.done_at })),
+    };
+  });
+}
 
 
 /** Remembers where I stopped reading (page within the chapter). Quiet: no refresh. */

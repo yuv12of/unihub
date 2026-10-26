@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { logStudy } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
+import { FOCUS_EVENT, type FocusRequest } from "@/components/focusShared";
 import { Icon } from "@/components/Icon";
 
 const KEY = "quicklog:last";
@@ -20,6 +21,8 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
   const [minutes, setMinutes] = useState(45);
   const [custom, setCustom] = useState("");
   const [timer, setTimer] = useState(false);
+  // a chapter to read inside the timer (from the reader); else the course's next reading
+  const [book, setBook] = useState<{ bookId: string; idx: number } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -32,7 +35,23 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
     const q = new URLSearchParams(location.search);
     if (q.get("log")) setOpen(true);
     if (Number(q.get("min")) > 0) setMinutes(Math.min(180, Number(q.get("min")))); // ?focus=1&min=15 (if-then pushes)
+    const c = q.get("course");
+    if (c && courses.some((x) => x.code === c)) setCourse(c);
+    if (q.get("book") && q.get("ch")) setBook({ bookId: q.get("book")!, idx: Number(q.get("ch")) });
     if (q.get("focus")) setTimer(true);
+  }, [courses]);
+
+  // "Read with a timer" from the book reader (and other pages): open the timer on that chapter
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<FocusRequest>).detail ?? { course: null };
+      if (d.course && courses.some((x) => x.code === d.course)) setCourse(d.course);
+      setBook(d.book && d.idx != null ? { bookId: d.book, idx: d.idx } : null);
+      setOpen(false);
+      setTimer(true);
+    };
+    window.addEventListener(FOCUS_EVENT, on);
+    return () => window.removeEventListener(FOCUS_EVENT, on);
   }, [courses]);
 
   const save = (m: number) =>
@@ -145,6 +164,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
           title={title}
           minutes={minutes}
           courseCode={course}
+          book={book}
           onClose={() => setTimer(false)}
           onFinish={(studied) => {
             setTimer(false);
