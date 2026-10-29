@@ -11,7 +11,8 @@ import {
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks, freeTaskKey } from "@/components/FocusTasks";
 import { FocusDesktop, useWide, type FocusClock } from "@/components/FocusDesktop";
-import { FocusReader, useFocusBook } from "@/components/FocusReader";
+import { FocusReader, useFocusDoc } from "@/components/FocusReader";
+import { assignmentOf } from "@/lib/agenda";
 import { pace, readHistory, recordFocus, wrapUp } from "@/lib/focusStats";
 import { Icon } from "@/components/Icon";
 
@@ -158,6 +159,7 @@ export function FocusTimer({
   courseCode,
   taskKey,
   book,
+  assignment,
 }: {
   storageKey: string;
   title: string;
@@ -173,10 +175,14 @@ export function FocusTimer({
   taskKey?: string;
   /** a chapter to read in the timer; without it, what the course's plan says to read next */
   book?: { bookId: string; idx: number } | null;
+  /** an assignment's sheet to work from ("12"); an assignment session finds its own */
+  assignment?: string | null;
 }) {
-  const fbook = useFocusBook(courseCode ?? null, book ?? null);
-  const fb = fbook.state === "ready" ? fbook.fb : null;
-  const [reading, setReading] = useState(!!book);
+  // a planned assignment session ("…|assignment|20109|a12-2") opens that assignment's sheet
+  const [, kind, , ref] = (taskKey ?? "").split("|");
+  const sessionAssignment = kind === "assignment" ? assignmentOf(ref) : null;
+  const { doc: fb } = useFocusDoc(courseCode ?? null, { book, assignment: assignment ?? sessionAssignment, preferAssignment: kind === "assignment" });
+  const [reading, setReading] = useState(!!book || !!assignment);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     startStudyLive({ title, minutes, with_user: withUser ?? null }).catch(
@@ -297,7 +303,7 @@ export function FocusTimer({
         taskKey={taskKey ?? freeTaskKey(courseCode)}
         onCounts={setCounts}
         stuck={<Stuck inline courseCode={courseCode ?? null} title={title} />}
-        book={fbook}
+        doc={fb}
         reading={reading}
         onReading={setReading}
       />,
@@ -335,7 +341,7 @@ export function FocusTimer({
             </button>
           </div>
           <div ref={setScrollEl} className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-bg">
-            <FocusReader key={fb.chapterId} fb={fb} onChapter={fbook.open} scrollRoot={scrollEl} wide={false} />
+            <FocusReader key={fb.key} doc={fb} scrollRoot={scrollEl} wide={false} />
           </div>
         </>
       )}
@@ -410,13 +416,10 @@ export function FocusTimer({
           </div>
           {fb && (
             <button type="button" onClick={() => setReading(true)} className="mt-5 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-rule px-4 py-3 text-start">
-              <Icon name="book" className="size-5 shrink-0" />
+              <Icon name={fb.cta.icon} className="size-5 shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block font-medium">לקרוא בזמן הזה</span>
-                <span className="block truncate text-sm text-ink-soft">
-                  {fb.title}
-                  {fb.page > 1 ? `, מעמ׳ ${fb.page}` : ""}
-                </span>
+                <span className="block font-medium">{fb.cta.title}</span>
+                <span className="block truncate text-sm text-ink-soft">{fb.cta.sub}</span>
               </span>
               <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
             </button>

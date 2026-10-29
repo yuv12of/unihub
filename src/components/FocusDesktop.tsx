@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks } from "@/components/FocusTasks";
 import { Chevron, Icon } from "@/components/Icon";
-import { FocusReader, type useFocusBook } from "@/components/FocusReader";
+import { FocusReader, type ReaderDoc } from "@/components/FocusReader";
 
 /** What the timer knows, shared by the phone layout, this one and the floating window. */
 export interface FocusClock {
@@ -47,7 +47,7 @@ export function FocusDesktop({
   taskKey,
   onCounts,
   stuck,
-  book,
+  doc,
   reading,
   onReading,
 }: {
@@ -57,8 +57,8 @@ export function FocusDesktop({
   onCounts: (x: { done: number; total: number; open: number }) => void;
   /** the "I'm stuck" box (it saves through the timer's own action) */
   stuck: React.ReactNode;
-  /** the chapter to read in this session (useFocusBook) */
-  book: ReturnType<typeof useFocusBook>;
+  /** the chapter or assignment sheet to read in this session (useFocusDoc) */
+  doc: ReaderDoc | null;
   reading: boolean;
   onReading: (on: boolean) => void;
 }) {
@@ -67,8 +67,9 @@ export function FocusDesktop({
   const [panel, setPanel] = useState(() => window.matchMedia("(min-width: 1280px)").matches);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const pip = useFloatingWindow(c.title);
-  const fb = book.state === "ready" ? book.fb : null;
+  const fb = doc;
   const inBook = reading && !!fb;
+  const docLabel = doc?.kind === "assignment" ? "מטלה" : "ספר";
   const live = useRef({ c, inBook, fb: !!fb, onReading });
   useEffect(() => {
     live.current = { c, inBook, fb: !!fb, onReading };
@@ -121,7 +122,7 @@ export function FocusDesktop({
           <div className="flex shrink-0 rounded-full border border-rule p-0.5" role="group" aria-label="תצוגה">
             {([
               [false, "טיימר", "timer"],
-              [true, "ספר", "book"],
+              [true, docLabel, doc?.cta.icon ?? "book"],
             ] as const).map(([v, label, icon]) => (
               <button
                 key={label}
@@ -178,7 +179,7 @@ export function FocusDesktop({
       <div className={`grid min-h-0 flex-1 ${showPanel ? "grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]" : "grid-cols-1"}`}>
         {inBook && fb ? (
           <main ref={setScrollEl} className="min-h-0 overflow-y-auto">
-            <FocusReader key={fb.chapterId} fb={fb} onChapter={book.open} scrollRoot={scrollEl} wide />
+            <FocusReader key={fb.key} doc={fb} scrollRoot={scrollEl} wide />
           </main>
         ) : (
           <main className="flex min-h-0 flex-col items-center justify-center overflow-y-auto px-10 py-8">
@@ -230,14 +231,11 @@ export function FocusDesktop({
                 className="mt-8 flex w-full max-w-md items-center gap-4 rounded-2xl border border-rule bg-surface px-5 py-4 text-start hover:border-ink"
               >
                 <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-bg">
-                  <Icon name="book" className="size-5" />
+                  <Icon name={fb.cta.icon} className="size-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-medium">לקרוא בזמן הזה</span>
-                  <span className="block truncate text-sm text-ink-soft">
-                    {fb.title}
-                    {fb.page > 1 ? `, מעמ׳ ${fb.page}` : ""}
-                  </span>
+                  <span className="block font-medium">{fb.cta.title}</span>
+                  <span className="block truncate text-sm text-ink-soft">{fb.cta.sub}</span>
                 </span>
                 <Chevron dir="forward" />
               </button>
@@ -245,7 +243,7 @@ export function FocusDesktop({
 
             <dl className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-soft" aria-label="קיצורי מקלדת">
               {!c.over && <Shortcut k="רווח" label={c.running ? "השהיה" : "המשך"} />}
-              {fb && <Shortcut k="B" label="ספר" />}
+              {fb && <Shortcut k="B" label={docLabel} />}
               <Shortcut k="N" label="משימה חדשה" />
               <Shortcut k="S" label="נתקעתי" />
               <Shortcut k="F" label="מסך מלא" />

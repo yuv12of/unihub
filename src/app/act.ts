@@ -137,6 +137,14 @@ export const deleteFocusTask = w(Focus.deleteFocusTask);
 export const pullFocusTask = w(Focus.pullFocusTask);
 export const getFocusBook = w(B.getFocusBook);
 
+import * as AF from "@/app/assignmentFileActions";
+export const assignmentUploadUrl = w(AF.assignmentUploadUrl);
+export const addAssignmentFile = w(AF.addAssignmentFile);
+export const setAssignmentFileN = w(AF.setAssignmentFileN);
+export const deleteAssignmentFile = w(AF.deleteAssignmentFile);
+export const saveAssignmentPlace = w(AF.saveAssignmentPlace);
+export const getFocusAssignment = w(AF.getFocusAssignment);
+
 import * as Log from "@/app/logActions";
 export const addStudyEntry = w(Log.addStudyEntry);
 export const updateStudyEntry = w(Log.updateStudyEntry);

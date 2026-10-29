@@ -23,6 +23,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
   const [timer, setTimer] = useState(false);
   // a chapter to read inside the timer (from the reader); else the course's next reading
   const [book, setBook] = useState<{ bookId: string; idx: number } | null>(null);
+  const [assignment, setAssignment] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -47,6 +48,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
       const d = (e as CustomEvent<FocusRequest>).detail ?? { course: null };
       if (d.course && courses.some((x) => x.code === d.course)) setCourse(d.course);
       setBook(d.book && d.idx != null ? { bookId: d.book, idx: d.idx } : null);
+      setAssignment(d.assignment ?? null);
       setOpen(false);
       setTimer(true);
     };
@@ -165,6 +167,7 @@ export function QuickLog({ courses }: { courses: { code: string; short: string; 
           minutes={minutes}
           courseCode={course}
           book={book}
+          assignment={assignment}
           onClose={() => setTimer(false)}
           onFinish={(studied) => {
             setTimer(false);

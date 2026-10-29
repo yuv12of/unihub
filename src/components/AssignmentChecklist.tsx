@@ -1,6 +1,8 @@
 "use client";
 import { duration } from "@/lib/time";
 
+import Link from "next/link";
+import { Icon } from "@/components/Icon";
 import { ReadChips } from "@/components/ReadChips";
 import { MathText } from "@/components/MathText";
 import type { ReadingItem } from "@/lib/readings";
@@ -23,6 +25,8 @@ export interface ChecklistItem {
   reading?: ReadingItem | null;
   /** course forum posts that mention this assignment */
   forum?: { topic: string; href: string }[];
+  /** the assignment's question sheet in the reader, when it was uploaded */
+  sheetHref?: string | null;
 }
 
 type Patch = { n: string; progress: Progress };
@@ -75,6 +79,12 @@ export function AssignmentChecklist({
                 <span className="text-ink-soft text-sm"> {it.due}, משקל {it.weight}</span>
               </span>
             </label>
+            {it.sheetHref && (
+              <Link href={it.sheetHref} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-rule px-2.5 py-1 text-xs hover:border-ink">
+                <Icon name="clip" className="size-3.5" />
+                דף המטלה
+              </Link>
+            )}
             {done ? (
               <input
                 type="number"

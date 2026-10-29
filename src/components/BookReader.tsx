@@ -809,6 +809,8 @@ export function Pages({
   fit = "width",
   scrollRoot = null,
   topOffset = 0,
+  onSave,
+  onPages,
 }: {
   url: string;
   chapterId: string;
@@ -822,6 +824,10 @@ export function Pages({
   scrollRoot?: HTMLElement | null;
   /** height of the bars stuck above the pages, for "whole page" and for jumping */
   topOffset?: number;
+  /** where to remember the page (default: the book chapter's place) */
+  onSave?: (page: number) => void;
+  /** the file's page count, once it's open */
+  onPages?: (n: number) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -829,6 +835,12 @@ export function Pages({
   const [err, setErr] = useState<string | null>(null);
   const [width, setWidth] = useState(0);
   const [viewH, setViewH] = useState(0);
+  const saveRef = useRef(onSave);
+  const onPagesRef = useRef(onPages);
+  useEffect(() => {
+    saveRef.current = onSave;
+    onPagesRef.current = onPages;
+  });
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const [current, setCurrent] = useState(initialPage);
   const drawn = useRef(
@@ -857,6 +869,7 @@ export function Pages({
         const vp = first.getViewport({ scale: 1 });
         setRatio(vp.height / vp.width);
         setDoc(d);
+        onPagesRef.current?.(d.numPages);
       } catch {
         if (!cancelled) setErr("לא הצלחתי לטעון את הפרק.");
       }
@@ -1000,7 +1013,7 @@ export function Pages({
   useEffect(() => {
     if (!doc) return;
     const t = setTimeout(
-      () => savePlace(chapterId, current).catch(() => {}),
+      () => (saveRef.current ? saveRef.current(current) : savePlace(chapterId, current).catch(() => {})),
       1500,
     );
     return () => clearTimeout(t);

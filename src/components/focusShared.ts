@@ -4,13 +4,16 @@ import { useSyncExternalStore } from "react";
 
 /**
  * Opens the focus timer from anywhere (the timer lives in the app layout): detail
- * { course, book?, idx? } starts a free timer in that course, reading that chapter.
+ * { course, book?, idx?, assignment? } starts a free timer in that course, reading that chapter
+ * or that assignment's sheet.
  */
 export const FOCUS_EVENT = "unihub:focus";
 export interface FocusRequest {
   course: string | null;
   book?: string | null;
   idx?: number | null;
+  /** an assignment's sheet ("12") instead of a book chapter */
+  assignment?: string | null;
 }
 
 /** Whether the window is at least `px` wide, following resizes. */
