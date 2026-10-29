@@ -21,8 +21,9 @@ import { ExamDates, ExamNag } from "@/components/ExamDates";
 import { PastExamBank } from "@/components/PastExamBank";
 import { AssignmentQuestions } from "@/components/AssignmentQuestions";
 import { AssignmentFiles } from "@/components/AssignmentFiles";
-import { getAssignmentFiles } from "@/lib/assignmentFilesData";
-import { sheetFor } from "@/lib/assignmentFiles";
+import { assignmentFileUrls, getAssignmentFiles } from "@/lib/assignmentFilesData";
+import { answerFor, extrasFor, linkFor, sheetFor } from "@/lib/assignmentFiles";
+import { AllAssignmentsLink } from "@/components/AssignmentLinks";
 import { StrategyPanel } from "@/components/Strategy";
 import { aimedExam, attemptScore, getMockAttempts, getPastExams, runway, semesterEnd, type Runway } from "@/lib/exams";
 import { getChecks, getQuestions } from "@/lib/trackerData";
@@ -70,7 +71,11 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
   ]);
   const c = courses.find((x) => x.code === code);
   if (!c) notFound();
-  const [plans, videos, cardsDue, attempts, sheets] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code), getMockAttempts(pastExams.map((e) => e.id)), getAssignmentFiles(code).then((r) => r.files)]);
+  const [plans, videos, cardsDue, attempts, assignmentData] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code), getMockAttempts(pastExams.map((e) => e.id)), getAssignmentFiles(code)]);
+  const sheets = assignmentData.files;
+  // stored files that aren't PDFs (a zip of starter files) and my submissions open through short-lived links
+  const fileLinks = await assignmentFileUrls(sheets.filter((f) => f.path && (!f.pdf || f.kind === "answer")).map((f) => f.path!));
+  const linkOf = (f: { path: string | null } | null) => (f?.path ? (fileLinks.get(f.path) ?? null) : null);
   const myBooks = books.filter((b) => b.course_code === code).sort((a, b) => a.position - b.position);
   const weeks = plans.weeks[code] ?? [];
   const thisWeek = weekFor(weeks, today);
@@ -243,6 +248,11 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                   <div className="space-y-6">
                   <section className="panel px-5 pb-2 pt-5">
                     <h2 className="section-title">מטלות הקורס</h2>
+                    {supabaseEnabled && (
+                      <p className="mt-1 text-sm">
+                        <AllAssignmentsLink code={code} url={assignmentData.allUrl} />
+                      </p>
+                    )}
                     <AssignmentChecklist
                       code={code}
                       color={c.color}
@@ -259,13 +269,22 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                         spent: spent[`${code}|${a.n}`],
                         review: reviews.find((r) => r.course_code === code && r.n === a.n) ?? null,
                         sheetHref: sheetFor(sheets, a.n) ? `/courses/${code}/assignment/${a.n}` : null,
+                        type: a.type,
+                        link: linkFor(sheets, a.n)?.url ?? null,
+                        answer: (() => {
+                          const f = answerFor(sheets, a.n);
+                          return f ? { id: f.id, name: f.name, href: linkOf(f) } : null;
+                        })(),
+                        extras: extrasFor(sheets, a.n).map((f) => ({ id: f.id, name: f.name, href: linkOf(f) })),
                       }))}
                     />
                   </section>
                   <AssignmentFiles
                     code={code}
                     editable={supabaseEnabled}
-                    files={sheets.filter((f) => f.kind === "sheet" && f.path).map((f) => ({ id: f.id, n: f.n, kind: f.kind, name: f.name, size: f.size, lastPage: f.lastPage, url: f.url }))}
+                    files={sheets
+                      .filter((f) => f.kind === "sheet" && f.path)
+                      .map((f) => ({ id: f.id, n: f.n, kind: f.kind, name: f.name, size: f.size, lastPage: f.lastPage, url: f.url, pdf: f.pdf, href: f.pdf ? null : linkOf(f) }))}
                     assignments={c.assignments.map((a) => ({ n: a.n, label: `${typeLabel[a.type]} ${a.n}` }))}
                   />
                   <section className="panel px-5 pb-2 pt-5">

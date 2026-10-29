@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BOOKLET, answerFor, guessAssignment, linkFor, sheetFor } from "@/lib/assignmentFiles";
+import { BOOKLET, answerFor, extrasFor, guessAssignment, linkFor, sheetFor } from "@/lib/assignmentFiles";
 
 const ns = ["11", "12", "13", "14", "01", "02"];
 
@@ -46,4 +46,13 @@ test("links and submitted files are kept apart from sheets", () => {
   assert.equal(sheetFor(files, "12")?.id, "s");
   assert.equal(answerFor(files, "12")?.id, "a2");
   assert.equal(linkFor(files, "12"), null);
+});
+
+test("a zip next to the sheet is an extra, never the sheet", () => {
+  const files = [
+    { n: "02", kind: "sheet" as const, url: null, pdf: false, id: "zip" },
+    { n: "02", kind: "sheet" as const, url: null, pdf: true, id: "pdf" },
+  ];
+  assert.equal(sheetFor(files, "02")?.id, "pdf");
+  assert.deepEqual(extrasFor(files, "02").map((f) => f.id), ["zip"]);
 });

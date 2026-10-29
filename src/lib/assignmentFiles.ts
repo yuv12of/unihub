@@ -19,7 +19,14 @@ export interface AssignmentFile {
   lastPage: number | null;
   /** a link instead of a stored file (an online assignment) */
   url: string | null;
+  /** a stored PDF (opens in the reader); other stored files (a zip, a Word file) download */
+  pdf: boolean;
+  /** a download link for a stored file that isn't a PDF */
+  href?: string | null;
 }
+
+/** What can go with an assignment: the PDF sheet, and extra files the course gives (zip, Word, images). */
+export const SHEET_ACCEPT = ".pdf,.zip,.doc,.docx,.txt,.java,.py,.c,.png,.jpg,.jpeg,application/pdf,application/zip,image/*";
 
 /** Submitted files: PDF opens in the reader; Word and images download. */
 export const ANSWER_ACCEPT = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.heic,application/pdf,image/*";
@@ -52,12 +59,17 @@ export function guessAssignment(fileName: string, ns: string[]): string | null {
   return hits.length === 1 ? hits[0] : null;
 }
 
-type Row = { n: string; kind?: AssignmentFileKind; url?: string | null };
-const isSheet = (f: Row) => (f.kind ?? "sheet") === "sheet" && !f.url;
+type Row = { n: string; kind?: AssignmentFileKind; url?: string | null; pdf?: boolean };
+const isSheet = (f: Row) => (f.kind ?? "sheet") === "sheet" && !f.url && f.pdf !== false;
 
 /** The stored sheet to open for assignment n: its own, else the booklet. */
 export function sheetFor<F extends Row>(files: F[], n: string): F | null {
   return files.find((f) => f.n === n && isSheet(f)) ?? files.find((f) => f.n === BOOKLET && isSheet(f)) ?? null;
+}
+
+/** Extra stored files of assignment n that aren't the PDF sheet (a zip of starter files). */
+export function extrasFor<F extends Row>(files: F[], n: string): F[] {
+  return files.filter((f) => f.n === n && (f.kind ?? "sheet") === "sheet" && !f.url && f.pdf === false);
 }
 
 /** An online assignment's link. */

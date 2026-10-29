@@ -4,6 +4,7 @@ import { duration } from "@/lib/time";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { ReadChips } from "@/components/ReadChips";
+import { AnswerUpload, OnlineLink } from "@/components/AssignmentLinks";
 import { MathText } from "@/components/MathText";
 import type { ReadingItem } from "@/lib/readings";
 
@@ -27,6 +28,14 @@ export interface ChecklistItem {
   forum?: { topic: string; href: string }[];
   /** the assignment's question sheet in the reader, when it was uploaded */
   sheetHref?: string | null;
+  /** file / online / participation */
+  type?: "file" | "online" | "participation";
+  /** online assignments: the link to the quiz */
+  link?: string | null;
+  /** file assignments: the file I submitted */
+  answer?: { id: string; name: string; href: string | null } | null;
+  /** extra files of the assignment (a zip of starter files) */
+  extras?: { id: string; name: string; href: string | null }[];
 }
 
 type Patch = { n: string; progress: Progress };
@@ -121,6 +130,18 @@ export function AssignmentChecklist({
               <ReadChips links={it.reading.links} className="mt-1" />
             </div>
           )}
+          {editable && (it.type === "online" || it.type === "file" || (it.extras?.length ?? 0) > 0) && (
+            <div className="ms-8 mb-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              {it.type === "online" && <OnlineLink code={code} n={it.n} url={it.link ?? null} />}
+              {it.type === "file" && <AnswerUpload code={code} n={it.n} answer={it.answer ?? null} />}
+              {it.extras?.map((x) => (
+                <a key={x.id} href={x.href ?? undefined} download className="inline-flex items-center gap-1 text-ink-soft underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
+                  <Icon name="clip" className="size-3" />
+                  {x.name}
+                </a>
+              ))}
+            </div>
+          )}
           {it.forum && it.forum.length > 0 && (
             <ul className="ms-8 mb-1 space-y-0.5 text-xs">
               {it.forum.map((f, i) => (
@@ -167,6 +188,11 @@ function Autopsy({ code, item, onDone }: { code: string; item: ChecklistItem; on
       }}
     >
       <p className="font-medium">הוגש 🎉 איך הלך?</p>
+      {item.type === "file" && !item.answer && (
+        <p className="text-xs">
+          <AnswerUpload code={code} n={item.n} answer={null} />
+        </p>
+      )}
       <label className="flex items-center gap-2">
         כמה זמן השקעת?
         <input value={hours} onChange={(e) => setHours(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" className="w-16 rounded border border-rule bg-surface px-2 py-1 text-center" aria-label="שעות" />

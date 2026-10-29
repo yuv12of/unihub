@@ -29,6 +29,7 @@ export async function getAssignmentFiles(code: string): Promise<{ files: Assignm
         path: r.path as string | null,
         url: r.url as string | null,
         lastPage: r.last_page as number | null,
+        pdf: !!r.path && /\.pdf$/i.test(r.path as string),
       }));
   return { files, allUrl: (uc?.assignments_url as string | null | undefined) ?? null };
 }

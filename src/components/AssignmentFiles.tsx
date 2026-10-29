@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { addAssignmentFile, assignmentUploadUrl, deleteAssignmentFile, setAssignmentFileN } from "@/app/act";
 import { Icon } from "@/components/Icon";
-import { ASSIGNMENT_FILE_MAX, BOOKLET, guessAssignment, type AssignmentFile } from "@/lib/assignmentFiles";
+import { ASSIGNMENT_FILE_MAX, BOOKLET, SHEET_ACCEPT, guessAssignment, type AssignmentFile } from "@/lib/assignmentFiles";
 import { fileSize } from "@/lib/meetupFiles";
 
 function put(url: string, file: File, onPct: (n: number) => void) {
   return new Promise<void>((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open("PUT", url);
-    x.setRequestHeader("Content-Type", file.type || "application/pdf");
+    x.setRequestHeader("Content-Type", file.type || (/\.pdf$/i.test(file.name) ? "application/pdf" : "application/octet-stream"));
     x.setRequestHeader("x-upsert", "true");
     x.upload.onprogress = (e) => e.lengthComputable && onPct(Math.round((e.loaded / e.total) * 100));
     x.onload = () => (x.status < 300 ? resolve() : reject(new Error("ההעלאה נכשלה")));
@@ -51,8 +51,7 @@ export function AssignmentFiles({
 
   const pick = (list: FileList | null) => {
     setError(null);
-    const all = [...(list ?? [])].filter((f) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
-    if (list?.length && !all.length) return setError("אפשר להעלות קובצי PDF בלבד");
+    const all = [...(list ?? [])];
     const big = all.find((f) => f.size > ASSIGNMENT_FILE_MAX);
     if (big) return setError(`${big.name} גדול מ־50MB`);
     setQueue((q) => [...q, ...all.map((file) => ({ file, n: guessAssignment(file.name, ns) ?? "" }))]);
@@ -67,6 +66,7 @@ export function AssignmentFiles({
         setBusy({ n: i + 1, of: queue.length, pct: 0 });
         const { path, url } = await assignmentUploadUrl(code, file.name, file.size);
         await put(url, file, (pct) => setBusy({ n: i + 1, of: queue.length, pct }));
+        // a PDF is shown without its extension; other files keep it (it tells what they are)
         await addAssignmentFile(code, n, file.name.replace(/\.pdf$/i, ""), path, file.size);
       }
       setQueue([]);
@@ -112,9 +112,15 @@ export function AssignmentFiles({
           {files.map((f) => (
             <li key={f.id} className="flex flex-wrap items-center gap-2 py-2.5">
               <Icon name="clip" className="size-4 shrink-0 text-ink-soft" />
-              <Link href={`/courses/${code}/assignment/${f.n}`} className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
-                {f.name}
-              </Link>
+              {f.pdf ? (
+                <Link href={`/courses/${code}/assignment/${f.n}`} className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
+                  {f.name}
+                </Link>
+              ) : (
+                <a href={f.href ?? undefined} download className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
+                  {f.name}
+                </a>
+              )}
               {f.size != null && <span className="text-xs tabular-nums text-ink-soft">{fileSize(f.size)}</span>}
               {editable ? select(f.n, (n) => run(() => setAssignmentFileN(f.id, n)), `המטלה של ${f.name}`) : <span className="text-sm text-ink-soft">{label(f.n)}</span>}
               {editable && (
@@ -144,11 +150,11 @@ export function AssignmentFiles({
           >
             <Icon name="plus" className="size-5" />
             <span className="font-medium">{files.length ? "עוד קבצים" : "בחירת קבצים"}</span>
-            <span className="text-ink-soft">או לגרור לכאן את כל קובצי ה־PDF של המטלות</span>
+            <span className="text-ink-soft">או לגרור לכאן את כל קובצי המטלות. PDF נפתח בקורא, קבצים אחרים (zip, Word) נשמרים להורדה.</span>
             <input
               type="file"
               multiple
-              accept=".pdf,application/pdf"
+              accept={SHEET_ACCEPT}
               className="sr-only"
               onChange={(e) => {
                 pick(e.target.files);

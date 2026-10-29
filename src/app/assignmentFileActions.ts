@@ -43,20 +43,49 @@ export async function assignmentUploadUrl(code: string, name: string, size: numb
   });
 }
 
-/** After the upload: record which assignment (or the booklet) the file is. */
-export async function addAssignmentFile(code: string, n: string, name: string, path: string, size: number) {
+/** After the upload: record which assignment (or the booklet) the file is: its sheet, or what I submitted. */
+export async function addAssignmentFile(code: string, n: string, name: string, path: string, size: number, kind: "sheet" | "answer" = "sheet") {
   return action("addAssignmentFile", async ({ supabase, userId }) => {
     if (!CODE.test(code) || !N.test(n)) throw new Error("מטלה לא תקינה");
+    if (kind !== "sheet" && kind !== "answer") throw new Error("סוג קובץ לא תקין");
+    if (kind === "answer" && n === BOOKLET) throw new Error("ההגשה שייכת למטלה אחת");
     if (!path.startsWith(`${userId}/${code}/${semester.semester}/`) || path.includes("..")) throw new Error("נתיב לא תקין");
     const title = String(name ?? "").trim().slice(0, 200) || "דף המטלה";
     const { data, error } = await supabase
       .from("assignment_files")
-      .insert({ user_id: userId, course_code: code, semester: semester.semester, n, name: title, path, size: Math.round(size) || null })
+      .insert({ user_id: userId, course_code: code, semester: semester.semester, n, kind, name: title, path, size: Math.round(size) || null })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     refresh(code);
     return { id: data.id as string };
+  });
+}
+
+const httpsUrl = (u: string | null | undefined, max: number) => {
+  const v = String(u ?? "").trim();
+  if (!v) return null;
+  if (!/^https:\/\/\S+$/.test(v) || v.length > max) throw new Error("צריך קישור שמתחיל ב־https://");
+  return v;
+};
+
+/** An online assignment's link (empty removes it). */
+export async function setAssignmentLink(code: string, n: string, url: string) {
+  return action("setAssignmentLink", async ({ supabase, userId }) => {
+    if (!CODE.test(code) || !/^\d{1,3}$/.test(n)) throw new Error("מטלה לא תקינה");
+    const v = httpsUrl(url, 1000);
+    must(await supabase.from("assignment_files").delete().match({ course_code: code, semester: semester.semester, n, kind: "sheet" }).not("url", "is", null));
+    if (v) must(await supabase.from("assignment_files").insert({ user_id: userId, course_code: code, semester: semester.semester, n, kind: "sheet", name: `מטלה ${n}`, url: v }));
+    refresh(code);
+  });
+}
+
+/** The course's page with all its assignments (on Opal). Empty removes it. */
+export async function setAssignmentsUrl(code: string, url: string) {
+  return action("setAssignmentsUrl", async ({ supabase, userId }) => {
+    if (!CODE.test(code)) throw new Error("קורס לא תקין");
+    must(await supabase.from("user_courses").update({ assignments_url: httpsUrl(url, 500) }).match({ user_id: userId, course_code: code, semester: semester.semester }));
+    refresh(code);
   });
 }
 
@@ -75,7 +104,7 @@ export async function deleteAssignmentFile(id: string) {
     // RLS: only the user's own row comes back
     const { data } = await supabase.from("assignment_files").select("course_code, path").eq("id", id).maybeSingle();
     if (!data) throw new Error("הקובץ לא נמצא");
-    await admin().storage.from(BUCKET).remove([data.path]);
+    if (data.path) await admin().storage.from(BUCKET).remove([data.path]);
     must(await supabase.from("assignment_files").delete().eq("id", id));
     refresh(data.course_code);
   });
@@ -117,7 +146,7 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
       getCourses(),
       supabase.from("assignment_progress").select("n, status").match({ course_code: code, semester: semester.semester }),
     ]);
-    const files = rows ?? [];
+    const files = (rows ?? []).map((r) => ({ ...r, pdf: !!r.path && /\.pdf$/i.test(r.path) }));
     if (!files.length) return null;
     const course = courses.find((c) => c.code === code);
     const list = course?.assignments ?? [];
@@ -130,8 +159,9 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
     const wanted = input.n && N.test(input.n) ? input.n : null;
     const next = [...list].filter((a) => a.due >= today && !closed.has(a.n) && sheetFor(files, a.n)).sort((a, b) => a.due.localeCompare(b.due))[0]?.n;
     const n = wanted ?? next ?? files[0].n;
-    const file = sheetFor(files, n) ?? files[0];
-    if (!file.path) return null;
+    // only a stored PDF opens in the timer (an online assignment's link doesn't)
+    const file = sheetFor(files, n);
+    if (!file?.path) return null;
     const { data: signed } = await admin().storage.from(BUCKET).createSignedUrl(file.path, 3600);
     if (!signed?.signedUrl) return null;
     const withSheet = list.filter((a) => sheetFor(files, a.n)).map((a) => ({ n: a.n, label: label(a.n) }));
