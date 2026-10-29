@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BOOKLET, guessAssignment, sheetFor } from "@/lib/assignmentFiles";
+import { BOOKLET, answerFor, guessAssignment, linkFor, sheetFor } from "@/lib/assignmentFiles";
 
 const ns = ["11", "12", "13", "14", "01", "02"];
 
@@ -32,4 +32,18 @@ test("sheetFor prefers the assignment's own file, then the booklet", () => {
   assert.equal(sheetFor(files, "12")?.id, "x");
   assert.equal(sheetFor(files, "13")?.id, "b");
   assert.equal(sheetFor([{ n: "11", id: "y" }], "13"), null);
+});
+
+test("links and submitted files are kept apart from sheets", () => {
+  const files = [
+    { n: "01", kind: "sheet" as const, url: "https://opal.openu.ac.il/mod/quiz/view.php?id=1", id: "l" },
+    { n: "12", kind: "answer" as const, url: null, id: "a1" },
+    { n: "12", kind: "answer" as const, url: null, id: "a2" },
+    { n: "12", kind: "sheet" as const, url: null, id: "s" },
+  ];
+  assert.equal(sheetFor(files, "01"), null);
+  assert.equal(linkFor(files, "01")?.id, "l");
+  assert.equal(sheetFor(files, "12")?.id, "s");
+  assert.equal(answerFor(files, "12")?.id, "a2");
+  assert.equal(linkFor(files, "12"), null);
 });

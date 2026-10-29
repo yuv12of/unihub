@@ -21,13 +21,13 @@ export default function AssignmentPage({ params }: PageProps<"/courses/[code]/as
 async function Assignment({ params }: Pick<PageProps<"/courses/[code]/assignment/[n]">, "params">) {
   await connection();
   const { code, n } = await params;
-  const [courses, files, questions, checks] = await Promise.all([getCourses(), getAssignmentFiles(code), getQuestions(code), getChecks(code)]);
+  const [courses, { files }, questions, checks] = await Promise.all([getCourses(), getAssignmentFiles(code), getQuestions(code), getChecks(code)]);
   const course = courses.find((c) => c.code === code);
   if (!course) notFound();
   const a = course.assignments.find((x) => x.n === n);
   if (!a && n !== BOOKLET) notFound();
   const file = sheetFor(files, n);
-  const url = file ? await assignmentFileUrl(file.path) : null;
+  const url = file?.path ? await assignmentFileUrl(file.path) : null;
   const label = a ? `${typeLabel[a.type]} ${a.n}` : "חוברת המטלות";
   const today = todayInIsrael();
 

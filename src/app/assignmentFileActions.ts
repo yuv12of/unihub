@@ -113,7 +113,7 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
     const code = input.courseCode && CODE.test(input.courseCode) ? input.courseCode : null;
     if (!code) return null;
     const [{ data: rows }, courses, { data: progress }] = await Promise.all([
-      supabase.from("assignment_files").select("id, n, name, path, last_page").match({ course_code: code, semester: semester.semester }).order("created_at"),
+      supabase.from("assignment_files").select("id, n, kind, name, path, url, last_page").match({ course_code: code, semester: semester.semester }).order("created_at"),
       getCourses(),
       supabase.from("assignment_progress").select("n, status").match({ course_code: code, semester: semester.semester }),
     ]);
@@ -131,6 +131,7 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
     const next = [...list].filter((a) => a.due >= today && !closed.has(a.n) && sheetFor(files, a.n)).sort((a, b) => a.due.localeCompare(b.due))[0]?.n;
     const n = wanted ?? next ?? files[0].n;
     const file = sheetFor(files, n) ?? files[0];
+    if (!file.path) return null;
     const { data: signed } = await admin().storage.from(BUCKET).createSignedUrl(file.path, 3600);
     if (!signed?.signedUrl) return null;
     const withSheet = list.filter((a) => sheetFor(files, a.n)).map((a) => ({ n: a.n, label: label(a.n) }));

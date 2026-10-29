@@ -1,19 +1,29 @@
 /**
- * Assignment files: the question sheet of each ממ"ן / ממ"ח, uploaded once a semester.
- * Pure, client-safe parts (matching a file to its assignment by name).
+ * Assignment files: the question sheet of each file assignment (ממ"ן), uploaded once a semester,
+ * the link of each online one (ממ"ח), and the file I submitted. Pure, client-safe parts.
  */
 
 export const ASSIGNMENT_FILE_MAX = 50 * 1024 * 1024;
 /** n of a booklet that holds all the course's assignments */
 export const BOOKLET = "all";
 
+export type AssignmentFileKind = "sheet" | "answer";
+
 export interface AssignmentFile {
   id: string;
   n: string;
+  /** sheet: the questions (or the online assignment's link); answer: what I submitted */
+  kind: AssignmentFileKind;
   name: string;
   size: number | null;
   lastPage: number | null;
+  /** a link instead of a stored file (an online assignment) */
+  url: string | null;
 }
+
+/** Submitted files: PDF opens in the reader; Word and images download. */
+export const ANSWER_ACCEPT = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.heic,application/pdf,image/*";
+export const isPdf = (name: string) => /\.pdf$/i.test(name);
 
 const num = (s: string) => String(Number(s));
 
@@ -42,7 +52,20 @@ export function guessAssignment(fileName: string, ns: string[]): string | null {
   return hits.length === 1 ? hits[0] : null;
 }
 
-/** The file to open for assignment n: its own sheet, else the booklet. */
-export function sheetFor<F extends { n: string }>(files: F[], n: string): F | null {
-  return files.find((f) => f.n === n) ?? files.find((f) => f.n === BOOKLET) ?? null;
+type Row = { n: string; kind?: AssignmentFileKind; url?: string | null };
+const isSheet = (f: Row) => (f.kind ?? "sheet") === "sheet" && !f.url;
+
+/** The stored sheet to open for assignment n: its own, else the booklet. */
+export function sheetFor<F extends Row>(files: F[], n: string): F | null {
+  return files.find((f) => f.n === n && isSheet(f)) ?? files.find((f) => f.n === BOOKLET && isSheet(f)) ?? null;
+}
+
+/** An online assignment's link. */
+export function linkFor<F extends Row>(files: F[], n: string): F | null {
+  return files.find((f) => f.n === n && (f.kind ?? "sheet") === "sheet" && !!f.url) ?? null;
+}
+
+/** The file I submitted for assignment n (the latest). */
+export function answerFor<F extends Row>(files: F[], n: string): F | null {
+  return [...files].reverse().find((f) => f.n === n && f.kind === "answer") ?? null;
 }

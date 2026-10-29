@@ -70,7 +70,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
   ]);
   const c = courses.find((x) => x.code === code);
   if (!c) notFound();
-  const [plans, videos, cardsDue, attempts, sheets] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code), getMockAttempts(pastExams.map((e) => e.id)), getAssignmentFiles(code)]);
+  const [plans, videos, cardsDue, attempts, sheets] = await Promise.all([getReadings(books), getCourseVideos(code, books), dueCards(code), getMockAttempts(pastExams.map((e) => e.id)), getAssignmentFiles(code).then((r) => r.files)]);
   const myBooks = books.filter((b) => b.course_code === code).sort((a, b) => a.position - b.position);
   const weeks = plans.weeks[code] ?? [];
   const thisWeek = weekFor(weeks, today);
@@ -265,7 +265,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                   <AssignmentFiles
                     code={code}
                     editable={supabaseEnabled}
-                    files={sheets.map((f) => ({ id: f.id, n: f.n, name: f.name, size: f.size, lastPage: f.lastPage }))}
+                    files={sheets.filter((f) => f.kind === "sheet" && f.path).map((f) => ({ id: f.id, n: f.n, kind: f.kind, name: f.name, size: f.size, lastPage: f.lastPage, url: f.url }))}
                     assignments={c.assignments.map((a) => ({ n: a.n, label: `${typeLabel[a.type]} ${a.n}` }))}
                   />
                   <section className="panel px-5 pb-2 pt-5">
