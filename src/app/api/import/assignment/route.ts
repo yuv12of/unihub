@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester } from "@/lib/semester";
-import { ASSIGNMENT_FILE_MAX } from "@/lib/assignmentFiles";
+import { ASSIGNMENT_FILE_MAX, semesterSlug } from "@/lib/assignmentFiles";
 
 /**
  * Import one assignment file from Opal: a script on the Opal page (where the student is logged in)
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   const { data: dup } = await admin.from("assignment_files").select("id").match({ user_id: uid, course_code: code, semester: semester.semester, n, kind, name: shown }).maybeSingle();
   if (dup) return json({ skipped: true, id: dup.id });
 
-  const path = `${uid}/${code}/${semester.semester}/${Date.now().toString(36)}-${safeName(name)}`;
+  const path = `${uid}/${code}/${semesterSlug(semester.semester)}/${Date.now().toString(36)}-${safeName(name)}`;
   const type = req.headers.get("content-type") || (/\.pdf$/i.test(name) ? "application/pdf" : "application/octet-stream");
   const up = await admin.storage.from("assignment-files").upload(path, bytes, { contentType: type, upsert: true });
   if (up.error) return json({ error: up.error.message }, 500);

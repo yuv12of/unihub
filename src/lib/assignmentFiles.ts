@@ -32,6 +32,12 @@ export const SHEET_ACCEPT = ".pdf,.zip,.doc,.docx,.txt,.java,.py,.c,.png,.jpg,.j
 export const ANSWER_ACCEPT = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.heic,application/pdf,image/*";
 export const isPdf = (name: string) => /\.pdf$/i.test(name);
 
+/**
+ * The semester as it may appear in a storage path: storage keys take ASCII only, so "2027א" → "2027a"
+ * (א/ב/ג → a/b/c).
+ */
+export const semesterSlug = (s: string) => s.replace(/א/g, "a").replace(/ב/g, "b").replace(/ג/g, "c").replace(/[^\w-]/g, "_");
+
 const num = (s: string) => String(Number(s));
 
 /**

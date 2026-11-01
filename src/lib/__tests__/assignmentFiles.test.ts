@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BOOKLET, answerFor, extrasFor, guessAssignment, linkFor, sheetFor } from "@/lib/assignmentFiles";
+import { BOOKLET, answerFor, extrasFor, guessAssignment, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
 
 const ns = ["11", "12", "13", "14", "01", "02"];
 
@@ -55,4 +55,10 @@ test("a zip next to the sheet is an extra, never the sheet", () => {
   ];
   assert.equal(sheetFor(files, "02")?.id, "pdf");
   assert.deepEqual(extrasFor(files, "02").map((f) => f.id), ["zip"]);
+});
+
+test("storage paths get an ASCII semester", () => {
+  assert.equal(semesterSlug("2027א"), "2027a");
+  assert.equal(semesterSlug("2026ג"), "2026c");
+  assert.match(semesterSlug("2027ב"), /^[\w-]+$/);
 });

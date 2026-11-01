@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { action, must } from "@/app/guard";
 import { adminClient } from "@/lib/supabase/admin";
-import { ASSIGNMENT_FILE_MAX, BOOKLET, linkFor, sheetFor } from "@/lib/assignmentFiles";
+import { ASSIGNMENT_FILE_MAX, BOOKLET, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
 import { getCourses } from "@/lib/userdata";
 import { semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
@@ -36,7 +36,7 @@ export async function assignmentUploadUrl(code: string, name: string, size: numb
     if (!CODE.test(code)) throw new Error("קורס לא תקין");
     if (!Number.isFinite(size) || size <= 0) throw new Error("קובץ ריק");
     if (size > ASSIGNMENT_FILE_MAX) throw new Error("הקובץ גדול מ־50MB");
-    const path = `${userId}/${code}/${semester.semester}/${Date.now().toString(36)}-${safeName(String(name ?? "file"))}`;
+    const path = `${userId}/${code}/${semesterSlug(semester.semester)}/${Date.now().toString(36)}-${safeName(String(name ?? "file"))}`;
     const { data, error } = await admin().storage.from(BUCKET).createSignedUploadUrl(path, { upsert: true });
     if (error) throw new Error(error.message);
     return { path, url: data.signedUrl };
@@ -49,7 +49,7 @@ export async function addAssignmentFile(code: string, n: string, name: string, p
     if (!CODE.test(code) || !N.test(n)) throw new Error("מטלה לא תקינה");
     if (kind !== "sheet" && kind !== "answer") throw new Error("סוג קובץ לא תקין");
     if (kind === "answer" && n === BOOKLET) throw new Error("ההגשה שייכת למטלה אחת");
-    if (!path.startsWith(`${userId}/${code}/${semester.semester}/`) || path.includes("..")) throw new Error("נתיב לא תקין");
+    if (!path.startsWith(`${userId}/${code}/${semesterSlug(semester.semester)}/`) || path.includes("..")) throw new Error("נתיב לא תקין");
     const title = String(name ?? "").trim().slice(0, 200) || "דף המטלה";
     const { data, error } = await supabase
       .from("assignment_files")
