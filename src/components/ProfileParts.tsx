@@ -120,6 +120,7 @@ export const TODAY_SECTIONS: [string, string][] = [
   ["reading", "לקריאה השבוע"],
   ["forums", "חדש בפורומים"],
   ["standings", "מצב בקורסים"],
+  ["degree", "הרשמה וציונים מתכנית התואר"],
 ];
 
 /**

@@ -4,8 +4,9 @@
  *
  * Program AF = B.Sc. in Computer Science, single major (academic.openu.ac.il/CS/computer/program/AF.aspx)
  * + general BA rules (academic.openu.ac.il/degrees/pages/ba.aspx). Course facts from the course catalog
- * (www.openu.ac.il/courses/<code>.htm) and offerings from course-requirements pages + Sheilta's offer
- * search (fetched 2026-11-01). `known` = a semester we actually saw offered; `offered` = the usual pattern.
+ * (www.openu.ac.il/courses/<code>.htm). Offerings from the university's official two-year table
+ * (www3.openu.ac.il/ouweb/owal/kursim.draw_form, 2027א–2028ג, fetched 2026-11-01): inside that range a
+ * course is either offered or not; beyond it the terms it had in the table are "usually".
  */
 
 export type Term = "א" | "ב" | "ג";
@@ -38,86 +39,120 @@ export interface DegreeCourse {
   approval?: boolean;
   /** taught in English: counts as an English content course */
   english?: boolean;
+  /** ends in a classroom exam (מתכונת הערכה מסכמת = בחינת כיתה); seminars and workshops don't */
+  exam: boolean;
+  /** terms it is offered in (from the official table) */
   offered: Term[];
-  known?: Record<string, boolean>;
   note?: string;
 }
 
-const MATH = (c: Omit<DegreeCourse, "area" | "block">): DegreeCourse => ({ ...c, area: "math", block: "math" });
-const CORE = (c: Omit<DegreeCourse, "area" | "block">): DegreeCourse => ({ ...c, area: "cs", block: "cs-core" });
-const ELEC = (c: Omit<DegreeCourse, "area" | "block">): DegreeCourse => ({ ...c, area: "cs", block: "cs-elective" });
-const SEM = (c: Omit<DegreeCourse, "area" | "block" | "level" | "credits">): DegreeCourse => ({
-  credits: 3,
-  level: "seminar",
-  minCs: 36,
-  biblio: true,
-  afterAdvanced: true,
-  approval: true,
-  ...c,
-  area: "cs",
-  block: "seminar",
-});
-const WORK = (c: Omit<DegreeCourse, "area" | "block" | "level" | "credits">): DegreeCourse => ({
-  credits: 3,
-  level: "seminar",
-  minCs: 36,
-  biblio: true,
-  ...c,
-  area: "cs",
-  block: "workshop",
-});
+/** The official two-year offering table: semesters each course is offered in, 2027א–2028ג. */
+export const TABLE_SEMESTERS = ["2027א", "2027ב", "2027ג", "2028א", "2028ב", "2028ג"];
+const Y = (...terms: string[]) => terms.flatMap((t) => ["2027" + t, "2028" + t]);
+const OFFER_TABLE: Record<string, string[]> = {
+  "20476": Y("א", "ב", "ג"),
+  "20109": Y("א", "ב", "ג"),
+  "20229": Y("א", "ב", "ג"),
+  "20474": Y("א", "ב", "ג"),
+  "20475": Y("א", "ב", "ג"),
+  "20425": Y("א", "ב", "ג"),
+  "20441": Y("א", "ב"),
+  "20407": Y("א", "ב"),
+  "20417": Y("א", "ב"),
+  "20465": Y("א", "ב"),
+  "20604": Y("א", "ב"),
+  "20471": Y("א", "ג"),
+  "20466": Y("א", "ב"),
+  "20594": Y("א", "ב"),
+  "20905": Y("ב"),
+  "20277": Y("א", "ג"),
+  "20436": Y("א", "ב"),
+  "20606": Y("א", "ב"),
+  "20551": Y("א", "ב"),
+  "20554": Y("א", "ב"),
+  "20906": Y("א", "ב"),
+  "20948": Y("א", "ג"),
+  "20937": Y("ב", "ג"),
+  "20562": Y("ב"),
+  "20580": Y("א"),
+  "20595": Y("ב"),
+  "20942": Y("א", "ב"),
+  "20944": ["2027א", "2027ב", "2028א"],
+  "20940": Y("א"),
+  "20946": Y("ב"),
+  "20368": Y("א", "ב", "ג"),
+  "20390": Y("א", "ב", "ג"),
+  "20372": Y("א", "ב", "ג"),
+  "20954": Y("א", "ב", "ג"),
+  "20973": Y("ב"),
+  "20586": Y("א", "ב"),
+  "20936": Y("א", "ג"),
+};
+const TERMS_ALL: Term[] = ["א", "ב", "ג"];
+const termsOf = (code: string): Term[] => {
+  const t = OFFER_TABLE[code];
+  if (!t) return TERMS_ALL;
+  return TERMS_ALL.filter((x) => t.some((s) => s.endsWith(x)));
+};
 
-const ALL: Term[] = ["א", "ב", "ג"];
-const AB: Term[] = ["א", "ב"];
+type Def = Omit<DegreeCourse, "area" | "block" | "exam" | "offered"> & { exam?: boolean };
+const make = (area: Area, block: Block, exam: boolean) => (c: Def): DegreeCourse => ({ exam, ...c, area, block, offered: termsOf(c.code) });
+const MATH = make("math", "math", true);
+const CORE = make("cs", "cs-core", true);
+const ELEC = make("cs", "cs-elective", true);
+const SEM = (c: Omit<Def, "level" | "credits">): DegreeCourse =>
+  make("cs", "seminar", false)({ credits: 3, level: "seminar", minCs: 36, biblio: true, afterAdvanced: true, approval: true, ...c });
+const WORK = (c: Omit<Def, "level" | "credits">): DegreeCourse => make("cs", "workshop", false)({ credits: 3, level: "seminar", minCs: 36, biblio: true, ...c });
+
 const JAVA = ["20441", "11238"];
 const DS = ["20407"];
 
 /** Program AF course list (the courses the planner knows). */
 export const COURSES: DegreeCourse[] = [
   // א. math, mandatory 35
-  MATH({ code: "20476", name: "מתמטיקה בדידה", credits: 4, level: "regular", offered: ALL }),
-  MATH({ code: "20109", name: "אלגברה לינארית 1", credits: 7, level: "regular", offered: ALL, known: { "2027ב": true, "2027ג": true } }),
-  MATH({ code: "20229", name: "אלגברה לינארית 2", credits: 5, level: "regular", needs: [["20109"]], offered: ALL, known: { "2027ב": true, "2027ג": true } }),
-  MATH({ code: "20474", name: "חשבון אינפיניטסימלי 1", credits: 7, level: "regular", offered: ALL }),
-  MATH({ code: "20475", name: "חשבון אינפיניטסימלי 2", credits: 7, level: "regular", needs: [["20474"]], offered: ALL, known: { "2027ב": true, "2027ג": true } }),
-  MATH({ code: "20425", name: "הסתברות ומבוא לסטטיסטיקה למדמ\"ח", credits: 5, level: "regular", needs: [["20474"], ["20475"]], offered: ALL, known: { "2027ב": true, "2027ג": true } }),
+  MATH({ code: "20476", name: "מתמטיקה בדידה", credits: 4, level: "regular" }),
+  MATH({ code: "20109", name: "אלגברה לינארית 1", credits: 7, level: "regular" }),
+  MATH({ code: "20229", name: "אלגברה לינארית 2", credits: 5, level: "regular", needs: [["20109"]] }),
+  MATH({ code: "20474", name: "חשבון אינפיניטסימלי 1", credits: 7, level: "regular" }),
+  MATH({ code: "20475", name: "חשבון אינפיניטסימלי 2", credits: 7, level: "regular", needs: [["20474"]] }),
+  MATH({ code: "20425", name: "הסתברות ומבוא לסטטיסטיקה למדמ\"ח", credits: 5, level: "regular", needs: [["20474"], ["20475"]] }),
 
   // ב. CS mandatory 42
-  CORE({ code: "20441", name: "מבוא למדעי המחשב ושפת Java", credits: 6, level: "regular", offered: ALL }),
-  CORE({ code: "20407", name: "מבני נתונים ומבוא לאלגוריתמים", credits: 6, level: "regular", needs: [JAVA, ["20476"]], recommended: ["20474", "20109", "20425"], offered: AB }),
-  CORE({ code: "20417", name: "אלגוריתמים", credits: 5, level: "regular", needs: [["20476"], DS, JAVA], recommended: ["20474", "20109", "20425"], offered: AB, known: { "2027ב": true, "2027ג": false } }),
-  CORE({ code: "20465", name: "מעבדה בתכנות מערכות", credits: 4, level: "regular", needs: [JAVA], offered: ALL }),
-  CORE({ code: "20604", name: "מודלים חישוביים", credits: 5, level: "regular", advanced: 2, needs: [DS], recommended: ["20417", "20466"], offered: AB, known: { "2027ב": true, "2027ג": false } }),
-  CORE({ code: "20471", name: "ארגון המחשב", credits: 4, level: "regular", offered: ALL }),
-  CORE({ code: "20466", name: "לוגיקה למדעי המחשב", credits: 4, level: "regular", needs: [["20476"]], note: "דורש גם שני קורסים במתמטיקה ושניים במדעי המחשב", offered: AB, known: { "2027ב": true, "2027ג": false } }),
-  CORE({ code: "20594", name: "מערכות הפעלה", credits: 4, level: "advanced", needs: [["20465"], DS], recommended: ["20471"], biblio: true, offered: AB, known: { "2027ב": true, "2027ג": false } }),
-  CORE({ code: "20905", name: "שפות תכנות", credits: 4, level: "advanced", needs: [DS, ["20604"], ["20465"], ["20417"]], minCs: 36, biblio: true, offered: ["ב"], known: { "2027ב": true, "2027ג": false } }),
+  CORE({ code: "20441", name: "מבוא למדעי המחשב ושפת Java", credits: 6, level: "regular" }),
+  CORE({ code: "20407", name: "מבני נתונים ומבוא לאלגוריתמים", credits: 6, level: "regular", needs: [JAVA, ["20476"]], recommended: ["20474", "20109", "20425"] }),
+  CORE({ code: "20417", name: "אלגוריתמים", credits: 5, level: "regular", needs: [["20476"], DS, JAVA], recommended: ["20474", "20109", "20425"] }),
+  CORE({ code: "20465", name: "מעבדה בתכנות מערכות", credits: 4, level: "regular", needs: [JAVA] }),
+  CORE({ code: "20604", name: "מודלים חישוביים", credits: 5, level: "regular", advanced: 2, needs: [DS], recommended: ["20417", "20466"] }),
+  CORE({ code: "20471", name: "ארגון המחשב", credits: 4, level: "regular" }),
+  CORE({ code: "20466", name: "לוגיקה למדעי המחשב", credits: 4, level: "regular", needs: [["20476"]], note: "דורש גם שני קורסים במתמטיקה ושניים במדעי המחשב" }),
+  CORE({ code: "20594", name: "מערכות הפעלה", credits: 4, level: "advanced", needs: [["20465"], DS], recommended: ["20471"], biblio: true }),
+  CORE({ code: "20905", name: "שפות תכנות", credits: 4, level: "advanced", needs: [DS, ["20604"], ["20465"], ["20417"]], minCs: 36, biblio: true }),
 
   // ב. CS electives (≥28 when the mandatory part is 42)
-  ELEC({ code: "20277", name: "מערכות בסיסי-נתונים", credits: 4, level: "regular", offered: ALL, known: { "2027ב": false, "2027ג": true } }),
-  ELEC({ code: "20436", name: "עקרונות פיתוח מערכות מידע", credits: 4, level: "regular", offered: AB, known: { "2027ב": true } }),
-  ELEC({ code: "20606", name: "תכנות וניתוח נתונים בשפת פייתון", credits: 6, level: "regular", offered: AB, known: { "2027ב": true }, note: "חפיפה עם 20441: שניהם יחד 9 נ\"ז" }),
-  ELEC({ code: "20551", name: "מבוא לבינה מלאכותית", credits: 4, level: "advanced", needs: [["20417"], DS, [...JAVA, "20606"], ["20425"]], recommended: ["20476", "20466"], biblio: true, offered: AB, known: { "2027ב": true } }),
-  ELEC({ code: "20554", name: "תכנות מתקדם בשפת Java", credits: 4, level: "advanced", needs: [DS], biblio: true, offered: AB, known: { "2027ב": true } }),
-  ELEC({ code: "20906", name: "תכנות מונחה עצמים", credits: 4, level: "advanced", needs: [DS], biblio: true, offered: AB, known: { "2027ב": true } }),
-  ELEC({ code: "20948", name: "רשתות תקשורת מחשבים", credits: 4, level: "advanced", needs: [DS, ["20425"]], recommended: ["20417"], biblio: true, offered: ["א", "ג"], known: { "2027ב": false, "2027ג": true } }),
-  ELEC({ code: "20937", name: "תכנות מערכות דפנסיבי", credits: 4, level: "advanced", needs: [["20554"], ["20465"], ["20594"]], recommended: ["20948"], biblio: true, offered: ["א", "ג"], known: { "2027א": false, "2027ב": true, "2027ג": true }, note: "ההיצע משתנה: 2025–2026 בא׳+ג׳, 2027 בב׳+ג׳" }),
-  ELEC({ code: "20562", name: "גרפיקה ממוחשבת", credits: 4, level: "advanced", needs: [["20474"], ["20475"], ["20109"], DS, ["20465"]], biblio: true, offered: ["ב"], known: { "2027ב": true } }),
-  ELEC({ code: "20580", name: "מבוא לקריפטוגרפיה", credits: 4, level: "advanced", needs: [["20109"], ["20425"], JAVA], recommended: ["20407", "20476"], biblio: true, offered: ["א"], known: { "2027ב": false, "2027ג": false } }),
-  ELEC({ code: "20595", name: "כריית מידע", credits: 4, level: "advanced", biblio: true, offered: ["ב"], known: { "2027ב": true } }),
-  ELEC({ code: "20942", name: "מבוא ללמידת מכונה", credits: 4, level: "advanced", needs: [["20425"], ["20474"], ["20475"], ["20109"], JAVA], biblio: true, offered: AB, known: { "2027ב": true, "2027ג": false } }),
-  ELEC({ code: "20944", name: "רובוטיקה אלגוריתמית", credits: 4, level: "advanced", needs: [["20109"], ["20474"], ["20475"], [...JAVA, "20606"]], recommended: ["20417"], minCredits: 36, biblio: true, offered: ["א"], known: { "2027א": true, "2027ב": true, "2027ג": false } }),
-  ELEC({ code: "20940", name: "מבוא לאבטחת המרחב המקוון", credits: 4, level: "advanced", needs: [["20594"], ["20948"]], biblio: true, offered: AB, known: { "2027ב": false } }),
-  ELEC({ code: "20946", name: "מבוא לבדיקות תוכנה (אנגלית)", credits: 4, level: "advanced", english: true, needs: [JAVA, ["20417"], ["20465"], ["20604"], ["20476"]], minCredits: 36, biblio: true, offered: ["ב"] }),
+  ELEC({ code: "20277", name: "מערכות בסיסי-נתונים", credits: 4, level: "regular" }),
+  ELEC({ code: "20436", name: "עקרונות פיתוח מערכות מידע", credits: 4, level: "regular" }),
+  ELEC({ code: "20606", name: "תכנות וניתוח נתונים בשפת פייתון", credits: 6, level: "regular", note: "חפיפה עם 20441: שניהם יחד 9 נ\"ז" }),
+  ELEC({ code: "20551", name: "מבוא לבינה מלאכותית", credits: 4, level: "advanced", needs: [["20417"], DS, [...JAVA, "20606"], ["20425"]], recommended: ["20476", "20466"], biblio: true }),
+  ELEC({ code: "20554", name: "תכנות מתקדם בשפת Java", credits: 4, level: "advanced", needs: [DS], biblio: true }),
+  ELEC({ code: "20906", name: "תכנות מונחה עצמים", credits: 4, level: "advanced", needs: [DS], biblio: true }),
+  ELEC({ code: "20948", name: "רשתות תקשורת מחשבים", credits: 4, level: "advanced", needs: [DS, ["20425"]], recommended: ["20417"], biblio: true }),
+  ELEC({ code: "20937", name: "תכנות מערכות דפנסיבי", credits: 4, level: "advanced", needs: [["20554"], ["20465"], ["20594"]], recommended: ["20948"], biblio: true }),
+  ELEC({ code: "20562", name: "גרפיקה ממוחשבת", credits: 4, level: "advanced", needs: [["20474"], ["20475"], ["20109"], DS, ["20465"]], biblio: true }),
+  ELEC({ code: "20580", name: "מבוא לקריפטוגרפיה", credits: 4, level: "advanced", needs: [["20109"], ["20425"], JAVA], recommended: ["20407", "20476"], biblio: true }),
+  ELEC({ code: "20595", name: "כריית מידע", credits: 4, level: "advanced", biblio: true }),
+  ELEC({ code: "20942", name: "מבוא ללמידת מכונה", credits: 4, level: "advanced", needs: [["20425"], ["20474"], ["20475"], ["20109"], JAVA], biblio: true }),
+  ELEC({ code: "20944", name: "רובוטיקה אלגוריתמית", credits: 4, level: "advanced", needs: [["20109"], ["20474"], ["20475"], [...JAVA, "20606"]], recommended: ["20417"], minCredits: 36, biblio: true }),
+  ELEC({ code: "20940", name: "מבוא לאבטחת המרחב המקוון", credits: 4, level: "advanced", needs: [["20594"], ["20948"]], biblio: true }),
+  ELEC({ code: "20946", name: "מבוא לבדיקות תוכנה (אנגלית)", credits: 4, level: "advanced", english: true, needs: [JAVA, ["20417"], ["20465"], ["20604"], ["20476"]], minCredits: 36, biblio: true }),
 
   // ג. seminar (3) + workshop (3)
-  SEM({ code: "20368", name: "סמינר בהנדסת תוכנה", offered: ALL, known: { "2027ב": true, "2027ג": true } }),
-  SEM({ code: "20390", name: "סמינר באלגוריתמים", offered: AB }),
-  SEM({ code: "20372", name: "סמינר בבינה מלאכותית", offered: AB }),
-  SEM({ code: "20954", name: "סמינר במדעי המחשב (אנגלית)", english: true, offered: ALL, note: "נלמד באנגלית — קורס תוכן באנגלית" }),
-  WORK({ code: "20973", name: "סדנה בסימולציה של מערכות אוטונומיות (אנגלית)", english: true, needs: [["20417"]], recommended: ["20942", "20937"], offered: ["ב"], known: { "2027ב": true } }),
-  WORK({ code: "20586", name: "סדנה בתכנות מונחה עצמים", offered: AB }),
-  WORK({ code: "20936", name: "סדנה במדעי הנתונים", offered: AB }),
+  SEM({ code: "20368", name: "סמינר בהנדסת תוכנה" }),
+  SEM({ code: "20390", name: "סמינר באלגוריתמים" }),
+  SEM({ code: "20372", name: "סמינר בבינה מלאכותית" }),
+  SEM({ code: "20954", name: "סמינר במדעי המחשב (אנגלית)", english: true, note: "נלמד באנגלית — קורס תוכן באנגלית" }),
+  WORK({ code: "20973", name: "סדנה בסימולציה של מערכות אוטונומיות (אנגלית)", english: true, needs: [["20417"]], recommended: ["20942", "20937"] }),
+  WORK({ code: "20586", name: "סדנה בתכנות מונחה עצמים" }),
+  WORK({ code: "20936", name: "סדנה במדעי הנתונים" }),
 ];
 
 export const COURSE = Object.fromEntries(COURSES.map((c) => [c.code, c])) as Record<string, DegreeCourse>;
@@ -155,7 +190,15 @@ export interface PlanItem {
   credited?: boolean;
   /** finished with a pass (set for past semesters) */
   passed?: boolean;
+  /** final grade (from Sheilta) */
   grade?: number | null;
+  /** the grade I expect, for the average calculator (future courses) */
+  expected?: number | null;
+  /** last attempt that didn't pass (Sheilta "אי עמידה בדרישות"): the item went back to "not placed" */
+  failedIn?: string;
+  /** courses outside AF (seen in Sheilta): their name and credits */
+  name?: string;
+  credits?: number;
 }
 
 export interface Recognized {
@@ -174,6 +217,8 @@ export interface PlanSettings {
   englishExempt: boolean;
   /** English content courses required (2 after a placement-test exemption, for students from 2022) */
   englishContent: number;
+  /** the degree average I aim for (average calculator) */
+  gradeTarget: number;
 }
 
 export interface DegreePlan {
@@ -183,7 +228,7 @@ export interface DegreePlan {
   settings: PlanSettings;
 }
 
-export const DEFAULT_SETTINGS: PlanSettings = { perSemester: 16, summers: false, target: null, biblioDone: false, englishExempt: false, englishContent: 2 };
+export const DEFAULT_SETTINGS: PlanSettings = { perSemester: 16, summers: false, target: null, biblioDone: false, englishExempt: false, englishContent: 2, gradeTarget: 85 };
 
 export function statusOf(item: PlanItem, current: string): ItemStatus | null {
   if (item.credited) return "credited";
@@ -219,11 +264,22 @@ function creditsBefore(plan: DegreePlan, sem: string) {
 
 export type Offer = "yes" | "usually" | "unusual" | "no";
 export function offerIn(c: DegreeCourse, sem: string): Offer {
-  const k = c.known?.[sem];
-  if (k === true) return "yes";
-  if (k === false) return "no";
+  const table = OFFER_TABLE[c.code];
+  if (table && TABLE_SEMESTERS.includes(sem)) return table.includes(sem) ? "yes" : "no";
   return c.offered.includes(termOf(sem)) ? "usually" : "unusual";
 }
+
+/** Grade weight in the degree average (sciences): credits; advanced and seminar credits count 1.5×. */
+export function gradeWeight(code: string, credits?: number): number {
+  const c = COURSE[code];
+  if (!c) return credits ?? 0;
+  if (c.level === "advanced" || c.level === "seminar") return c.credits * 1.5;
+  return c.credits - (c.advanced ?? 0) + (c.advanced ?? 0) * 1.5;
+}
+
+/** Credits of a plan item: the program's course, or what Sheilta says for a course outside AF. */
+export const creditsOf = (i: { code: string; credits?: number }) => COURSE[i.code]?.credits ?? i.credits ?? 0;
+export const nameOf = (i: { code: string; name?: string }) => COURSE[i.code]?.name ?? i.name ?? i.code;
 
 // ─── checks for one placed course ─────────────────────────────────────────────
 
@@ -236,7 +292,11 @@ export interface Issue {
 export function itemIssues(plan: DegreePlan, item: PlanItem, current: string): Issue[] {
   const c = COURSE[item.code];
   const out: Issue[] = [];
-  if (!c) return [{ severity: "warn", text: "קורס שלא בתכנית AF — בדקו שהוא נספר" }];
+  if (!c)
+    return item.passed
+      ? [{ severity: "info", text: "קורס מחוץ לתכנית: נספר בסך הנ\"ז כבחירה חופשית (עד 9 נ\"ז)" }]
+      : [{ severity: "warn", text: "קורס שלא בתכנית AF — בדקו שהוא נספר" }];
+  if (item.failedIn && !item.sem) out.push({ severity: "warn", text: `לא הושלם ב${semLabel(item.failedIn)} — לשבץ מחדש` });
   if (item.credited || !item.sem) return out;
   const st = statusOf(item, current);
   if (st === "done" || st === "now") return out; // already happened
@@ -305,7 +365,8 @@ function counted(plan: DegreePlan, current: string, onlyDone: boolean) {
   const courses = items.map((i) => COURSE[i.code]).filter(Boolean) as DegreeCourse[];
   const sum = (f: (c: DegreeCourse) => number) => courses.reduce((s, c) => s + f(c), 0);
   const recCs = plan.recognized.filter((r) => r.area === "cs").reduce((s, r) => s + r.credits, 0);
-  const recAll = plan.recognized.reduce((s, r) => s + r.credits, 0);
+  // courses outside AF (from Sheilta) count toward the total as free electives
+  const recAll = plan.recognized.reduce((s, r) => s + r.credits, 0) + items.filter((i) => !COURSE[i.code]).reduce((s, i) => s + creditsOf(i), 0);
   const adv = (c: DegreeCourse) => (c.level === "advanced" || c.level === "seminar" ? c.credits : (c.advanced ?? 0));
   return {
     codes: new Set(items.map((i) => i.code)),
@@ -365,13 +426,12 @@ export function totals(plan: DegreePlan, current: string): Totals {
   const rec = plan.recognized.reduce((s, r) => s + r.credits, 0);
   t.done += rec;
   for (const i of plan.items) {
-    const c = COURSE[i.code];
-    if (!c) continue;
+    const cr = creditsOf(i);
     const s = statusOf(i, current);
-    if (s === "credited" || s === "done") t.done += c.credits;
-    else if (s === "now") t.now += c.credits;
-    else if (s === "planned") t.planned += c.credits;
-    else t.unplaced += c.credits;
+    if (s === "credited" || s === "done") t.done += cr;
+    else if (s === "now") t.now += cr;
+    else if (s === "planned") t.planned += cr;
+    else t.unplaced += cr;
   }
   t.all = t.done + t.now + t.planned;
   return t;
@@ -387,7 +447,7 @@ export function semestersOf(plan: DegreePlan, current: string) {
     const sem = semFromIndex(k);
     const items = plan.items.filter((i) => !i.credited && i.sem === sem);
     if (termOf(sem) === "ג" && !items.length && !plan.settings.summers) continue;
-    out.push({ sem, items, credits: items.reduce((s, i) => s + (COURSE[i.code]?.credits ?? 0), 0) });
+    out.push({ sem, items, credits: items.reduce((s, i) => s + creditsOf(i), 0) });
   }
   return out;
 }
@@ -413,7 +473,7 @@ export function actions(plan: DegreePlan, current: string): { text: string; urge
         urgent: firstBiblio === next,
       });
   }
-  if (nextItems.length) out.push({ text: `להירשם ל${semLabel(next)}: ${nextItems.map((i) => COURSE[i.code]?.name ?? i.code).join(", ")}`, urgent: true });
+  if (nextItems.length) out.push({ text: `להירשם ל${semLabel(next)}: ${nextItems.map(nameOf).join(", ")}`, urgent: true });
   for (const i of plan.items) {
     const c = COURSE[i.code];
     if (c?.approval && i.sem && semIndex(i.sem) > semIndex(current))
@@ -510,13 +570,20 @@ export function cleanPlan(input: unknown): DegreePlan {
     if (!/^\d{5}$/.test(code) || seen.has(code)) continue;
     seen.add(code);
     const r = raw as PlanItem;
-    const g = Number(r.grade);
+    const grade = (v: unknown) => (v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 100 ? Math.round(Number(v)) : null);
+    const g = grade(r.grade);
+    const e = grade(r.expected);
+    const cr = Number(r.credits);
     items.push({
       code,
       sem: isSemester(r.sem) ? r.sem : null,
       ...(r.credited ? { credited: true } : {}),
       ...(r.passed ? { passed: true } : {}),
-      ...(Number.isFinite(g) && g >= 0 && g <= 100 ? { grade: Math.round(g) } : {}),
+      ...(g !== null ? { grade: g } : {}),
+      ...(e !== null ? { expected: e } : {}),
+      ...(isSemester(r.failedIn) ? { failedIn: r.failedIn } : {}),
+      ...(!COURSE[code] && typeof r.name === "string" ? { name: r.name.slice(0, 80) } : {}),
+      ...(!COURSE[code] && Number.isFinite(cr) && cr > 0 && cr <= 12 ? { credits: cr } : {}),
     });
   }
   const recognized: Recognized[] = (Array.isArray(p.recognized) ? p.recognized.slice(0, 10) : [])
@@ -535,6 +602,42 @@ export function cleanPlan(input: unknown): DegreePlan {
     biblioDone: !!s.biblioDone,
     englishExempt: !!s.englishExempt,
     englishContent: [0, 1, 2].includes(Number(s.englishContent)) ? Number(s.englishContent) : 2,
+    gradeTarget: Number(s.gradeTarget) >= 60 && Number(s.gradeTarget) <= 100 ? Math.round(Number(s.gradeTarget)) : 85,
   };
   return { program: "AF", items, recognized, settings };
+}
+
+// ─── what-if scenarios ────────────────────────────────────────────────────────
+
+export interface Scenario {
+  id: string;
+  name: string;
+  plan: DegreePlan;
+}
+export const MAX_SCENARIOS = 5;
+
+export function cleanScenarios(input: unknown): Scenario[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: Scenario[] = [];
+  for (const raw of input.slice(0, MAX_SCENARIOS)) {
+    const r = (raw ?? {}) as Partial<Scenario>;
+    const id = String(r.id ?? "");
+    if (!/^[a-z0-9]{6,24}$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: String(r.name ?? "").trim().slice(0, 40) || "תרחיש", plan: cleanPlan(r.plan) });
+  }
+  return out;
+}
+
+/** What differs between two plans: courses that moved, were added or removed. */
+export function planDiff(a: DegreePlan, b: DegreePlan): { code: string; name: string; from: string | null; to: string | null; kind: "moved" | "added" | "removed" }[] {
+  const out: ReturnType<typeof planDiff> = [];
+  for (const x of a.items) {
+    const y = b.items.find((i) => i.code === x.code);
+    if (!y) out.push({ code: x.code, name: nameOf(x), from: x.sem, to: null, kind: "removed" });
+    else if (y.sem !== x.sem && !x.credited) out.push({ code: x.code, name: nameOf(x), from: x.sem, to: y.sem, kind: "moved" });
+  }
+  for (const y of b.items) if (!a.items.some((i) => i.code === y.code)) out.push({ code: y.code, name: nameOf(y), from: null, to: y.sem, kind: "added" });
+  return out;
 }

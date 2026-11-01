@@ -165,3 +165,5 @@ export const setMeetupFilesDone = w(MeetFiles.setMeetupFilesDone);
 
 import * as Degree from "@/app/degreeActions";
 export const saveDegreePlan = w(Degree.saveDegreePlan);
+export const saveScenarios = w(Degree.saveScenarios);
+export const importSheilta = w(Degree.importSheilta);

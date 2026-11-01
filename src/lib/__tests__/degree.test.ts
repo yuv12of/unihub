@@ -8,7 +8,7 @@ const CURRENT = "2027א";
 const plan: DegreePlan = {
   program: "AF",
   recognized: [{ label: "הכרה בלימודים קודמים — מדעים (140)", area: "science", credits: 9 }],
-  settings: { perSemester: 16, summers: false, target: "2029ב", biblioDone: false, englishExempt: true, englishContent: 2 },
+  settings: { perSemester: 16, summers: false, target: "2029ב", biblioDone: false, englishExempt: true, englishContent: 2, gradeTarget: 85 },
   items: [
     { code: "20441", sem: null, credited: true },
     { code: "20471", sem: null, credited: true },
@@ -68,8 +68,12 @@ test("prerequisite and offering errors are caught", () => {
   const bad: DegreePlan = { ...plan, settings: { ...plan.settings, biblioDone: true }, items: plan.items.map((i) => (i.code === "20425" ? { ...i, sem: "2027ב" } : i.code === "20580" ? { ...i, sem: "2028ב" } : i)) };
   const p425 = itemIssues(bad, bad.items.find((i) => i.code === "20425")!, CURRENT);
   assert.ok(p425.some((x) => x.severity === "error" && x.text.includes("חשבון אינפיניטסימלי 2")));
+  // inside the official two-year table (2027א–2028ג): offered or not, no guessing
   const p580 = itemIssues(bad, bad.items.find((i) => i.code === "20580")!, CURRENT);
-  assert.ok(p580.some((x) => x.text.includes("בדרך כלל נפתח רק")));
+  assert.ok(p580.some((x) => x.severity === "error" && x.text.startsWith("לא נפתח ב")));
+  // beyond it: the table's terms are "usually" — 20937 ran only in ב׳ and ג׳ in 2027–2028
+  const p937 = itemIssues(bad, bad.items.find((i) => i.code === "20937")!, CURRENT);
+  assert.ok(p937.some((x) => x.severity === "warn" && x.text.includes("בדרך כלל נפתח רק ב: ב׳, ג׳")));
 });
 
 test("the original draft's 20937 without 20554 is flagged", () => {

@@ -39,6 +39,7 @@ import { getForumPosts } from "@/lib/forum";
 import { SessionAgendaFor } from "@/components/SessionAgendaFor";
 import { PracticeMarksCard } from "@/components/PracticeMarks";
 import { ExamCandidates } from "@/components/ExamCandidates";
+import { DegreeTodayCard } from "@/components/DegreeTodayCard";
 import { DayCheckCard } from "@/components/DayCheckCard";
 import { MeetupFilesCard } from "@/components/MeetupFilesCard";
 import { MeetupBanner } from "@/components/MeetupBanner";
@@ -524,6 +525,11 @@ async function Today() {
 
         <PracticeMarksCard />
         <ExamCandidates />
+        {show("degree") && (
+          <Suspense fallback={null}>
+            <DegreeTodayCard today={today} current={semester.semester} />
+          </Suspense>
+        )}
 
         {show("live") && (
           <StudyingNow

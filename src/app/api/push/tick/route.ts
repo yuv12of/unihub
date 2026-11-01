@@ -7,6 +7,9 @@ import { syncDueGoogle } from "@/lib/googleCal";
 import { adminClient } from "@/lib/supabase/admin";
 import { backfillAttachmentText } from "@/lib/pdfText";
 import { scanExamMails } from "@/lib/examScan";
+import { cleanPlan } from "@/lib/degree";
+import { registrationPushes } from "@/lib/registration";
+import type { SheiltaSnapshot } from "@/lib/sheilta";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -25,7 +28,10 @@ export async function POST(req: Request) {
   const now = israelNow();
 
   let sent = 0;
-  if (data.feed.subscriptions.length) sent += await sendPush(token, data.feed.subscriptions, remindersFor(data, now, await extrasByToken(token)));
+  if (data.feed.subscriptions.length) {
+    const { data: degree } = await anonClient().rpc("degree_feed", { p_token: token });
+    sent += await sendPush(token, data.feed.subscriptions, [...remindersFor(data, now, await extrasByToken(token)), ...degreePushes(degree, now, data.offDays)]);
+  }
 
   const admin = adminClient();
   let others = 0;
@@ -47,7 +53,8 @@ export async function POST(req: Request) {
       if (!feed) continue;
       const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
       const built = buildFromFeed(full, await restForFeed(full));
-      others += await sendPushAsServer(userId, list, remindersFor(built, now, await extrasByUser(admin, userId)));
+      const { data: degree } = await admin.from("degree_plans").select("plan, sheilta").eq("user_id", userId).maybeSingle();
+      others += await sendPushAsServer(userId, list, [...remindersFor(built, now, await extrasByUser(admin, userId)), ...degreePushes(degree, now, built.offDays)]);
     }
     pdfs = await backfillAttachmentText(admin).catch(() => 0);
     // Exam dates in new mail (after PDF text, the Sheilta notice is a PDF); Saturday night a wider safety scan.
@@ -57,6 +64,14 @@ export async function POST(req: Request) {
     google = await syncDueGoogle(admin);
   }
   return Response.json({ sent, others, google, pdfs, exams });
+}
+
+/** Registration reminders from the degree plan (src/lib/registration.ts). On a rough day only the last-day ones. */
+function degreePushes(row: unknown, now: { date: string; minutes: number }, offDays: string[]) {
+  const r = row as { plan?: unknown; sheilta?: SheiltaSnapshot | null } | null;
+  if (!r?.plan) return [];
+  const items = registrationPushes(cleanPlan(r.plan), r.sheilta ?? null, now);
+  return offDays.includes(now.date) ? items.filter((i) => /\|(last|late)$/.test(i.key)) : items;
 }
 
 type Row = { id: string; kind?: string; trigger_kind?: string; params: IfThenPlan["params"] | null; action: string; active: boolean };

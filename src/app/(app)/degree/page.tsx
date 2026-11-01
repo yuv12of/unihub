@@ -4,8 +4,10 @@ import { DegreePlanner } from "@/components/DegreePlanner";
 import { getCourses } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { cleanPlan, DEFAULT_SETTINGS, type DegreePlan } from "@/lib/degree";
-import { CURRENT_SEMESTER } from "@/lib/semester";
+import { cleanPlan, cleanScenarios, DEFAULT_SETTINGS, type DegreePlan, type Scenario } from "@/lib/degree";
+import type { SheiltaSnapshot } from "@/lib/sheilta";
+import type { KnownExam } from "@/lib/examLoad";
+import { CURRENT_SEMESTER, todayInIsrael } from "@/lib/semester";
 
 /** The whole degree, semester by semester, checked against the program's rules. */
 export default function DegreePage() {
@@ -26,15 +28,24 @@ async function Degree() {
   await connection();
   const current = CURRENT_SEMESTER.code;
   let plan: DegreePlan | null = null;
+  let scenarios: Scenario[] = [];
+  let snapshot: SheiltaSnapshot | null = null;
+  let exams: KnownExam[] = [];
   if (supabaseEnabled) {
     const sb = await createClient();
-    const { data } = await sb.from("degree_plans").select("plan").maybeSingle();
+    const [{ data }, { data: ex }] = await Promise.all([
+      sb.from("degree_plans").select("plan, scenarios, sheilta").maybeSingle(),
+      sb.from("exams").select("course_code, date, moed, chosen").eq("semester", current),
+    ]);
     if (data?.plan) plan = cleanPlan(data.plan);
+    scenarios = cleanScenarios(data?.scenarios ?? []);
+    snapshot = (data?.sheilta as SheiltaSnapshot | null) ?? null;
+    exams = (ex ?? []) as KnownExam[];
   }
   if (!plan) {
     // a first plan: this semester's courses; the rest is added on the page
     const courses = await getCourses();
     plan = { program: "AF", items: courses.map((c) => ({ code: c.code, sem: current })), recognized: [], settings: DEFAULT_SETTINGS };
   }
-  return <DegreePlanner initial={plan} current={current} editable={supabaseEnabled} />;
+  return <DegreePlanner initial={plan} initialScenarios={scenarios} snapshot={snapshot} knownExams={exams} current={current} today={todayInIsrael()} editable={supabaseEnabled} />;
 }
