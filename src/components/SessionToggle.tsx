@@ -10,8 +10,8 @@ import {
 } from "@/app/act";
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks, freeTaskKey } from "@/components/FocusTasks";
-import { FocusDesktop, useWide, type FocusClock } from "@/components/FocusDesktop";
-import { FocusReader, useFocusDoc } from "@/components/FocusReader";
+import { FocusDesktop, useWide, type FocusClock, type FocusView } from "@/components/FocusDesktop";
+import { FocusReader, useFocusDoc, type ReaderDoc } from "@/components/FocusReader";
 import { assignmentOf } from "@/lib/agenda";
 import { pace, readHistory, recordFocus, wrapUp } from "@/lib/focusStats";
 import { Icon } from "@/components/Icon";
@@ -181,8 +181,9 @@ export function FocusTimer({
   // a planned assignment session ("…|assignment|20109|a12-2") opens that assignment's sheet
   const [, kind, , ref] = (taskKey ?? "").split("|");
   const sessionAssignment = kind === "assignment" ? assignmentOf(ref) : null;
-  const { doc: fb } = useFocusDoc(courseCode ?? null, { book, assignment: assignment ?? sessionAssignment, preferAssignment: kind === "assignment" });
-  const [reading, setReading] = useState(!!book || !!assignment);
+  const docs = useFocusDoc(courseCode ?? null, { book, assignment: assignment ?? sessionAssignment, preferAssignment: kind === "assignment" });
+  // what the stage shows: the clock, the book chapter or the assignment sheet
+  const [view, setView] = useState<FocusView>(assignment ? "assignment" : book ? "book" : "timer");
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     startStudyLive({ title, minutes, with_user: withUser ?? null }).catch(
@@ -303,9 +304,9 @@ export function FocusTimer({
         taskKey={taskKey ?? freeTaskKey(courseCode)}
         onCounts={setCounts}
         stuck={<Stuck inline courseCode={courseCode ?? null} title={title} />}
-        doc={fb}
-        reading={reading}
-        onReading={setReading}
+        docs={docs}
+        view={view}
+        onView={setView}
       />,
       document.body,
     );
@@ -313,7 +314,9 @@ export function FocusTimer({
 
   // Phone: the book takes the screen under a slim timer bar. The timer view stays mounted (hidden)
   // so the music and the task list carry on.
-  const inBook = reading && !!fb;
+  const fb = view === "book" ? docs.book : view === "assignment" ? docs.assignment : null;
+  const inBook = !!fb;
+  const cards = (docs.prefer === "assignment" ? [docs.assignment, docs.book] : [docs.book, docs.assignment]).filter((d): d is ReaderDoc => !!d);
   return createPortal(
     <div
       className={`fixed inset-0 z-50 bg-surface ${inBook ? "flex flex-col" : "overflow-y-auto"}`}
@@ -324,7 +327,7 @@ export function FocusTimer({
       {inBook && fb && (
         <>
           <div className="flex shrink-0 items-center gap-2 border-b border-rule px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-            <button type="button" onClick={() => setReading(false)} className="inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm text-ink-soft">
+            <button type="button" onClick={() => setView("timer")} className="inline-flex min-h-11 items-center gap-1 rounded-full px-2 text-sm text-ink-soft">
               <Icon name="chevronRight" className="size-4" />
               טיימר
             </button>
@@ -414,15 +417,29 @@ export function FocusTimer({
               ביטול
             </button>
           </div>
-          {fb && (
-            <button type="button" onClick={() => setReading(true)} className="mt-5 flex w-full max-w-sm items-center gap-3 rounded-2xl border border-rule px-4 py-3 text-start">
-              <Icon name={fb.cta.icon} className="size-5 shrink-0" />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{fb.cta.title}</span>
-                <span className="block truncate text-sm text-ink-soft">{fb.cta.sub}</span>
-              </span>
-              <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
-            </button>
+          {(cards.length > 0 || docs.link) && (
+            <div className="mt-5 grid w-full max-w-sm gap-2">
+              {cards.map((d) => (
+                <button key={d.kind} type="button" onClick={() => setView(d.kind)} className="flex items-center gap-3 rounded-2xl border border-rule px-4 py-3 text-start">
+                  <Icon name={d.cta.icon} className="size-5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{d.cta.title}</span>
+                    <span className="block truncate text-sm text-ink-soft">{d.cta.sub}</span>
+                  </span>
+                  <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
+                </button>
+              ))}
+              {docs.link && (
+                <a href={docs.link.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-rule px-4 py-3 text-start">
+                  <Icon name="pencil" className="size-5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{docs.link.title}</span>
+                    <span className="block truncate text-sm text-ink-soft">{docs.link.sub}</span>
+                  </span>
+                  <Icon name="chevronLeft" className="size-4 shrink-0 text-ink-soft" />
+                </a>
+              )}
+            </div>
           )}
           <Stuck courseCode={courseCode ?? null} title={title} />
           <FocusMusic running={!!state.since && !over} over={over} />

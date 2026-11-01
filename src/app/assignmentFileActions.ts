@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { action, must } from "@/app/guard";
 import { adminClient } from "@/lib/supabase/admin";
-import { ASSIGNMENT_FILE_MAX, BOOKLET, sheetFor } from "@/lib/assignmentFiles";
+import { ASSIGNMENT_FILE_MAX, BOOKLET, linkFor, sheetFor } from "@/lib/assignmentFiles";
 import { getCourses } from "@/lib/userdata";
 import { semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
@@ -124,18 +124,18 @@ export interface FocusAssignment {
   n: string;
   /** "ממ״ן 12" */
   label: string;
-  fileId: string;
-  name: string;
-  /** signed link (1 hour) */
-  url: string;
-  page: number;
-  /** the course's assignments that have a sheet, to switch without leaving the timer */
-  options: { n: string; label: string }[];
+  /** the stored PDF sheet, opened at the saved page (null for an online assignment) */
+  sheet: { fileId: string; name: string; url: string; page: number } | null;
+  /** an online assignment's link on Opal */
+  link: string | null;
+  /** the course's assignments that have a sheet or a link, to switch without leaving the timer */
+  options: { n: string; label: string; online: boolean }[];
 }
 
 /**
- * The assignment sheet to work from in the focus timer: assignment n when given, else the next one
- * due that isn't submitted, opened at the saved page. Null when no sheet was uploaded.
+ * The assignment to work on in the focus timer: assignment n when given, else the next one due
+ * that isn't submitted (with a sheet or a link). A file assignment comes with its PDF (signed link,
+ * opened at the saved page); an online one with its Opal link. Null when nothing was added.
  */
 export async function getFocusAssignment(input: { courseCode: string | null; n?: string | null }): Promise<FocusAssignment | null | { failed: string }> {
   return action("getFocusAssignment", async ({ supabase }) => {
@@ -148,32 +148,33 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
     ]);
     const files = (rows ?? []).map((r) => ({ ...r, pdf: !!r.path && /\.pdf$/i.test(r.path) }));
     if (!files.length) return null;
-    const course = courses.find((c) => c.code === code);
-    const list = course?.assignments ?? [];
+    const list = courses.find((c) => c.code === code)?.assignments ?? [];
     const label = (n: string) => {
       const a = list.find((x) => x.n === n);
       return n === BOOKLET ? "חוברת המטלות" : `${a ? typeLabel[a.type] : "מטלה"} ${n}`;
     };
+    const has = (n: string) => !!sheetFor(files, n) || !!linkFor(files, n);
     const closed = new Set((progress ?? []).filter((p) => p.status === "submitted" || p.status === "skipped").map((p) => p.n));
     const today = todayInIsrael();
     const wanted = input.n && N.test(input.n) ? input.n : null;
-    const next = [...list].filter((a) => a.due >= today && !closed.has(a.n) && sheetFor(files, a.n)).sort((a, b) => a.due.localeCompare(b.due))[0]?.n;
-    const n = wanted ?? next ?? files[0].n;
-    // only a stored PDF opens in the timer (an online assignment's link doesn't)
+    const next = [...list].filter((a) => a.due >= today && !closed.has(a.n) && has(a.n)).sort((a, b) => a.due.localeCompare(b.due))[0]?.n;
+    const n = wanted ?? next ?? list.find((a) => has(a.n))?.n;
+    if (!n) return null;
     const file = sheetFor(files, n);
-    if (!file?.path) return null;
-    const { data: signed } = await admin().storage.from(BUCKET).createSignedUrl(file.path, 3600);
-    if (!signed?.signedUrl) return null;
-    const withSheet = list.filter((a) => sheetFor(files, a.n)).map((a) => ({ n: a.n, label: label(a.n) }));
+    let sheet: FocusAssignment["sheet"] = null;
+    if (file?.path) {
+      const { data: signed } = await admin().storage.from(BUCKET).createSignedUrl(file.path, 3600);
+      if (signed?.signedUrl) sheet = { fileId: file.id, name: file.name, url: signed.signedUrl, page: file.last_page ?? 1 };
+    }
+    const link = sheet ? null : (linkFor(files, n)?.url ?? null);
+    if (!sheet && !link) return null;
     return {
       course: code,
       n,
       label: label(n),
-      fileId: file.id,
-      name: file.name,
-      url: signed.signedUrl,
-      page: file.last_page ?? 1,
-      options: withSheet.length ? withSheet : [{ n, label: label(n) }],
+      sheet,
+      link,
+      options: list.filter((a) => has(a.n)).map((a) => ({ n: a.n, label: label(a.n), online: !sheetFor(files, a.n) })),
     };
   });
 }

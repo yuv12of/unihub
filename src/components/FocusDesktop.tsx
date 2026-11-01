@@ -5,8 +5,11 @@ import { FOCUS_EVENT, useMinWidth, type FocusRequest } from "@/components/focusS
 import { createPortal } from "react-dom";
 import { FocusMusic } from "@/components/FocusMusic";
 import { FocusTasks } from "@/components/FocusTasks";
-import { Chevron, Icon } from "@/components/Icon";
-import { FocusReader, type ReaderDoc } from "@/components/FocusReader";
+import { Chevron, Icon, type IconName } from "@/components/Icon";
+
+/** What the focus page shows on its stage. */
+export type FocusView = "timer" | "book" | "assignment";
+import { FocusReader, type FocusDocs, type ReaderDoc } from "@/components/FocusReader";
 
 /** What the timer knows, shared by the phone layout, this one and the floating window. */
 export interface FocusClock {
@@ -38,7 +41,7 @@ const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isConte
  * The focus page on a computer: a header with the session and its window controls, the timer on
  * the main stage, and a side panel with the session's tasks, "I'm stuck" and music. With a chapter
  * to read, the stage turns into the book (the timer moves into the header) and the panel can fold
- * away. Keyboard: space (timer view) or K pauses, B book / timer, N task, S stuck, F full screen,
+ * away. Keyboard: space (timer view) or K pauses, B book, M assignment, N task, S stuck, F full screen,
  * P floating window; in the book ← / → turn pages. Keys go by position, so the Hebrew layout works.
  */
 export function FocusDesktop({
@@ -47,9 +50,9 @@ export function FocusDesktop({
   taskKey,
   onCounts,
   stuck,
-  doc,
-  reading,
-  onReading,
+  docs,
+  view,
+  onView,
 }: {
   c: FocusClock;
   courseCode: string | null;
@@ -57,22 +60,28 @@ export function FocusDesktop({
   onCounts: (x: { done: number; total: number; open: number }) => void;
   /** the "I'm stuck" box (it saves through the timer's own action) */
   stuck: React.ReactNode;
-  /** the chapter or assignment sheet to read in this session (useFocusDoc) */
-  doc: ReaderDoc | null;
-  reading: boolean;
-  onReading: (on: boolean) => void;
+  /** the chapter and the assignment this session can show (useFocusDoc) */
+  docs: FocusDocs;
+  view: FocusView;
+  onView: (v: FocusView) => void;
 }) {
   const [full, setFull] = useState(false);
   // the side panel next to the book: open on a big screen, folded on a small laptop
   const [panel, setPanel] = useState(() => window.matchMedia("(min-width: 1280px)").matches);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
   const pip = useFloatingWindow(c.title);
-  const fb = doc;
-  const inBook = reading && !!fb;
-  const docLabel = doc?.kind === "assignment" ? "מטלה" : "ספר";
-  const live = useRef({ c, inBook, fb: !!fb, onReading });
+  const active = view === "book" ? docs.book : view === "assignment" ? docs.assignment : null;
+  const inBook = !!active;
+  const views: [FocusView, string, IconName][] = [
+    ["timer", "טיימר", "timer"],
+    ...(docs.book ? [["book", "ספר", "book"] as [FocusView, string, IconName]] : []),
+    ...(docs.assignment ? [["assignment", "מטלה", "pencil"] as [FocusView, string, IconName]] : []),
+  ];
+  // the session's subject first: an assignment session offers the assignment before the book
+  const cards = (docs.prefer === "assignment" ? [docs.assignment, docs.book] : [docs.book, docs.assignment]).filter((d): d is ReaderDoc => !!d);
+  const live = useRef({ c, view, docs, onView });
   useEffect(() => {
-    live.current = { c, inBook, fb: !!fb, onReading };
+    live.current = { c, view, docs, onView };
   });
 
   useEffect(() => {
@@ -94,8 +103,9 @@ export function FocusDesktop({
         f();
       };
       // in the book, space scrolls the page as usual; K pauses everywhere
-      if (((e.code === "Space" && !l.inBook) || e.code === "KeyK") && !l.c.over) go(l.c.onToggle);
-      else if (e.code === "KeyB" && l.fb) go(() => l.onReading(!l.inBook));
+      if (((e.code === "Space" && l.view === "timer") || e.code === "KeyK") && !l.c.over) go(l.c.onToggle);
+      else if (e.code === "KeyB" && l.docs.book) go(() => l.onView(l.view === "book" ? "timer" : "book"));
+      else if (e.code === "KeyM" && l.docs.assignment) go(() => l.onView(l.view === "assignment" ? "timer" : "assignment"));
       else if (e.code === "KeyN") go(() => document.getElementById("focus-task")?.focus());
       else if (e.code === "KeyS") go(() => document.getElementById("focus-stuck")?.focus());
       else if (e.code === "KeyF") go(toggleFull);
@@ -118,18 +128,15 @@ export function FocusDesktop({
           <h2 className="truncate font-semibold">{c.title}</h2>
         </div>
 
-        {fb && (
+        {views.length > 1 && (
           <div className="flex shrink-0 rounded-full border border-rule p-0.5" role="group" aria-label="תצוגה">
-            {([
-              [false, "טיימר", "timer"],
-              [true, docLabel, doc?.cta.icon ?? "book"],
-            ] as const).map(([v, label, icon]) => (
+            {views.map(([v, label, icon]) => (
               <button
-                key={label}
+                key={v}
                 type="button"
-                onClick={() => onReading(v)}
-                aria-pressed={inBook === v}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm ${inBook === v ? "bg-accent text-on-accent" : "text-ink-soft hover:text-ink"}`}
+                onClick={() => onView(v)}
+                aria-pressed={view === v}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm ${view === v ? "bg-accent text-on-accent" : "text-ink-soft hover:text-ink"}`}
               >
                 <Icon name={icon} className="size-4" />
                 {label}
@@ -177,16 +184,16 @@ export function FocusDesktop({
       </header>
 
       <div className={`grid min-h-0 flex-1 ${showPanel ? "grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]" : "grid-cols-1"}`}>
-        {inBook && fb ? (
+        {active ? (
           <main ref={setScrollEl} className="min-h-0 overflow-y-auto">
-            <FocusReader key={fb.key} doc={fb} scrollRoot={scrollEl} wide />
+            <FocusReader key={active.key} doc={active} scrollRoot={scrollEl} wide />
           </main>
         ) : (
-          <main className="flex min-h-0 flex-col items-center justify-center overflow-y-auto px-10 py-8">
+          <main className="flex min-h-0 flex-col items-center overflow-y-auto px-10 py-8 [&>*:first-child]:mt-auto [&>*:last-child]:mb-auto">
             <p className={`text-lg ${c.over ? "font-semibold" : "text-ink-soft"}`} aria-live="polite">
               {c.over ? "הזמן שתכננת נגמר. כל הכבוד!" : c.running ? "לומדים" : "מושהה"}
             </p>
-            <div className="relative mt-6 grid aspect-square w-[min(28rem,48vh)] place-items-center">
+            <div className="relative mt-6 grid aspect-square w-[min(28rem,42vh)] place-items-center">
               <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90" aria-hidden>
                 <circle cx="50" cy="50" r={R} fill="none" stroke="var(--rule)" strokeWidth="2.5" />
                 <circle
@@ -224,26 +231,44 @@ export function FocusDesktop({
               </button>
             </div>
 
-            {fb && (
-              <button
-                type="button"
-                onClick={() => onReading(true)}
-                className="mt-8 flex w-full max-w-md items-center gap-4 rounded-2xl border border-rule bg-surface px-5 py-4 text-start hover:border-ink"
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-bg">
-                  <Icon name={fb.cta.icon} className="size-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{fb.cta.title}</span>
-                  <span className="block truncate text-sm text-ink-soft">{fb.cta.sub}</span>
-                </span>
-                <Chevron dir="forward" />
-              </button>
+            {(cards.length > 0 || docs.link) && (
+              <div className="mt-8 grid w-full max-w-md gap-2">
+                {cards.map((d) => (
+                  <button
+                    key={d.kind}
+                    type="button"
+                    onClick={() => onView(d.kind)}
+                    className="flex items-center gap-4 rounded-2xl border border-rule bg-surface px-5 py-4 text-start hover:border-ink"
+                  >
+                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-bg">
+                      <Icon name={d.cta.icon} className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{d.cta.title}</span>
+                      <span className="block truncate text-sm text-ink-soft">{d.cta.sub}</span>
+                    </span>
+                    <Chevron dir="forward" />
+                  </button>
+                ))}
+                {docs.link && (
+                  <a href={docs.link.url} target="_blank" rel="noreferrer" className="flex items-center gap-4 rounded-2xl border border-rule bg-surface px-5 py-4 text-start hover:border-ink">
+                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-bg">
+                      <Icon name="pencil" className="size-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{docs.link.title}</span>
+                      <span className="block truncate text-sm text-ink-soft">{docs.link.sub}</span>
+                    </span>
+                    <Chevron dir="forward" />
+                  </a>
+                )}
+              </div>
             )}
 
             <dl className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-soft" aria-label="קיצורי מקלדת">
               {!c.over && <Shortcut k="רווח" label={c.running ? "השהיה" : "המשך"} />}
-              {fb && <Shortcut k="B" label={docLabel} />}
+              {docs.book && <Shortcut k="B" label="ספר" />}
+              {docs.assignment && <Shortcut k="M" label="מטלה" />}
               <Shortcut k="N" label="משימה חדשה" />
               <Shortcut k="S" label="נתקעתי" />
               <Shortcut k="F" label="מסך מלא" />

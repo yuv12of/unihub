@@ -35,25 +35,35 @@ export interface ReaderDoc {
 
 type Want = { book?: { bookId: string; idx: number } | null; assignment?: string | null; preferAssignment?: boolean };
 
+/** What the focus timer can show besides the clock: the book chapter, the assignment, or its link. */
+export interface FocusDocs {
+  book: ReaderDoc | null;
+  assignment: ReaderDoc | null;
+  /** an online assignment: open it on Opal (it can't be read inside the timer) */
+  link: { title: string; sub: string; url: string } | null;
+  /** which one this session is about (an assignment session, or one opened from an assignment) */
+  prefer: "book" | "assignment";
+  ready: boolean;
+}
+
 /**
- * What to read in this focus session. An assignment session (or one opened from an assignment)
- * gets that assignment's sheet; otherwise the chapter given, else what the course's plan says to
- * read next. Falls back to the other one when the first isn't there.
+ * What to read in this focus session: the chapter given (else what the course's plan says to read
+ * next) and the assignment given (else the next one due), both offered in every session. An
+ * assignment session, or one opened from an assignment, starts on the assignment.
  */
-export function useFocusDoc(courseCode: string | null, want: Want): { doc: ReaderDoc | null; ready: boolean } {
+export function useFocusDoc(courseCode: string | null, want: Want): FocusDocs {
   const [fb, setFb] = useState<FocusBook | null>(null);
   const [fa, setFa] = useState<FocusAssignment | null>(null);
   const [ready, setReady] = useState(false);
   const bookKey = want.book ? `${want.book.bookId}:${want.book.idx}` : "";
   const aKey = want.assignment ?? "";
-  const prefer = !!(want.preferAssignment || want.assignment);
 
   useEffect(() => {
     let alive = true;
     const [bookId, idx] = bookKey ? bookKey.split(":") : [null, null];
     Promise.all([
       getFocusBook({ courseCode, bookId, idx: idx == null ? null : Number(idx) }).catch(() => null),
-      prefer ? getFocusAssignment({ courseCode, n: aKey || null }).catch(() => null) : Promise.resolve(null),
+      getFocusAssignment({ courseCode, n: aKey || null }).catch(() => null),
     ]).then(([b, a]) => {
       if (!alive) return;
       setFb(b);
@@ -63,7 +73,7 @@ export function useFocusDoc(courseCode: string | null, want: Want): { doc: Reade
     return () => {
       alive = false;
     };
-  }, [courseCode, bookKey, aKey, prefer]);
+  }, [courseCode, bookKey, aKey]);
 
   const openChapter = async (v: string) => {
     if (!fb) return;
@@ -75,7 +85,7 @@ export function useFocusDoc(courseCode: string | null, want: Want): { doc: Reade
     if (r) setFa(r);
   };
 
-  const bookDoc: ReaderDoc | null = fb && {
+  const book: ReaderDoc | null = fb && {
     key: `book:${fb.chapterId}`,
     heading: fb.bookTitle,
     url: fb.url,
@@ -91,20 +101,26 @@ export function useFocusDoc(courseCode: string | null, want: Want): { doc: Reade
     chapterId: fb.chapterId,
     next: fb.chapters.some((c) => c.idx === fb.idx + 1) ? String(fb.idx + 1) : null,
   };
-  const assignmentDoc: ReaderDoc | null = fa && {
-    key: `assignment:${fa.fileId}:${fa.n}`,
-    heading: "מטלות הקורס",
-    url: fa.url,
-    page: fa.page,
-    options: fa.options.map((o) => ({ value: o.n, label: o.label })),
-    current: fa.n,
-    pickLabel: "מטלה",
-    onPick: openAssignment,
-    onSave: (p) => void saveAssignmentPlace(fa.fileId, p).catch(() => {}),
-    cta: { title: `דף ה${fa.label}`, sub: fa.page > 1 ? `${fa.name}, מעמ׳ ${fa.page}` : fa.name, icon: "pencil" },
-    kind: "assignment",
-  };
-  return { doc: prefer ? (assignmentDoc ?? bookDoc) : (bookDoc ?? assignmentDoc), ready };
+  const sheet = fa?.sheet ?? null;
+  const assignment: ReaderDoc | null =
+    fa && sheet
+      ? {
+          key: `assignment:${sheet.fileId}:${fa.n}`,
+          heading: "מטלות הקורס",
+          url: sheet.url,
+          page: sheet.page,
+          // online ones open on Opal, so the picker lists the ones with a sheet
+          options: fa.options.filter((o) => !o.online).map((o) => ({ value: o.n, label: o.label })),
+          current: fa.n,
+          pickLabel: "מטלה",
+          onPick: openAssignment,
+          onSave: (p) => void saveAssignmentPlace(sheet.fileId, p).catch(() => {}),
+          cta: { title: `לעבוד על ${fa.label}`, sub: sheet.page > 1 ? `דף המטלה, מעמ׳ ${sheet.page}` : "דף המטלה בתוך הטיימר", icon: "pencil" },
+          kind: "assignment",
+        }
+      : null;
+  const link = fa?.link ? { title: `${fa.label} באופל`, sub: "מטלה מקוונת: נפתחת בלשונית חדשה", url: fa.link } : null;
+  return { book, assignment, link, prefer: want.preferAssignment || want.assignment ? "assignment" : "book", ready };
 }
 
 /**
