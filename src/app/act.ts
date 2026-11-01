@@ -162,3 +162,6 @@ export const addMeetupFile = w(MeetFiles.addMeetupFile);
 export const addMeetupLink = w(MeetFiles.addMeetupLink);
 export const deleteMeetupFile = w(MeetFiles.deleteMeetupFile);
 export const setMeetupFilesDone = w(MeetFiles.setMeetupFilesDone);
+
+import * as Degree from "@/app/degreeActions";
+export const saveDegreePlan = w(Degree.saveDegreePlan);

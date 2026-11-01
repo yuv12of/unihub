@@ -19,6 +19,7 @@ const items: Item[] = [
   { href: "/", label: "היום", icon: IconToday, group: "study" },
   { href: "/semester", label: "לוח שנה", icon: IconSemester, group: "study" },
   { href: "/courses", label: "קורסים", icon: IconCourses, group: "study" },
+  { href: "/degree", label: "תכנית התואר", icon: IconDegree, group: "study" },
   { href: "/books", label: "ספרים", icon: IconBooks, group: "study" },
   { href: "/study", label: "תרגול", icon: IconStudy, group: "study" },
   { href: "/log", label: "יומן שעות", icon: IconLog, group: "study" },
@@ -217,6 +218,16 @@ function IconCourses() {
     <svg {...iconProps}>
       <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z" />
       <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z" />
+    </svg>
+  );
+}
+
+function IconDegree() {
+  return (
+    <svg {...iconProps}>
+      <path d="M2.5 9 12 4.5 21.5 9 12 13.5z" />
+      <path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11" />
+      <path d="M21.5 9v5" />
     </svg>
   );
 }
