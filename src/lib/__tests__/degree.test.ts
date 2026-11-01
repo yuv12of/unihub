@@ -65,7 +65,8 @@ test("the agreed plan has no placement errors once the bibliographic training is
 });
 
 test("prerequisite and offering errors are caught", () => {
-  const bad: DegreePlan = { ...plan, settings: { ...plan.settings, biblioDone: true }, items: plan.items.map((i) => (i.code === "20425" ? { ...i, sem: "2027ב" } : i.code === "20580" ? { ...i, sem: "2028ב" } : i)) };
+  const moved: Record<string, string> = { "20425": "2027ב", "20580": "2028ב", "20937": "2029א" };
+  const bad: DegreePlan = { ...plan, settings: { ...plan.settings, biblioDone: true }, items: plan.items.map((i) => (moved[i.code] ? { ...i, sem: moved[i.code] } : i)) };
   const p425 = itemIssues(bad, bad.items.find((i) => i.code === "20425")!, CURRENT);
   assert.ok(p425.some((x) => x.severity === "error" && x.text.includes("חשבון אינפיניטסימלי 2")));
   // inside the official two-year table (2027א–2028ג): offered or not, no guessing
