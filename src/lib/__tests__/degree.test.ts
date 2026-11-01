@@ -4,7 +4,7 @@ import { autoPlan, cleanPlan, itemIssues, nextSemester, requirements, semIndex, 
 
 const CURRENT = "2027א";
 
-/** The owner's plan as agreed on 1.11.2026 (Sheilta draft 395269 + two swaps), 5 semesters to 2029ב; לינארית 2 ↔ לוגיקה swapped and 20554 → 2028ב later that day. */
+/** The owner's plan as agreed on 1.11.2026 (Sheilta draft 395269 + two swaps), 5 semesters to 2029ב; לינארית 2 ↔ לוגיקה swapped and 20554 → 2028ב later that day; 20937 ↔ 20551 after the official offering table (20937 runs ב+ג only). */
 const plan: DegreePlan = {
   program: "AF",
   recognized: [{ label: "הכרה בלימודים קודמים — מדעים (140)", area: "science", credits: 9 }],
@@ -28,11 +28,11 @@ const plan: DegreePlan = {
     { code: "20466", sem: "2027ב" },
     { code: "20905", sem: "2028ב" },
     { code: "20942", sem: "2028ב" },
-    { code: "20937", sem: "2029א" },
+    { code: "20937", sem: "2029ב" },
     { code: "20580", sem: "2029א" },
     { code: "20944", sem: "2029א" },
     { code: "20954", sem: "2029א" },
-    { code: "20551", sem: "2029ב" },
+    { code: "20551", sem: "2029א" },
     { code: "20973", sem: "2029ב" },
   ],
 };
