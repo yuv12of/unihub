@@ -44,3 +44,8 @@ test("helpers", () => {
   assert.equal(isoDate("31", "02", "2027"), null);
   assert.equal(examsMoed("מיוחד"), "ג");
 });
+
+test("Opal's forum digest is never read as exam dates", () => {
+  const body = "20407-2027a -> פורומים -> פורום לקראת המבחן ->\nמבחן עבור סטודנטים שלמדו בסמסטרים קודמים\nמאת: מישהו - 27/10/2026, 19:06\nמועד א";
+  assert.deepEqual(parseExamDates({ subject: "דף השער: מקבץ פורומים", body_text: body }, ["20407"], "2027א"), []);
+});

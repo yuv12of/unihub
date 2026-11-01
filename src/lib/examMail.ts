@@ -36,7 +36,11 @@ export const EXAM_MAIL = /(מועדי\s*(ה)?בחינ|לוח\s*(ה)?בחינות
  * @param semester current semester as the university writes it ("2027א"); a course cell naming another
  *   semester is skipped (old notices list last semester's repeat exams)
  */
+/** Opal's daily forum digest: many posts, each with its own date and time, none of them an exam date. */
+export const FORUM_DIGEST = /מקבץ\s*פורומים|דף\s*השער/;
+
 export function parseExamDates(mail: ExamMailInput, courses: string[], semester: string): ExamDate[] {
+  if (FORUM_DIGEST.test(mail.subject ?? "")) return [];
   const mine = new Set(courses);
   const texts = [mail.body_text ?? "", ...(mail.attachments ?? []).map((a) => a ?? "")].filter(Boolean);
   const out: ExamDate[] = [];

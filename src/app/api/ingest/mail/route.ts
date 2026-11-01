@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       { subject: String(m.subject ?? ""), body_text: String(m.body ?? ""), attachments: attachments.map((a) => a.text) },
       priv.courses.map((c) => c.code),
       semester.semester,
-    );
+    ).filter((e) => e.date >= todayInIsrael());
     if (found.length) {
       const { data: n } = await sb.rpc("exam_candidates_add", { p_token: token, p_gmail_id: m.id, p_rows: found.map((e) => ({ ...e, semester: semester.semester })) });
       exams = typeof n === "number" ? n : 0;

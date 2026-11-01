@@ -170,7 +170,7 @@ export function DegreePlanner({ initial, current, editable }: { initial: DegreeP
 
   const column = (s: { sem: string; items: PlanItem[]; credits: number }) => {
     const isNow = s.sem === current;
-    const heavy = s.credits > plan.settings.perSemester + 2;
+    const heavy = semIndex(s.sem) > semIndex(current) && s.credits > plan.settings.perSemester + 2;
     return (
       <section
         key={s.sem}
@@ -345,9 +345,7 @@ export function DegreePlanner({ initial, current, editable }: { initial: DegreeP
                 </span>
                 <span className="min-w-0 flex-1">{r.label}</span>
                 <span className="tabular-nums text-sm text-ink-soft">
-                  {r.have}
-                  {r.max ? " ≤ " : " / "}
-                  {r.need}
+                  {r.have} {r.max ? `(מותר עד ${r.need})` : `(נדרש ${r.need})`}
                 </span>
               </div>
               {!r.max && r.need > 0 && (

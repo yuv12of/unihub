@@ -417,7 +417,7 @@ export function actions(plan: DegreePlan, current: string): { text: string; urge
   for (const i of plan.items) {
     const c = COURSE[i.code];
     if (c?.approval && i.sem && semIndex(i.sem) > semIndex(current))
-      out.push({ text: `לבקש אישור בכתב לסמינר (${c.name}) מהאחראי לסמינרים לפני ההרשמה ל${semLabel(i.sem)}`, urgent: semIndex(i.sem) - semIndex(current) <= 1 });
+      out.push({ text: `לבקש אישור בכתב מהאחראי לסמינרים ל"${c.name}", לפני ההרשמה ל${semLabel(i.sem)}`, urgent: semIndex(i.sem) - semIndex(current) <= 1 });
   }
   return out;
 }

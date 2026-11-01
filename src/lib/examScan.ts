@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { EXAM_MAIL, parseExamDates } from "@/lib/examMail";
-import { semester } from "@/lib/semester";
+import { semester, todayInIsrael } from "@/lib/semester";
 
 /**
  * Server-side scan (secret key) for exam dates in recent university mail of every user. Runs in the
@@ -36,7 +36,7 @@ export async function scanExamMails(admin: SupabaseClient, days = 3): Promise<nu
     const rows = relevant
       .filter((m) => m.user_id === user)
       .flatMap((m) => parseExamDates({ subject: m.subject, body_text: m.body_text, attachments: textsOf.get(m.id) }, courses, semester.semester).map((e) => ({ ...e, mail_id: m.id })))
-      .filter((e) => !known.has(`${user}|${e.course_code}|${e.date}`))
+      .filter((e) => e.date >= todayInIsrael() && !known.has(`${user}|${e.course_code}|${e.date}`))
       .map((e) => ({ user_id: user, semester: semester.semester, ...e }));
     if (!rows.length) continue;
     const { data: fresh, error: insErr } = await admin
