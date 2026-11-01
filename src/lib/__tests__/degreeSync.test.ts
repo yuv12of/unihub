@@ -171,5 +171,8 @@ test("grade average: OU weights, needed grade for a target, projection", () => {
   assert.equal(g.needed, 85);
   assert.equal(g.projected, round((80 * 4 + 90 * 4 + 95 * 6) / 14));
   assert.equal(g.projectedComplete, false);
+  // no expectations entered: no projection (it would just repeat the average)
+  p.items.find((i) => i.code === "20594")!.expected = null;
+  assert.equal(gradeSummary(p, CURRENT).projected, null);
 });
 const round = (n: number) => Math.round(n * 10) / 10;

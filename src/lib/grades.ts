@@ -71,7 +71,7 @@ export function gradeSummary(plan: DegreePlan, current: string): GradeSummary {
     weightDone,
     remaining,
     weightLeft,
-    projected: weightDone + wExp ? round1((sumDone + sumExp) / (weightDone + wExp)) : null,
+    projected: withExp.length && weightDone + wExp ? round1((sumDone + sumExp) / (weightDone + wExp)) : null,
     projectedComplete: withExp.length === remaining.length,
     target,
     needed,
