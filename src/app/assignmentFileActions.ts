@@ -2,7 +2,10 @@
 import { revalidatePath } from "next/cache";
 import { action, must } from "@/app/guard";
 import { adminClient } from "@/lib/supabase/admin";
-import { ASSIGNMENT_FILE_MAX, BOOKLET, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
+import { ASSIGNMENT_FILE_MAX, BOOKLET, answerFor, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
+import { isUsable, parseSheet, partItems, type PartItem, type SheetStructure } from "@/lib/sheetStructure";
+import { findSolutionNote, hasIdNumber, solutionNumbers } from "@/lib/submitCheck";
+import { pdfText } from "@/lib/pdfText";
 import { getCourses } from "@/lib/userdata";
 import { semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
@@ -176,5 +179,72 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
       link,
       options: list.filter((a) => has(a.n)).map((a) => ({ n: a.n, label: label(a.n), online: !sheetFor(files, a.n) })),
     };
+  });
+}
+
+export interface SubmitCheck {
+  n: string;
+  /** "ok": parts read from the sheet; "notext": a scanned sheet; "none": no sheet uploaded */
+  sheet: "ok" | "notext" | "none";
+  questions: { q: number; points: number | null; items: PartItem[] }[];
+  /** my solution among the synced Notability notes */
+  note: { name: string; url: string | null; modified: string | null; ocr: boolean; hasId: boolean } | null;
+  /** the file I submitted, saved in Unihub */
+  answer: string | null;
+}
+
+/**
+ * "Ready to submit" for one file assignment: every part the sheet asks for (read from the sheet's
+ * PDF text once, then kept), and what can be checked about my solution without reading it.
+ * Fills the tracker's question count from the sheet when it is still empty.
+ */
+export async function getSubmitCheck(code: string, n: string): Promise<SubmitCheck | { failed: string }> {
+  return action("getSubmitCheck", async ({ supabase, userId }) => {
+    if (!CODE.test(code) || !/^\d{2}$/.test(n)) throw new Error("מטלה לא תקינה");
+    const key = { course_code: code, semester: semester.semester };
+    const [courses, { data: rows }, { data: notes }, { data: qrows }] = await Promise.all([
+      getCourses(),
+      supabase.from("assignment_files").select("id, n, kind, name, path, url, structure").match(key).order("created_at"),
+      supabase.from("notes").select("id, name, folder, course_code, url, modified_at").eq("course_code", code).order("modified_at", { ascending: false }).limit(200),
+      supabase.from("assignment_questions").select("q").match({ ...key, n }).limit(1),
+    ]);
+    const list = courses.find((c) => c.code === code)?.assignments ?? [];
+    if (!list.some((a) => a.n === n && a.type === "file")) throw new Error("מטלה לא מוכרת");
+    const files = (rows ?? []).map((r) => ({ ...r, pdf: !!r.path && /\.pdf$/i.test(r.path) }));
+
+    // the sheet's structure: stored, or read now from its text layer
+    const file = sheetFor(files, n);
+    let structure = (file?.structure as SheetStructure | null) ?? null;
+    if (file?.path && !structure) {
+      structure = { questions: [] };
+      try {
+        const { data: blob } = await admin().storage.from(BUCKET).download(file.path);
+        if (blob) structure = parseSheet(await pdfText(new Uint8Array(await blob.arrayBuffer()), 40));
+      } catch {}
+      await supabase.from("assignment_files").update({ structure }).eq("id", file.id);
+    }
+    // a booklet holds every assignment: its questions can't be told apart, so no parts from it
+    const usable = file && file.n === n && isUsable(structure) ? structure : null;
+    if (usable && !qrows?.length) {
+      const qs = usable.questions.map((x) => ({ user_id: userId, ...key, n, q: x.q }));
+      const { error } = await supabase.from("assignment_questions").upsert(qs, { onConflict: "user_id,course_code,semester,n,q", ignoreDuplicates: true });
+      if (!error) refresh(code);
+    }
+
+    const found = findSolutionNote(notes ?? [], code, solutionNumbers(list, n));
+    let note: SubmitCheck["note"] = null;
+    if (found) {
+      const { data: t } = await supabase.from("notes").select("text_content").eq("id", found.id).maybeSingle();
+      const text = (t?.text_content as string | null) ?? "";
+      note = { name: found.name.replace(/\.pdf$/i, ""), url: found.url, modified: found.modified_at, ocr: !!text.trim(), hasId: hasIdNumber(text) };
+    }
+
+    return {
+      n,
+      sheet: !file ? "none" : usable ? "ok" : "notext",
+      questions: (usable?.questions ?? []).map((x) => ({ q: x.q, points: x.points, items: partItems(x) })),
+      note,
+      answer: answerFor(files, n)?.name ?? null,
+    } satisfies SubmitCheck;
   });
 }

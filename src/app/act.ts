@@ -146,6 +146,7 @@ export const saveAssignmentPlace = w(AF.saveAssignmentPlace);
 export const getFocusAssignment = w(AF.getFocusAssignment);
 export const setAssignmentLink = w(AF.setAssignmentLink);
 export const setAssignmentsUrl = w(AF.setAssignmentsUrl);
+export const getSubmitCheck = w(AF.getSubmitCheck);
 
 import * as Log from "@/app/logActions";
 export const addStudyEntry = w(Log.addStudyEntry);

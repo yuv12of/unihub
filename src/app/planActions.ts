@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester, typeLabel } from "@/lib/semester";
 import { CHECKLIST, type QStatus } from "@/lib/tracker";
+import { PART_KEY } from "@/lib/sheetStructure";
 import { weakQuestions, type MockScore } from "@/lib/exams";
 import type { Failed } from "@/app/actions";
 
@@ -226,7 +227,7 @@ export async function setQuestionState(input: { code: string; n: string; q: numb
 export async function toggleCheck(input: { code: string; n: string; item: string; done: boolean }) {
   return g(async () => {
     const { sb, userId } = await user();
-    if (!CODE.test(input.code) || !N.test(input.n) || !CHECKLIST.some((c) => c.id === input.item)) throw new Error("פריט לא מוכר");
+    if (!CODE.test(input.code) || !N.test(input.n) || !(CHECKLIST.some((c) => c.id === input.item) || PART_KEY.test(input.item))) throw new Error("פריט לא מוכר");
     const key = { user_id: userId, course_code: input.code, semester: semester.semester, n: input.n };
     const { data, error: readErr } = await sb.from("assignment_checks").select("checks").match(key).maybeSingle();
     if (readErr) throw new Error(missingTable(readErr.message) ? notReady : "לא נשמר");

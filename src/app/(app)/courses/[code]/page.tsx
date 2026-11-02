@@ -289,7 +289,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
                   />
                   <section className="panel px-5 pb-2 pt-5">
                     <h2 className="section-title">איפה אני בממ״נים</h2>
-                    <p className="mt-1 text-sm text-ink-soft">שאלה אחר שאלה. יומיים לפני ההגשה מופיעה רשימת בדיקה.</p>
+                    <p className="mt-1 text-sm text-ink-soft">שאלה אחר שאלה. ולפני ההגשה: בדיקה שכל סעיף קיבל תשובה.</p>
                     <AssignmentQuestions code={code} color={c.color} items={tracked} editable={supabaseEnabled} />
                   </section>
                   </div>

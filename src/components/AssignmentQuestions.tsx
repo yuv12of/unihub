@@ -3,7 +3,8 @@
 import { useOptimistic, useState, useTransition } from "react";
 import { setQuestionCount, setQuestionState, toggleCheck } from "@/app/act";
 import { Icon } from "@/components/Icon";
-import { CHECKLIST, Q_LABEL, type QStatus } from "@/lib/tracker";
+import { Q_LABEL, type QStatus } from "@/lib/tracker";
+import { SubmitCheck } from "@/components/SubmitCheck";
 
 export interface TrackedAssignment {
   n: string;
@@ -21,7 +22,7 @@ const STYLE: Record<QStatus, string> = {
   stuck: "border-ink text-ink hl",
 };
 
-/** Open ממ"נים: where I am question by question, and the checklist for the last 48 hours. */
+/** Open ממ"נים: where I am question by question, and whether it is ready to submit. */
 export function AssignmentQuestions({ code, color, items, editable }: { code: string; color: string; items: TrackedAssignment[]; editable: boolean }) {
   if (!items.length) return <p className="mt-2 text-sm text-ink-soft">אין ממ״ן פתוח כרגע.</p>;
   return (
@@ -51,7 +52,6 @@ function Row({ code, color, it, editable }: { code: string; color: string; it: T
     });
   const done = qs.filter((x) => x.status === "done").length;
   const stuck = qs.filter((x) => x.status === "stuck").length;
-  const crunch = it.daysLeft >= 0 && it.daysLeft <= 2;
 
   return (
     <li className="py-3">
@@ -128,39 +128,21 @@ function Row({ code, color, it, editable }: { code: string; color: string; it: T
         )
       )}
 
-      {crunch && (
-        <div className="mt-3 rounded-xl bg-bg p-3 text-sm">
-          <p className="font-medium">
-            לפני ההגשה ({it.daysLeft === 0 ? "היום" : it.daysLeft === 1 ? "מחר" : "מחרתיים"}) · {checks.length}/{CHECKLIST.length}
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {CHECKLIST.map((c) => {
-              const on = checks.includes(c.id);
-              return (
-                <li key={c.id}>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="size-4"
-                      style={{ accentColor: color }}
-                      checked={on}
-                      disabled={!editable}
-                      onChange={() =>
-                        run(async () => {
-                          applyC({ item: c.id, done: !on });
-                          await toggleCheck({ code, n: it.n, item: c.id, done: !on });
-                        })
-                      }
-                    />
-                    <span className={on ? "text-ink-soft line-through" : ""}>{c.text}</span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-2 text-xs text-ink-soft">כשמגיע מייל אישור הגשה מהאוניברסיטה, המטלה מסומנת כהוגשה מעצמה.</p>
-        </div>
-      )}
+      <SubmitCheck
+        code={code}
+        n={it.n}
+        color={color}
+        daysLeft={it.daysLeft}
+        checks={checks}
+        editable={editable}
+        pending={pending}
+        onToggle={(changes) =>
+          run(async () => {
+            for (const c of changes) applyC(c);
+            for (const c of changes) await toggleCheck({ code, n: it.n, item: c.item, done: c.done });
+          })
+        }
+      />
       {err && <p className="mt-1 text-xs hl">{err}</p>}
     </li>
   );
