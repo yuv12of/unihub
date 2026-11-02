@@ -236,6 +236,8 @@ export async function toggleCheck(input: { code: string; n: string; item: string
     else cur.delete(input.item);
     const { error } = await sb.from("assignment_checks").upsert({ ...key, checks: [...cur], updated_at: new Date().toISOString() });
     if (error) throw new Error("לא נשמר");
+    // without it the optimistic tick falls back to the page's stale list when the action ends
+    refresh();
     return [...cur];
   });
 }
