@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { startTransition, useOptimistic, useState, useTransition } from "react";
 import { setQuestionCount, setQuestionState, toggleCheck } from "@/app/act";
 import { Icon } from "@/components/Icon";
 import { Q_LABEL, type QStatus } from "@/lib/tracker";
@@ -36,7 +36,9 @@ export function AssignmentQuestions({ code, color, items, editable }: { code: st
 
 function Row({ code, color, it, editable }: { code: string; color: string; it: TrackedAssignment; editable: boolean }) {
   const [qs, applyQ] = useOptimistic(it.questions, (s, p: { q: number; status: QStatus }) => s.map((x) => (x.q === p.q ? { ...x, status: p.status } : x)));
-  const [checks, applyC] = useOptimistic(it.checks, (s, p: { item: string; done: boolean }) => (p.done ? [...s, p.item] : s.filter((x) => x !== p.item)));
+  // the saved list as the server returns it (the page's own copy is only as fresh as its last load)
+  const [saved, setSaved] = useState(it.checks);
+  const [checks, applyC] = useOptimistic(saved, (s, p: { item: string; done: boolean }) => (p.done ? [...s, p.item] : s.filter((x) => x !== p.item)));
   const [sel, setSel] = useState<number | null>(null);
   const [count, setCount] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -139,7 +141,9 @@ function Row({ code, color, it, editable }: { code: string; color: string; it: T
         onToggle={(changes) =>
           run(async () => {
             for (const c of changes) applyC(c);
-            for (const c of changes) await toggleCheck({ code, n: it.n, item: c.item, done: c.done });
+            let list = saved;
+            for (const c of changes) list = await toggleCheck({ code, n: it.n, item: c.item, done: c.done });
+            startTransition(() => setSaved(list));
           })
         }
       />
