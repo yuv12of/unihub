@@ -57,15 +57,17 @@ export function PaceChart({
   const target = dayMs(addDays(win.target, 1));
   const expected = `M${x(x0)},${y(0)} L${x(target)},${y(total)} L${x(x1)},${y(total)}`;
 
-  // my line: steps at each recorded change, then on to now with the current count
+  // my line: from the first recorded point (before it Unihub didn't know, so nothing is drawn),
+  // a step at each change, then on to now with the current count
   const pts = points.filter((p) => p.total === total).map((p) => ({ ms: Date.parse(p.at), v: p.answered }));
-  let path = `M${x(x0)},${y(0)}`;
-  let last = 0;
-  for (const p of pts) {
+  const end = Math.min(nowMs, x1);
+  const first = pts[0] ?? { ms: end, v: answered };
+  let path = `M${x(first.ms).toFixed(1)},${y(first.v).toFixed(1)}`;
+  let last = first.v;
+  for (const p of pts.slice(1)) {
     path += ` H${x(p.ms).toFixed(1)} V${y(p.v).toFixed(1)}`;
     last = p.v;
   }
-  const end = Math.min(nowMs, x1);
   path += ` H${x(end).toFixed(1)}`;
   if (answered !== last) path += ` V${y(answered).toFixed(1)}`;
 
@@ -103,7 +105,7 @@ export function PaceChart({
         <text x={x(x0)} y={H - 4} fontSize={9} fill="currentColor">{short(win.start)}</text>
         <text x={x(x1)} y={H - 4} textAnchor="end" fontSize={9} fill="currentColor">הגשה {short(due)}</text>
       </svg>
-      <p className="mt-1 text-xs text-ink-soft">הקו המקווקו: התקדמות קבועה עד יום לפני ההגשה. הקו הצבעוני: הסעיפים שקיבלו תשובה, לפי הסימונים והזיהוי.</p>
+      <p className="mt-1 text-xs text-ink-soft">הקו המקווקו: התקדמות קבועה עד יום לפני ההגשה. הקו הצבעוני: הסעיפים שקיבלו תשובה, לפי הסימונים והזיהוי, מהרגע ש־Unihub התחיל לעקוב.</p>
     </div>
   );
 }
