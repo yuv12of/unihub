@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { getPracticeMarks, type PracticeMark } from "@/lib/practiceMarks";
 import { getCourses } from "@/lib/userdata";
 import { themeOf } from "@/lib/semester";
@@ -27,10 +28,13 @@ async function List({ marks, title }: { marks: PracticeMark[]; title: string }) 
 
 /** Today: overnight feedback not seen yet (renders nothing when there is none). */
 export async function PracticeMarksCard() {
+  await connection();
   return <List marks={await getPracticeMarks({ unseenOnly: true, limit: 3 })} title="משוב על התרגול שלך" />;
 }
 
 /** /study: recent feedback on handwritten practice. */
 export async function PracticeMarks() {
+  // reads the session (cookies, Date.now): request time, never at prerender
+  await connection();
   return <List marks={await getPracticeMarks({ limit: 20 })} title="משוב על תרגול בכתב יד" />;
 }
