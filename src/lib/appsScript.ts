@@ -15,6 +15,11 @@ const TOKEN = '${token}';
 const NOTES_FOLDER = 'Notability';      // the Drive folder Notability backs up to
 const MAX_ATTACHMENT_BYTES = 2500000;
 
+// Google stops any run after 6 minutes. Everything in one run shares this budget, so a long job
+// stops early and simply continues on the next run (nothing is sent twice).
+const RUN_STARTED = Date.now();
+function timeLeft_() { return 5 * 60 * 1000 - (Date.now() - RUN_STARTED); }
+
 // Run once (again after updating this code). Safe to re-run: nothing is duplicated.
 function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
@@ -22,8 +27,9 @@ function setup() {
   ScriptApp.newTrigger('hourly').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('sendMorningDigest').timeBased().everyDays(1).atHour(7).inTimezone('Asia/Jerusalem').create();
   ScriptApp.newTrigger('sendWeeklySummary').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(12).inTimezone('Asia/Jerusalem').create();
+  // a first pass only: whatever doesn't fit in this run continues on the hourly and 10-minute runs
   sendMatching_('from:openu.ac.il newer_than:365d', 250, false);
-  hourly();
+  if (timeLeft_() > 90 * 1000) syncNotes();
 }
 
 function every10Minutes() {
@@ -32,9 +38,9 @@ function every10Minutes() {
 }
 
 function hourly() {
+  post_('/api/sync', {});
   syncNotes();
   detectAssignmentHeadings();
-  post_('/api/sync', {});
 }
 
 // ---------- University mail ----------
@@ -45,14 +51,13 @@ function sendMatching_(query, limit, withText, seenKey) {
   seenKey = seenKey || 'sentIds';
   const props = PropertiesService.getScriptProperties();
   const seen = JSON.parse(props.getProperty(seenKey) || '[]');
-  const started = Date.now();
   try {
     for (let start = 0; start < limit; start += 50) {
       const threads = GmailApp.search(query, start, 50);
       if (threads.length === 0) return;
       for (const thread of threads) {
         for (const msg of thread.getMessages()) {
-          if (Date.now() - started > 4 * 60 * 1000) return; // stay under the 6-minute limit
+          if (timeLeft_() < 60 * 1000) return; // stay under the 6-minute limit
           if (!/openu\\.ac\\.il/i.test(msg.getFrom()) || seen.indexOf(msg.getId()) >= 0) continue;
           const attachments = msg.getAttachments({ includeInlineImages: false })
             .filter(function (a) { return a.getSize() <= MAX_ATTACHMENT_BYTES; })
@@ -102,10 +107,9 @@ function syncNotes() {
   if (!folders.hasNext()) return;
   const props = PropertiesService.getScriptProperties();
   const since = Number(props.getProperty('notesSince') || 0);
-  const started = Date.now();
   let newest = since;
   walk_(folders.next(), NOTES_FOLDER, function (file, path) {
-    if (Date.now() - started > 4 * 60 * 1000) return false;
+    if (timeLeft_() < 60 * 1000) return false;
     const updated = file.getLastUpdated().getTime();
     if (updated <= since || file.getMimeType() !== MimeType.PDF) return true;
     const r = ocrFile_(file.getId());
@@ -196,10 +200,10 @@ function detectAssignmentHeadings() {
   if (!folders.hasNext()) return;
   const done = JSON.parse(props.getProperty('headingsDone') || '{}');
   const recent = Date.now() - 180 * 24 * 3600 * 1000;
-  const started = Date.now();
   let left = 5;
   walk_(folders.next(), NOTES_FOLDER, function (file, path) {
-    if (left <= 0 || Date.now() - started > 4 * 60 * 1000) return false;
+    // a PDF can take Gemini a minute or more: start one only with time to spare
+    if (left <= 0 || timeLeft_() < 2 * 60 * 1000) return false;
     if (file.getMimeType() !== MimeType.PDF || !isAssignment_(file.getName(), path)) return true;
     const version = String(file.getLastUpdated().getTime());
     if (file.getLastUpdated().getTime() < recent || done[file.getId()] === version) return true;
