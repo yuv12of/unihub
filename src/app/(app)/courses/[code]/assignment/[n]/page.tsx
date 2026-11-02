@@ -3,10 +3,11 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { getCourses } from "@/lib/userdata";
-import { getChecks, getQuestions } from "@/lib/trackerData";
+import { getChecks, getPaceLog, getQuestions } from "@/lib/trackerData";
+import { paceWindow } from "@/lib/pace";
 import { assignmentFileUrl, getAssignmentFiles } from "@/lib/assignmentFilesData";
 import { BOOKLET, sheetFor } from "@/lib/assignmentFiles";
-import { daysBetween, formatHebrewDate, todayInIsrael, typeLabel } from "@/lib/semester";
+import { CURRENT_SEMESTER, daysBetween, formatHebrewDate, todayInIsrael, typeLabel } from "@/lib/semester";
 import { AssignmentReader } from "@/components/AssignmentReader";
 import { Icon } from "@/components/Icon";
 
@@ -21,7 +22,7 @@ export default function AssignmentPage({ params }: PageProps<"/courses/[code]/as
 async function Assignment({ params }: Pick<PageProps<"/courses/[code]/assignment/[n]">, "params">) {
   await connection();
   const { code, n } = await params;
-  const [courses, { files }, questions, checks] = await Promise.all([getCourses(), getAssignmentFiles(code), getQuestions(code), getChecks(code)]);
+  const [courses, { files }, questions, checks, pace] = await Promise.all([getCourses(), getAssignmentFiles(code), getQuestions(code), getChecks(code), getPaceLog(code)]);
   const course = courses.find((c) => c.code === code);
   if (!course) notFound();
   const a = course.assignments.find((x) => x.n === n);
@@ -66,6 +67,9 @@ async function Assignment({ params }: Pick<PageProps<"/courses/[code]/assignment
               daysLeft: daysBetween(today, a.due),
               questions: questions[a.n] ?? [],
               checks: checks[a.n] ?? [],
+              due: a.due,
+              pace: pace[a.n] ?? [],
+              window: paceWindow(course.assignments, a.n, CURRENT_SEMESTER.starts),
             }
           : null
       }

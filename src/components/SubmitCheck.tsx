@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { getSubmitCheck } from "@/app/act";
-import type { SubmitCheck as Data } from "@/app/assignmentFileActions";
+import type { SubmitCheck as Data } from "@/lib/submitState";
 import { Icon } from "@/components/Icon";
 import { CHECKLIST } from "@/lib/tracker";
 import { PART_NO_PREFIX, PART_PREFIX } from "@/lib/sheetStructure";
+import type { PacePoint } from "@/lib/pace";
+import { PaceChart } from "@/components/PaceChart";
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
@@ -19,6 +21,9 @@ export function SubmitCheck({
   n,
   color,
   daysLeft,
+  due: dueDate,
+  pace,
+  window: win,
   checks,
   editable,
   pending,
@@ -28,6 +33,9 @@ export function SubmitCheck({
   n: string;
   color: string;
   daysLeft: number;
+  due?: string;
+  pace?: PacePoint[];
+  window?: { start: string; target: string } | null;
   checks: string[];
   editable: boolean;
   pending: boolean;
@@ -158,6 +166,15 @@ export function SubmitCheck({
                   </p>
                 )}
               </section>
+
+              {items.length > 0 && win && dueDate && (
+                <section>
+                  <h4 className="font-medium">הקצב</h4>
+                  <div className="mt-1">
+                    <PaceChart points={pace ?? []} answered={doneParts} total={items.length} window={win} due={dueDate} color={color} />
+                  </div>
+                </section>
+              )}
 
               <section>
                 <h4 className="font-medium">הפתרון</h4>

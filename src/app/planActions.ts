@@ -9,6 +9,7 @@ import { supabaseEnabled } from "@/lib/supabase/config";
 import { semester, typeLabel } from "@/lib/semester";
 import { CHECKLIST, type QStatus } from "@/lib/tracker";
 import { PART_KEY } from "@/lib/sheetStructure";
+import { recordPace, submitState } from "@/lib/submitState";
 import { weakQuestions, type MockScore } from "@/lib/exams";
 import type { Failed } from "@/app/actions";
 
@@ -236,6 +237,12 @@ export async function toggleCheck(input: { code: string; n: string; item: string
     else cur.delete(input.item);
     const { error } = await sb.from("assignment_checks").upsert({ ...key, checks: [...cur], updated_at: new Date().toISOString() });
     if (error) throw new Error("לא נשמר");
+    // a part ticked or unticked moves the assignment's timeline
+    if (PART_KEY.test(input.item)) {
+      const c = await myCourse(sb, input.code);
+      const { check } = await submitState(sb, userId, input.code, input.n, c.assignments);
+      await recordPace(sb, userId, input.code, input.n, check.answered, check.total);
+    }
     // without it the optimistic tick falls back to the page's stale list when the action ends
     refresh();
     return [...cur];

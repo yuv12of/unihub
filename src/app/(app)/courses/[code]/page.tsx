@@ -26,7 +26,8 @@ import { answerFor, extrasFor, linkFor, sheetFor } from "@/lib/assignmentFiles";
 import { AllAssignmentsLink } from "@/components/AssignmentLinks";
 import { StrategyPanel } from "@/components/Strategy";
 import { aimedExam, attemptScore, getMockAttempts, getPastExams, runway, semesterEnd, type Runway } from "@/lib/exams";
-import { getChecks, getQuestions } from "@/lib/trackerData";
+import { getChecks, getPaceLog, getQuestions } from "@/lib/trackerData";
+import { paceWindow } from "@/lib/pace";
 import { courseStrategy, crunches as findCrunches, freeMinutes } from "@/lib/strategy";
 import { busyFromEvents } from "@/lib/planfor";
 import { getBooks, readingByCourse } from "@/lib/books";
@@ -39,7 +40,7 @@ import { progressKey, standing } from "@/lib/progress";
 import { getNotes, getReviews, getSessionRows, getSpentByAssignment, getStuck, getUserPlan, type UserEvent } from "@/lib/userdata";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import { addDays, daysBetween, formatHebrewDate, semester, todayInIsrael, typeLabel } from "@/lib/semester";
+import { CURRENT_SEMESTER, addDays, daysBetween, formatHebrewDate, semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
 export default function CoursePage({ params }: PageProps<"/courses/[code]">) {
   return (
@@ -56,7 +57,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
   await connection();
   const { code } = await params;
   const today = todayInIsrael();
-  const [{ progress, plan, events, status, courses, exams, prefs, offDays }, rows, books, forum, stuck, notes, spent, reviews, pastExams, questions, checks] = await Promise.all([
+  const [{ progress, plan, events, status, courses, exams, prefs, offDays }, rows, books, forum, stuck, notes, spent, reviews, pastExams, questions, checks, pace] = await Promise.all([
     getUserPlan(today),
     getSessionRows(),
     getBooks(),
@@ -68,6 +69,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
     getPastExams(code),
     getQuestions(code),
     getChecks(code),
+    getPaceLog(code),
   ]);
   const c = courses.find((x) => x.code === code);
   if (!c) notFound();
@@ -113,6 +115,9 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
       daysLeft: daysBetween(today, a.due),
       questions: questions[a.n] ?? [],
       checks: checks[a.n] ?? [],
+      due: a.due,
+      pace: pace[a.n] ?? [],
+      window: paceWindow(c.assignments, a.n, CURRENT_SEMESTER.starts),
     }));
   const upcoming = plan.sessions.filter((s) => s.courseCode === code && s.date >= today && s.date <= addDays(today, 13));
   const courseForum = forum.filter((f) => f.courseCode === code);

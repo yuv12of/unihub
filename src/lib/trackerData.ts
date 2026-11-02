@@ -23,3 +23,10 @@ export async function getChecks(code: string): Promise<Record<string, string[]>>
   return Object.fromEntries((data ?? []).map((r) => [r.n, (r.checks as string[]) ?? []]));
 }
 
+
+/** The timeline of every assignment in the course (assignment_pace), by assignment number. */
+export async function getPaceLog(code: string): Promise<Record<string, import("@/lib/pace").PacePoint[]>> {
+  if (!supabaseEnabled) return {};
+  const { paceLog } = await import("@/lib/submitState");
+  return paceLog(await createClient(), code);
+}

@@ -2,10 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { action, must } from "@/app/guard";
 import { adminClient } from "@/lib/supabase/admin";
-import { ASSIGNMENT_FILE_MAX, BOOKLET, answerFor, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
-import { isUsable, parseSheet, partItems, type PartItem, type SheetStructure } from "@/lib/sheetStructure";
-import { detectedIn, findSolutionNote, hasIdNumber, solutionNumbers, type NoteHeadings } from "@/lib/submitCheck";
-import { pdfText } from "@/lib/pdfText";
+import { ASSIGNMENT_FILE_MAX, BOOKLET, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
+import { recordPace, submitState, type SubmitCheck } from "@/lib/submitState";
 import { getCourses } from "@/lib/userdata";
 import { semester, todayInIsrael, typeLabel } from "@/lib/semester";
 
@@ -182,102 +180,20 @@ export async function getFocusAssignment(input: { courseCode: string | null; n?:
   });
 }
 
-export interface SubmitCheck {
-  n: string;
-  /** "ok": parts read from the sheet; "notext": a scanned sheet; "none": no sheet uploaded */
-  sheet: "ok" | "notext" | "none";
-  questions: { q: number; points: number | null; items: PartItem[] }[];
-  /** my solution among the synced Notability notes */
-  note: {
-    name: string;
-    url: string | null;
-    modified: string | null;
-    ocr: boolean;
-    hasId: boolean;
-    /** automatic part detection: "off" never ran (no Gemini key), "stale" a newer version is waiting */
-    detect: "off" | "ok" | "stale" | "error";
-    detectError: string | null;
-  } | null;
-  /** sheet parts whose heading the solution has, with writing under it */
-  detected: string[];
-  /** sheet parts whose heading is there but nothing is written under it */
-  emptyParts: string[];
-  /** the file I submitted, saved in Unihub */
-  answer: string | null;
-}
+export type { SubmitCheck } from "@/lib/submitState";
 
 /**
- * "Ready to submit" for one file assignment: every part the sheet asks for (read from the sheet's
- * PDF text once, then kept), and what can be checked about my solution without reading it.
- * Fills the tracker's question count from the sheet when it is still empty.
+ * "Ready to submit" for one file assignment (src/lib/submitState.ts). Fills the tracker's question
+ * count from the sheet when it is still empty, and adds a point to the assignment's timeline.
  */
 export async function getSubmitCheck(code: string, n: string): Promise<SubmitCheck | { failed: string }> {
   return action("getSubmitCheck", async ({ supabase, userId }) => {
     if (!CODE.test(code) || !/^\d{2}$/.test(n)) throw new Error("מטלה לא תקינה");
-    const key = { course_code: code, semester: semester.semester };
-    const [courses, { data: rows }, { data: notes }, { data: qrows }] = await Promise.all([
-      getCourses(),
-      supabase.from("assignment_files").select("id, n, kind, name, path, url, structure").match(key).order("created_at"),
-      supabase.from("notes").select("id, name, folder, course_code, url, modified_at").eq("course_code", code).order("modified_at", { ascending: false }).limit(200),
-      supabase.from("assignment_questions").select("q").match({ ...key, n }).limit(1),
-    ]);
-    const list = courses.find((c) => c.code === code)?.assignments ?? [];
+    const list = (await getCourses()).find((c) => c.code === code)?.assignments ?? [];
     if (!list.some((a) => a.n === n && a.type === "file")) throw new Error("מטלה לא מוכרת");
-    const files = (rows ?? []).map((r) => ({ ...r, pdf: !!r.path && /\.pdf$/i.test(r.path) }));
-
-    // the sheet's structure: stored, or read now from its text layer
-    const file = sheetFor(files, n);
-    let structure = (file?.structure as SheetStructure | null) ?? null;
-    if (file?.path && !structure) {
-      structure = { questions: [] };
-      try {
-        const { data: blob } = await admin().storage.from(BUCKET).download(file.path);
-        if (blob) structure = parseSheet(await pdfText(new Uint8Array(await blob.arrayBuffer()), 40));
-      } catch {}
-      await supabase.from("assignment_files").update({ structure }).eq("id", file.id);
-    }
-    // a booklet holds every assignment: its questions can't be told apart, so no parts from it
-    const usable = file && file.n === n && isUsable(structure) ? structure : null;
-    if (usable && !qrows?.length) {
-      const qs = usable.questions.map((x) => ({ user_id: userId, ...key, n, q: x.q }));
-      const { error } = await supabase.from("assignment_questions").upsert(qs, { onConflict: "user_id,course_code,semester,n,q", ignoreDuplicates: true });
-      if (!error) refresh(code);
-    }
-
-    const found = findSolutionNote(notes ?? [], code, solutionNumbers(list, n));
-    let note: SubmitCheck["note"] = null;
-    let headings: NoteHeadings | null = null;
-    if (found) {
-      const { data: t } = await supabase.from("notes").select("text_content, headings, headings_for, headings_error").eq("id", found.id).maybeSingle();
-      const text = (t?.text_content as string | null) ?? "";
-      const at = (t?.headings_for as string | null) ?? null;
-      const current = !!at && !!found.modified_at && new Date(at).getTime() >= new Date(found.modified_at).getTime();
-      const detect: NonNullable<SubmitCheck["note"]>["detect"] = !at && !t?.headings_error ? "off" : !current ? "stale" : t?.headings_error ? "error" : "ok";
-      note = {
-        name: found.name.replace(/\.pdf$/i, ""),
-        url: found.url,
-        modified: found.modified_at,
-        ocr: !!text.trim(),
-        hasId: hasIdNumber(text),
-        detect,
-        detectError: detect === "error" ? String(t?.headings_error).slice(0, 200) : null,
-      };
-      if (detect === "ok" && t?.headings) headings = t.headings as NoteHeadings;
-    }
-    const itemKeys = (usable?.questions ?? []).flatMap((x) => partItems(x).map((i) => i.key));
-    const foundKeys = new Set(headings?.keys ?? []);
-    const emptyKeys = new Set(headings?.empty ?? []);
-    const detected = itemKeys.filter((k) => detectedIn(foundKeys, k));
-    const emptyParts = itemKeys.filter((k) => !detected.includes(k) && detectedIn(emptyKeys, k));
-
-    return {
-      n,
-      sheet: !file ? "none" : usable ? "ok" : "notext",
-      questions: (usable?.questions ?? []).map((x) => ({ q: x.q, points: x.points, items: partItems(x) })),
-      note,
-      detected,
-      emptyParts,
-      answer: answerFor(files, n)?.name ?? null,
-    } satisfies SubmitCheck;
+    const { check, filledQuestions } = await submitState(supabase, userId, code, n, list);
+    if (filledQuestions) refresh(code);
+    await recordPace(supabase, userId, code, n, check.answered, check.total);
+    return check;
   });
 }

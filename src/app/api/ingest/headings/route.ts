@@ -1,5 +1,8 @@
 import { connection } from "next/server";
-import { anonClient, bearer } from "@/lib/privateFeed";
+import { anonClient, bearer, loadPrivate } from "@/lib/privateFeed";
+import { adminClient } from "@/lib/supabase/admin";
+import { recordPace, submitState } from "@/lib/submitState";
+import { todayInIsrael } from "@/lib/semester";
 import { normalizeHeadings } from "@/lib/submitCheck";
 
 /**
@@ -30,5 +33,25 @@ export async function POST(req: Request) {
     p_error: error,
   });
   if (rpcError) return Response.json({ error: "rejected" }, { status: 400 });
+  if (data === "stored" && headings) await moveTimeline(token, body.id as string).catch(() => {});
   return Response.json({ result: data, found: headings?.keys.length ?? 0 });
+}
+
+/** New headings can change how many parts have answers: a point on that assignment's timeline. */
+async function moveTimeline(token: string, driveId: string) {
+  const admin = adminClient();
+  if (!admin) return;
+  const { data: t } = await admin.from("ingest_tokens").select("user_id").eq("token", token).maybeSingle();
+  const userId = t?.user_id as string | undefined;
+  if (!userId) return;
+  const { data: note } = await admin.from("notes").select("id, course_code").match({ user_id: userId, drive_id: driveId }).maybeSingle();
+  const priv = note?.course_code ? await loadPrivate(token) : null;
+  const course = priv?.courses.find((c) => c.code === note?.course_code);
+  if (!note || !course) return;
+  const today = todayInIsrael();
+  for (const a of course.assignments.filter((x) => x.type === "file" && x.due >= today)) {
+    const { check } = await submitState(admin, userId, course.code, a.n, course.assignments);
+    // only the assignment this note is the solution of
+    if (check.note?.id === note.id) await recordPace(admin, userId, course.code, a.n, check.answered, check.total);
+  }
 }

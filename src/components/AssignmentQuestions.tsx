@@ -5,6 +5,7 @@ import { setQuestionCount, setQuestionState, toggleCheck } from "@/app/act";
 import { Icon } from "@/components/Icon";
 import { Q_LABEL, type QStatus } from "@/lib/tracker";
 import { SubmitCheck } from "@/components/SubmitCheck";
+import type { PacePoint } from "@/lib/pace";
 
 export interface TrackedAssignment {
   n: string;
@@ -13,6 +14,10 @@ export interface TrackedAssignment {
   daysLeft: number;
   questions: { q: number; status: QStatus }[];
   checks: string[];
+  /** for the pace chart: the deadline, the timeline, and the prep window */
+  due?: string;
+  pace?: PacePoint[];
+  window?: { start: string; target: string } | null;
 }
 
 const STYLE: Record<QStatus, string> = {
@@ -135,6 +140,9 @@ function Row({ code, color, it, editable }: { code: string; color: string; it: T
         n={it.n}
         color={color}
         daysLeft={it.daysLeft}
+        due={it.due}
+        pace={it.pace}
+        window={it.window}
         checks={checks}
         editable={editable}
         pending={pending}

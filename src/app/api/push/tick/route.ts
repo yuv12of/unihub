@@ -10,6 +10,9 @@ import { scanExamMails } from "@/lib/examScan";
 import { cleanPlan } from "@/lib/degree";
 import { registrationPushes } from "@/lib/registration";
 import type { SheiltaSnapshot } from "@/lib/sheilta";
+import { paceWarnings, paceWindow, type PacePoint } from "@/lib/pace";
+import { progressKey } from "@/lib/progress";
+import { CURRENT_SEMESTER, semester, typeLabel } from "@/lib/semester";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -28,9 +31,12 @@ export async function POST(req: Request) {
   const now = israelNow();
 
   let sent = 0;
+  const admin0 = adminClient();
   if (data.feed.subscriptions.length) {
     const { data: degree } = await anonClient().rpc("degree_feed", { p_token: token });
-    sent += await sendPush(token, data.feed.subscriptions, [...remindersFor(data, now, await extrasByToken(token)), ...degreePushes(degree, now, data.offDays)]);
+    const me = admin0 ? await userOfToken(admin0, token) : null;
+    const pace = admin0 && me ? await pacePushes(admin0, me, data, now) : [];
+    sent += await sendPush(token, data.feed.subscriptions, [...remindersFor(data, now, await extrasByToken(token)), ...degreePushes(degree, now, data.offDays), ...pace]);
   }
 
   const admin = adminClient();
@@ -54,7 +60,11 @@ export async function POST(req: Request) {
       const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
       const built = buildFromFeed(full, await restForFeed(full));
       const { data: degree } = await admin.from("degree_plans").select("plan, sheilta").eq("user_id", userId).maybeSingle();
-      others += await sendPushAsServer(userId, list, [...remindersFor(built, now, await extrasByUser(admin, userId)), ...degreePushes(degree, now, built.offDays)]);
+      others += await sendPushAsServer(userId, list, [
+        ...remindersFor(built, now, await extrasByUser(admin, userId)),
+        ...degreePushes(degree, now, built.offDays),
+        ...(await pacePushes(admin, userId, built, now)),
+      ]);
     }
     pdfs = await backfillAttachmentText(admin).catch(() => 0);
     // Exam dates in new mail (after PDF text, the Sheilta notice is a PDF); Saturday night a wider safety scan.
@@ -64,6 +74,37 @@ export async function POST(req: Request) {
     google = await syncDueGoogle(admin);
   }
   return Response.json({ sent, others, google, pdfs, exams });
+}
+
+async function userOfToken(admin: NonNullable<ReturnType<typeof adminClient>>, token: string): Promise<string | null> {
+  const { data } = await admin.from("ingest_tokens").select("user_id").eq("token", token).maybeSingle();
+  return (data?.user_id as string | undefined) ?? null;
+}
+
+/**
+ * The evening "behind on this assignment" push (src/lib/pace.ts): open file assignments with five
+ * days or fewer left that I track in the ready-to-submit check, judged by their latest point.
+ */
+async function pacePushes(admin: NonNullable<ReturnType<typeof adminClient>>, userId: string, built: ReturnType<typeof buildFromFeed>, now: { date: string; minutes: number }) {
+  if (now.minutes < 17 * 60 || built.offDays.includes(now.date)) return [];
+  const open = built.courses.flatMap((c) =>
+    c.assignments
+      .filter((a) => a.type === "file" && a.due >= now.date && !["submitted", "skipped"].includes(built.progress[progressKey(c.code, a.n)]?.status ?? ""))
+      .map((a) => ({ c, a })),
+  );
+  if (!open.length) return [];
+  const { data } = await admin.from("assignment_pace").select("course_code, n, at, answered, total").match({ user_id: userId, semester: semester.semester }).order("at");
+  const last = new Map<string, PacePoint>();
+  for (const r of data ?? []) last.set(`${r.course_code}|${r.n}`, { at: r.at as string, answered: r.answered as number, total: r.total as number });
+  return paceWarnings(
+    open.flatMap(({ c, a }) => {
+      const window = paceWindow(c.assignments, a.n, CURRENT_SEMESTER.starts);
+      return window
+        ? [{ code: c.code, courseName: c.short, n: a.n, label: `${typeLabel[a.type]} ${a.n}`, due: a.due, window, last: last.get(`${c.code}|${a.n}`) ?? null }]
+        : [];
+    }),
+    now,
+  );
 }
 
 /** Registration reminders from the degree plan (src/lib/registration.ts). On a rough day only the last-day ones. */
