@@ -139,11 +139,11 @@ export function SubmitCheck({
                     </ul>
                     <p className="mt-2 text-xs text-ink-soft">
                       {doneParts === items.length ? "לכל הסעיפים יש תשובה." : `נשארו ${items.length - doneParts} סעיפים בלי תשובה.`}{" "}
-                      {data.note?.detect === "ok"
+                      {data.note?.detect === "ok" && items.some((i) => auto(i.key))
                         ? "הסעיפים עם ✦ זוהו לפי הכותרות בפתרון. לחיצה מתקנת. הזיהוי מחפש כותרות בלבד ולא בודק את התשובות."
                         : "מסמנים כל סעיף שכתבתם לו תשובה. Unihub לא בודק את התשובות."}
                     </p>
-                    {emptyHeading.size > 0 && (
+                    {items.some((i) => !answered(i.key) && emptyHeading.has(i.key)) && (
                       <p className="mt-1 text-xs">יש בפתרון כותרת בלי שום דבר מתחתיה (מסומנת במסגרת מקווקוות).</p>
                     )}
                     {data.note?.detect === "stale" && <p className="mt-1 text-xs text-ink-soft">יש גרסה חדשה של הפתרון. הסעיפים יזוהו מחדש עד שעה אחרי שהיא מגיעה ל־Unihub.</p>}
