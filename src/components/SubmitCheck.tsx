@@ -5,7 +5,7 @@ import { getSubmitCheck } from "@/app/act";
 import type { SubmitCheck as Data } from "@/app/assignmentFileActions";
 import { Icon } from "@/components/Icon";
 import { CHECKLIST } from "@/lib/tracker";
-import { PART_PREFIX } from "@/lib/sheetStructure";
+import { PART_NO_PREFIX, PART_PREFIX } from "@/lib/sheetStructure";
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
@@ -51,15 +51,29 @@ export function SubmitCheck({
   }, [open, data, code, n]);
 
   const items = data?.questions.flatMap((q) => q.items) ?? [];
-  const ticked = new Set(checks.filter((c) => c.startsWith(PART_PREFIX)).map((c) => c.slice(PART_PREFIX.length)));
-  const doneParts = items.filter((i) => ticked.has(i.key)).length;
+  const marked = (prefix: string) => new Set(checks.filter((c) => c.startsWith(prefix)).map((c) => c.slice(prefix.length)));
+  const yes = marked(PART_PREFIX);
+  const no = marked(PART_NO_PREFIX);
+  const found = new Set(data?.detected ?? []);
+  const emptyHeading = new Set(data?.emptyParts ?? []);
+  // what I marked wins; otherwise what the detection found
+  const answered = (k: string) => yes.has(k) || (found.has(k) && !no.has(k));
+  const auto = (k: string) => !yes.has(k) && found.has(k) && !no.has(k);
+  const doneParts = items.filter((i) => answered(i.key)).length;
   const listDone = CHECKLIST.filter((c) => checks.includes(c.id)).length;
   const due = daysLeft < 0 ? "המועד עבר" : daysLeft === 0 ? "ההגשה היום" : daysLeft === 1 ? "ההגשה מחר" : `עוד ${daysLeft} ימים`;
 
   const togglePart = (key: string) => {
-    const done = !ticked.has(key);
-    const all = items.every((i) => (i.key === key ? done : ticked.has(i.key)));
-    const changes = [{ item: PART_PREFIX + key, done }];
+    const done = !answered(key);
+    const all = items.every((i) => (i.key === key ? done : answered(i.key)));
+    const changes: { item: string; done: boolean }[] = [];
+    if (done) {
+      if (no.has(key)) changes.push({ item: PART_NO_PREFIX + key, done: false });
+      if (!found.has(key)) changes.push({ item: PART_PREFIX + key, done: true });
+    } else {
+      if (yes.has(key)) changes.push({ item: PART_PREFIX + key, done: false });
+      if (found.has(key)) changes.push({ item: PART_NO_PREFIX + key, done: true });
+    }
     // "every part answered" on the checklist follows the parts
     if (all !== checks.includes("parts")) changes.push({ item: "parts", done: all });
     onToggle(changes);
@@ -100,7 +114,9 @@ export function SubmitCheck({
                             {q.points != null && <span className="text-xs"> · {q.points} נק׳</span>}
                           </span>
                           {q.items.map((it) => {
-                            const on = ticked.has(it.key);
+                            const on = answered(it.key);
+                            const byAuto = auto(it.key);
+                            const blank = !on && emptyHeading.has(it.key);
                             return (
                               <button
                                 key={it.key}
@@ -108,11 +124,12 @@ export function SubmitCheck({
                                 disabled={!editable || pending}
                                 onClick={() => togglePart(it.key)}
                                 aria-pressed={on}
-                                aria-label={`${it.label.startsWith("שאלה") ? it.label : `שאלה ${q.q} סעיף ${it.label}`}: ${on ? "יש תשובה" : "עוד אין תשובה"}`}
-                                className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-lg border px-2 ${on ? "border-transparent text-bg" : "border-rule bg-surface text-ink"}`}
+                                aria-label={`${it.label.startsWith("שאלה") ? it.label : `שאלה ${q.q} סעיף ${it.label}`}: ${on ? (byAuto ? "זוהתה תשובה בפתרון" : "יש תשובה") : blank ? "יש כותרת בלי תשובה" : "עוד אין תשובה"}`}
+                                title={byAuto ? "זוהה בפתרון. לחיצה מסמנת שאין תשובה." : blank ? "הכותרת בפתרון, אבל מתחתיה ריק" : undefined}
+                                className={`inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-lg border px-2 ${on ? "border-transparent text-bg" : blank ? "border-dashed border-ink bg-surface text-ink" : "border-rule bg-surface text-ink"}`}
                                 style={on ? { background: color } : undefined}
                               >
-                                {on && <Icon name="check" className="size-3.5" />}
+                                {on && <Icon name={byAuto ? "sparkle" : "check"} className="size-3.5" />}
                                 {it.label.startsWith("שאלה") ? "כל השאלה" : it.label}
                               </button>
                             );
@@ -121,8 +138,19 @@ export function SubmitCheck({
                       ))}
                     </ul>
                     <p className="mt-2 text-xs text-ink-soft">
-                      {doneParts === items.length ? "כל הסעיפים סומנו." : `נשארו ${items.length - doneParts} סעיפים בלי סימון.`} מסמנים כל סעיף שכתבתם לו תשובה. Unihub לא קורא את הפתרון ולא בודק אותו.
+                      {doneParts === items.length ? "לכל הסעיפים יש תשובה." : `נשארו ${items.length - doneParts} סעיפים בלי תשובה.`}{" "}
+                      {data.note?.detect === "ok"
+                        ? "הסעיפים עם ✦ זוהו לפי הכותרות בפתרון. לחיצה מתקנת. הזיהוי מחפש כותרות בלבד ולא בודק את התשובות."
+                        : "מסמנים כל סעיף שכתבתם לו תשובה. Unihub לא בודק את התשובות."}
                     </p>
+                    {emptyHeading.size > 0 && (
+                      <p className="mt-1 text-xs">יש בפתרון כותרת בלי שום דבר מתחתיה (מסומנת במסגרת מקווקוות).</p>
+                    )}
+                    {data.note?.detect === "stale" && <p className="mt-1 text-xs text-ink-soft">יש גרסה חדשה של הפתרון. הסעיפים יזוהו מחדש עד שעה אחרי שהיא מגיעה ל־Unihub.</p>}
+                    {data.note?.detect === "error" && <p className="mt-1 text-xs hl">הזיהוי האוטומטי נכשל בגרסה האחרונה: {data.note.detectError}</p>}
+                    {data.note?.detect === "off" && (
+                      <p className="mt-1 text-xs text-ink-soft">אפשר שהסעיפים יסומנו מעצמם לפי הכותרות בפתרון: מוסיפים מפתח Gemini חינמי לסקריפט של Google (ההוראות בראש הסקריפט, בהגדרות).</p>
+                    )}
                   </>
                 ) : (
                   <p className="mt-1 text-ink-soft">

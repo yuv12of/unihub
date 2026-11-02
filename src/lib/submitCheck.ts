@@ -46,3 +46,62 @@ export function findSolutionNote<N extends NoteRow>(notes: N[], code: string, nu
 
 /** An ID number (9 digits) near the top of the recognised text. Digits survive OCR well. */
 export const hasIdNumber = (text: string | null | undefined) => /(?<!\d)\d{9}(?!\d)/.test((text ?? "").slice(0, 600));
+
+export interface NoteHeadings {
+  /** headings found with writing under them: "1", "1א", "3ב(1)" */
+  keys: string[];
+  /** headings found with nothing written under them */
+  empty: string[];
+  pages: number | null;
+}
+
+const HEB = /^[א-מ]$/;
+const FINAL: Record<string, string> = { ך: "כ", ם: "מ", ן: "נ", ף: "פ", ץ: "צ" };
+
+/**
+ * The model's reply ({parts:[{q, part, sub, page, has_answer}], pages}) as part keys. Anything
+ * malformed is dropped: a wrong key would tick a part that was never answered.
+ */
+export function normalizeHeadings(raw: unknown): NoteHeadings {
+  const r = (raw && typeof raw === "object" ? raw : {}) as { parts?: unknown; pages?: unknown };
+  const keys = new Set<string>();
+  const empty = new Set<string>();
+  for (const p of Array.isArray(r.parts) ? r.parts.slice(0, 200) : []) {
+    if (!p || typeof p !== "object") continue;
+    const o = p as Record<string, unknown>;
+    const q = Number(o.q);
+    if (!Number.isInteger(q) || q < 1 || q > 20) continue;
+    let key = String(q);
+    const partRaw = typeof o.part === "string" ? o.part.replace(/["'׳״.\s()]/g, "") : "";
+    const part = FINAL[partRaw] ?? partRaw;
+    if (part) {
+      if (!HEB.test(part)) continue;
+      key += part;
+      const sub = o.sub == null || o.sub === "" ? null : Number(String(o.sub).replace(/[()\s]/g, ""));
+      if (sub != null) {
+        if (!Number.isInteger(sub) || sub < 1 || sub > 9) continue;
+        key += `(${sub})`;
+      }
+    }
+    if (o.has_answer === false) empty.add(key);
+    else keys.add(key);
+  }
+  for (const k of keys) empty.delete(k);
+  const pages = Number(r.pages);
+  return { keys: [...keys], empty: [...empty], pages: Number.isInteger(pages) && pages > 0 ? pages : null };
+}
+
+/**
+ * Whether the solution answers the sheet's part `key` ("3ב(1)", "3א", "2"): its own heading, or a
+ * heading it sits under (a solution that labels ב but not ב(1), ב(2) answers both inside it), or
+ * for a question without parts, any heading of that question.
+ */
+export function detectedIn(found: Set<string>, key: string): boolean {
+  if (found.has(key)) return true;
+  const m = key.match(/^(\d+)([א-מ])?(\(\d\))?$/);
+  if (!m) return false;
+  const [, q, part, sub] = m;
+  if (part && sub && found.has(q + part)) return true;
+  if (!part) return [...found].some((k) => k.startsWith(q) && !/^\d/.test(k.slice(q.length)));
+  return false;
+}

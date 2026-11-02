@@ -6,6 +6,8 @@ export function mailScript(origin: string, token: string) {
 // - Every hour: sends new Notability notes (PDFs in your Drive "Notability" folder) to Unihub,
 //   and asks Unihub to refresh your Opal calendar.
 // - Every morning at 07:00: emails you today's plan. Fridays at 12:00: a weekly summary.
+// - Optional, every hour: finds which questions and parts your assignment solutions answer (see
+//   "Assignment headings" below; needs a free Gemini API key).
 // Nothing else in your Gmail or Drive is read.
 
 const UNIHUB = '${origin}';
@@ -31,6 +33,7 @@ function every10Minutes() {
 
 function hourly() {
   syncNotes();
+  detectAssignmentHeadings();
   post_('/api/sync', {});
 }
 
@@ -158,6 +161,88 @@ function ocrBlob_(blob) {
   } finally {
     if (tmp) { try { tmp.setTrashed(true); } catch (e) {} }
   }
+}
+
+// ---------- Assignment headings ----------
+// Unihub ticks the parts of an assignment that your solution answers. Handwriting is read by Gemini,
+// which is asked ONLY to list the question/part headings it sees, never to solve or judge anything.
+// To turn it on: get a free API key at https://aistudio.google.com/apikey, then in this editor:
+// Project Settings (gear) -> Script properties -> Add: GEMINI_API_KEY = your key. Then run
+// detectAssignmentHeadings once. Without the key, nothing is sent anywhere.
+// Optional property GEMINI_MODEL (default gemini-flash-latest).
+
+const HEADINGS_PROMPT = [
+  'This PDF is a student\u2019s handwritten solution to a university assignment, written in Hebrew (right to left).',
+  'List the question and part headings the student wrote: question headings such as "שאלה 1" or "1.",',
+  'part labels such as "א", "ב", "ג" (also written "א.", "סעיף א", "(א)"), and sub-parts such as "(1)", "(2)".',
+  'Do NOT read, solve, check or evaluate the answers. Only report headings.',
+  'For each heading give: q (question number), part (the Hebrew letter, or null for the question itself),',
+  'sub (the sub-part number, or null), page (1-based), and has_answer (true if anything is written under',
+  'the heading before the next heading, false if it is empty).',
+  'Return only JSON: {"pages": <number of pages>, "parts": [{"q":1,"part":"א","sub":null,"page":1,"has_answer":true}]}.',
+].join(' ');
+
+function isAssignment_(name, path) {
+  return /(ממ["\u05F4']?[ןנ]|ממן|מטל|mmn|maman|matala|assignment)/i.test(name + ' ' + path);
+}
+
+// Reads the headings of assignment solutions changed in the last 6 months that weren't read yet
+// (each version once). A few per run, to stay inside the time limit and the free quota.
+function detectAssignmentHeadings() {
+  const props = PropertiesService.getScriptProperties();
+  const key = props.getProperty('GEMINI_API_KEY');
+  if (!key) return;
+  const folders = DriveApp.getFoldersByName(NOTES_FOLDER);
+  if (!folders.hasNext()) return;
+  const done = JSON.parse(props.getProperty('headingsDone') || '{}');
+  const recent = Date.now() - 180 * 24 * 3600 * 1000;
+  const started = Date.now();
+  let left = 5;
+  walk_(folders.next(), NOTES_FOLDER, function (file, path) {
+    if (left <= 0 || Date.now() - started > 4 * 60 * 1000) return false;
+    if (file.getMimeType() !== MimeType.PDF || !isAssignment_(file.getName(), path)) return true;
+    const version = String(file.getLastUpdated().getTime());
+    if (file.getLastUpdated().getTime() < recent || done[file.getId()] === version) return true;
+    left--;
+    if (readHeadings_(file, key, props.getProperty('GEMINI_MODEL') || 'gemini-flash-latest')) done[file.getId()] = version;
+    return true;
+  });
+  const ids = Object.keys(done);
+  const kept = {};
+  ids.slice(-300).forEach(function (id) { kept[id] = done[id]; });
+  props.setProperty('headingsDone', JSON.stringify(kept));
+}
+
+function readHeadings_(file, key, model) {
+  let headings = null, error = '';
+  try {
+    const bytes = file.getBlob().getBytes();
+    if (bytes.length > 18000000) throw new Error('PDF larger than 18MB');
+    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-goog-api-key': key },
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        contents: [{ role: 'user', parts: [
+          { inline_data: { mime_type: 'application/pdf', data: Utilities.base64Encode(bytes) } },
+          { text: HEADINGS_PROMPT },
+        ] }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+      }),
+    });
+    if (res.getResponseCode() !== 200) throw new Error('Gemini ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+    const out = JSON.parse(res.getContentText());
+    const text = ((out.candidates || [])[0] || {}).content.parts.map(function (p) { return p.text || ''; }).join('');
+    headings = JSON.parse(text);
+  } catch (e) {
+    error = String(e).slice(0, 400);
+  }
+  const r = post_('/api/ingest/headings', {
+    id: file.getId(), modified: file.getLastUpdated().toISOString(), headings: headings, error: error,
+  });
+  // done only when stored; an error or a note Unihub doesn't have yet is tried again next hour
+  return !error && r && r.getResponseCode() === 200 && JSON.parse(r.getContentText()).result === 'stored';
 }
 
 // Run this once if you want all notes re-sent (for example after enabling the Drive API).

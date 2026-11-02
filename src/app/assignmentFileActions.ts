@@ -4,7 +4,7 @@ import { action, must } from "@/app/guard";
 import { adminClient } from "@/lib/supabase/admin";
 import { ASSIGNMENT_FILE_MAX, BOOKLET, answerFor, linkFor, semesterSlug, sheetFor } from "@/lib/assignmentFiles";
 import { isUsable, parseSheet, partItems, type PartItem, type SheetStructure } from "@/lib/sheetStructure";
-import { findSolutionNote, hasIdNumber, solutionNumbers } from "@/lib/submitCheck";
+import { detectedIn, findSolutionNote, hasIdNumber, solutionNumbers, type NoteHeadings } from "@/lib/submitCheck";
 import { pdfText } from "@/lib/pdfText";
 import { getCourses } from "@/lib/userdata";
 import { semester, todayInIsrael, typeLabel } from "@/lib/semester";
@@ -188,7 +188,20 @@ export interface SubmitCheck {
   sheet: "ok" | "notext" | "none";
   questions: { q: number; points: number | null; items: PartItem[] }[];
   /** my solution among the synced Notability notes */
-  note: { name: string; url: string | null; modified: string | null; ocr: boolean; hasId: boolean } | null;
+  note: {
+    name: string;
+    url: string | null;
+    modified: string | null;
+    ocr: boolean;
+    hasId: boolean;
+    /** automatic part detection: "off" never ran (no Gemini key), "stale" a newer version is waiting */
+    detect: "off" | "ok" | "stale" | "error";
+    detectError: string | null;
+  } | null;
+  /** sheet parts whose heading the solution has, with writing under it */
+  detected: string[];
+  /** sheet parts whose heading is there but nothing is written under it */
+  emptyParts: string[];
   /** the file I submitted, saved in Unihub */
   answer: string | null;
 }
@@ -233,17 +246,37 @@ export async function getSubmitCheck(code: string, n: string): Promise<SubmitChe
 
     const found = findSolutionNote(notes ?? [], code, solutionNumbers(list, n));
     let note: SubmitCheck["note"] = null;
+    let headings: NoteHeadings | null = null;
     if (found) {
-      const { data: t } = await supabase.from("notes").select("text_content").eq("id", found.id).maybeSingle();
+      const { data: t } = await supabase.from("notes").select("text_content, headings, headings_for, headings_error").eq("id", found.id).maybeSingle();
       const text = (t?.text_content as string | null) ?? "";
-      note = { name: found.name.replace(/\.pdf$/i, ""), url: found.url, modified: found.modified_at, ocr: !!text.trim(), hasId: hasIdNumber(text) };
+      const at = (t?.headings_for as string | null) ?? null;
+      const current = !!at && !!found.modified_at && new Date(at).getTime() >= new Date(found.modified_at).getTime();
+      const detect: NonNullable<SubmitCheck["note"]>["detect"] = !at && !t?.headings_error ? "off" : !current ? "stale" : t?.headings_error ? "error" : "ok";
+      note = {
+        name: found.name.replace(/\.pdf$/i, ""),
+        url: found.url,
+        modified: found.modified_at,
+        ocr: !!text.trim(),
+        hasId: hasIdNumber(text),
+        detect,
+        detectError: detect === "error" ? String(t?.headings_error).slice(0, 200) : null,
+      };
+      if (detect === "ok" && t?.headings) headings = t.headings as NoteHeadings;
     }
+    const itemKeys = (usable?.questions ?? []).flatMap((x) => partItems(x).map((i) => i.key));
+    const foundKeys = new Set(headings?.keys ?? []);
+    const emptyKeys = new Set(headings?.empty ?? []);
+    const detected = itemKeys.filter((k) => detectedIn(foundKeys, k));
+    const emptyParts = itemKeys.filter((k) => !detected.includes(k) && detectedIn(emptyKeys, k));
 
     return {
       n,
       sheet: !file ? "none" : usable ? "ok" : "notext",
       questions: (usable?.questions ?? []).map((x) => ({ q: x.q, points: x.points, items: partItems(x) })),
       note,
+      detected,
+      emptyParts,
       answer: answerFor(files, n)?.name ?? null,
     } satisfies SubmitCheck;
   });

@@ -108,9 +108,13 @@ export function partItems(q: SheetQuestion): PartItem[] {
   );
 }
 
-/** Stored check ids for parts: "part:3ב(1)". */
+/**
+ * Stored check ids for parts: "part:3ב(1)" (I marked it answered) and "partno:3ב(1)" (I marked a
+ * part the automatic detection found as not answered).
+ */
 export const PART_PREFIX = "part:";
-export const PART_KEY = /^part:\d{1,2}([א-מ](\(\d\))?)?$/;
+export const PART_NO_PREFIX = "partno:";
+export const PART_KEY = /^part(no)?:\d{1,2}([א-מ](\(\d\))?)?$/;
 
 /** A plausible structure: at least one question, numbered from 1 with no gap. */
 export const isUsable = (s: SheetStructure | null | undefined): s is SheetStructure => !!s && s.questions.length > 0;

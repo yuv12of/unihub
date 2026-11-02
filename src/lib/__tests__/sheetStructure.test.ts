@@ -75,6 +75,7 @@ test("references to other questions are not headings", () => {
 test("stored part keys", () => {
   assert.match("part:3ב(1)", PART_KEY);
   assert.match("part:2", PART_KEY);
+  assert.match("partno:3ב(1)", PART_KEY);
   assert.doesNotMatch("part:x", PART_KEY);
   assert.doesNotMatch("submit", PART_KEY);
 });

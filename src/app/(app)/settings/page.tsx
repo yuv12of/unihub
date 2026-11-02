@@ -344,10 +344,28 @@ async function Settings() {
                         </li>
                       </ol>
                       <p className="text-sm">
-                        <span className="hl">גרסה חדשה (אוקטובר 2026):</span> כבר הדבקתם גרסה קודמת? החליפו את כל הקוד בגרסה הזו, הריצו{" "}
-                        <b dir="ltr">setup</b>, ואחר כך פעם אחת <b dir="ltr">backfillAttachmentText</b> (קורא את מסמכי ה־PDF של ארבעת החודשים
-                        האחרונים; אם נעצר באמצע, מריצים שוב). שום דבר לא ייכפל.
+                        <span className="hl">גרסה חדשה (נובמבר 2026):</span> כבר הדבקתם גרסה קודמת? החליפו את כל הקוד בגרסה הזו והריצו{" "}
+                        <b dir="ltr">setup</b>. שום דבר לא ייכפל.
                       </p>
+                      <div className="rounded-xl bg-bg p-3 text-sm">
+                        <p className="font-medium">רשות: סימון אוטומטי של הסעיפים שעניתם עליהם</p>
+                        <p className="mt-1 text-ink-soft">
+                          הסקריפט שולח את קובצי הפתרון של המטלות (רק מתיקיות ושמות של מטלות) ל־Gemini של Google, שמתבקש לרשום אילו כותרות
+                          שאלות וסעיפים מופיעות בהם, בלי לפתור או לבדוק כלום. בשכבה החינמית Google רשאית להשתמש בתוכן לשיפור המוצרים שלה.
+                        </p>
+                        <ol className="mt-2 list-decimal space-y-1 ps-5">
+                          <li>
+                            יוצרים מפתח חינמי ב־<b dir="ltr">aistudio.google.com/apikey</b>.
+                          </li>
+                          <li>
+                            בעורך הסקריפט: <b>Project Settings</b> (גלגל השיניים) ← <b>Script properties</b> ← <b>Add script property</b>: שם{" "}
+                            <b dir="ltr">GEMINI_API_KEY</b>, ערך המפתח. שומרים.
+                          </li>
+                          <li>
+                            מריצים פעם אחת את <b dir="ltr">detectAssignmentHeadings</b>. מכאן זה קורה לבד כל שעה, פעם אחת לכל גרסה של פתרון.
+                          </li>
+                        </ol>
+                      </div>
                       <details className="group">
                         <summary className="summary-clean flex min-h-10 items-center gap-2 text-sm font-medium">
                           הקוד להדבקה
