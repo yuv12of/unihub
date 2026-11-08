@@ -214,7 +214,7 @@ function Card({
               <span className="shrink-0 text-xs tabular-nums text-ink-soft">
                 {parts.doneParts}/{total}
               </span>
-              {card.window && <PaceSpark points={card.pace} answered={parts.doneParts} total={total} window={card.window} due={card.due} color={color} now={now} />}
+              {card.window && (now.date >= card.window.start || card.pace.length > 0) && <PaceSpark points={card.pace} answered={parts.doneParts} total={total} window={card.window} due={card.due} color={color} now={now} />}
               {word && <span className={`shrink-0 text-xs ${word.behind ? "hl font-medium" : "text-ink-soft"}`}>{word.text}</span>}
             </span>
           )}
