@@ -30,6 +30,9 @@ test("the solution note: in the course, an assignment, the right number, the new
   assert.equal(findSolutionNote(notes, "20474", solutionNumbers(infi, "01"))?.id, "new");
   assert.equal(findSolutionNote(notes, "20474", solutionNumbers(infi, "04"))?.id, "13");
   assert.equal(findSolutionNote(notes, "20474", solutionNumbers(infi, "03")), null);
+  // last semester's "ממן 13" (synced on the first day) is not this semester's ממ״ן 04
+  assert.equal(findSolutionNote(notes, "20474", solutionNumbers(infi, "04"), "2026-10-26"), null);
+  assert.equal(findSolutionNote(notes, "20474", solutionNumbers(infi, "01"), "2026-10-26")?.id, "new");
 });
 
 test("an ID number at the top", () => {

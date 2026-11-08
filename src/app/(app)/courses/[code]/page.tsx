@@ -154,7 +154,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               key: "overview",
               label: "סקירה",
               panel: (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="space-y-6">
                     <section className="panel p-5">
                       <h2 className="section-title">{thisWeek ? `לקריאה השבוע · ${thisWeek.label}` : "לקריאה השבוע"}</h2>
@@ -237,7 +237,7 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               key: "assignments",
               label: "מטלות",
               panel: (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="section-title me-auto">מטלות הקורס</h2>

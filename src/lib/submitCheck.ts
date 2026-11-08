@@ -31,11 +31,14 @@ const ASSIGNMENT_WORD = /(ממ["״']?[ןנ]|ממן|מטל|mmn|maman|matala|assig
 
 /**
  * The note that is my solution: in the course, named or filed as an assignment, with one of its
- * numbers. Several (copies, old semesters): the most recently modified.
+ * numbers, saved this semester (`notBefore`: an ISO date). Several (copies): the most recently
+ * modified.
  */
-export function findSolutionNote<N extends NoteRow>(notes: N[], code: string, numbers: number[]): N | null {
+export function findSolutionNote<N extends NoteRow>(notes: N[], code: string, numbers: number[], notBefore?: string): N | null {
   const hits = notes.filter((x) => {
     if (x.course_code !== code) return false;
+    // a previous semester's solution to "ממ״ן 12" is not this semester's
+    if (notBefore && (x.modified_at ?? "") < notBefore) return false;
     const name = x.name.normalize("NFC").replace(/\.pdf$/i, "");
     if (!ASSIGNMENT_WORD.test(name) && !ASSIGNMENT_WORD.test(x.folder ?? "")) return false;
     const nums = [...name.matchAll(/(?<!\d)(\d{1,2})(?!\d)/g)].map((m) => Number(m[1]));

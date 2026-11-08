@@ -11,7 +11,7 @@ import { isUsable, parseSheet, partItems, type PartItem, type SheetStructure } f
 import { detectedIn, findSolutionNote, hasIdNumber, solutionNumbers, type NoteHeadings } from "@/lib/submitCheck";
 import { answeredCount, type PacePoint } from "@/lib/pace";
 import { pdfText } from "@/lib/pdfText";
-import { semester, type Assignment } from "@/lib/semester";
+import { CURRENT_SEMESTER, addDays, semester, type Assignment } from "@/lib/semester";
 
 const BUCKET = "assignment-files";
 
@@ -78,7 +78,9 @@ export async function submitStates(
   const admin = adminClient();
 
   // which note is each assignment's solution, then their texts and headings in one query
-  const solution = new Map(ns.map((n) => [n, findSolutionNote(notes ?? [], code, solutionNumbers(assignments, n))]));
+  // notes synced on the semester's first day or before are earlier semesters' work
+  const notBefore = addDays(CURRENT_SEMESTER.starts, 1);
+  const solution = new Map(ns.map((n) => [n, findSolutionNote(notes ?? [], code, solutionNumbers(assignments, n), notBefore)]));
   const noteIds = [...new Set([...solution.values()].filter((x) => !!x).map((x) => x!.id))];
   const { data: texts } = noteIds.length
     ? await sb.from("notes").select("id, text_content, headings, headings_for, headings_error").eq("user_id", userId).in("id", noteIds)
