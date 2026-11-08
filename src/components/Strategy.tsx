@@ -12,12 +12,12 @@ import { todayInIsrael } from "@/lib/semester";
 
 const STATE: Record<string, string> = { submitted: "הוגש", skipped: "ויתרת", missed: "עבר המועד", open: "פתוח" };
 
-export function StrategyPanel({ s, crunches, color }: { s: CourseStrategy; crunches: Crunch[]; color: string }) {
+/** The strategy itself (lines, the assignments by state, the legend), for a fold or a panel. */
+export function StrategyBody({ s, color }: { s: CourseStrategy; color: string }) {
   const best = new Set(s.best ?? []);
   return (
-    <section className="panel p-5">
-      <h2 className="section-title">אסטרטגיית מטלות</h2>
-      <ul className="mt-3 space-y-2 text-[15px] leading-relaxed">
+    <>
+      <ul className="space-y-2 text-[15px] leading-relaxed">
         {s.lines.map((l, i) => (
           <li key={i} className={l.tone === "info" && i > 0 ? "text-ink-soft" : ""}>
             {l.tone === "warn" ? <span className="hl">{l.text}</span> : l.text}
@@ -42,17 +42,37 @@ export function StrategyPanel({ s, crunches, color }: { s: CourseStrategy; crunc
         })}
       </ul>
       <p className="mt-2 text-xs text-ink-soft">צבוע: הוגש · רקע בהיר: הדרך הקצרה ביותר · מסגרת עבה: חובה</p>
+    </>
+  );
+}
+
+/** Weeks with several deadlines across my courses, and whether they fit. */
+export function CrunchList({ crunches }: { crunches: Crunch[] }) {
+  return (
+    <ul className="space-y-2 text-sm leading-relaxed">
+      {crunches.map((c) => (
+        <li key={c.first} className="flex gap-2">
+          <Icon name={c.tone === "warn" ? "alert" : "calendar"} className={`mt-0.5 size-4 shrink-0 ${c.tone === "warn" ? "text-ink" : "text-ink-soft"}`} />
+          <span>{c.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function StrategyPanel({ s, crunches, color }: { s: CourseStrategy; crunches: Crunch[]; color: string }) {
+  return (
+    <section className="panel p-5">
+      <h2 className="section-title">אסטרטגיית מטלות</h2>
+      <div className="mt-3">
+        <StrategyBody s={s} color={color} />
+      </div>
       {crunches.length > 0 && (
         <div className="mt-5 border-t border-rule pt-4">
           <h3 className="text-sm font-semibold">שבועות עמוסים</h3>
-          <ul className="mt-2 space-y-2 text-sm leading-relaxed">
-            {crunches.map((c) => (
-              <li key={c.first} className="flex gap-2">
-                <Icon name={c.tone === "warn" ? "alert" : "calendar"} className={`mt-0.5 size-4 shrink-0 ${c.tone === "warn" ? "text-ink" : "text-ink-soft"}`} />
-                <span>{c.text}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2">
+            <CrunchList crunches={crunches} />
+          </div>
         </div>
       )}
     </section>

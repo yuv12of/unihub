@@ -171,7 +171,7 @@ export function AssignmentChecklist({
 const FACES = ["😌", "🙂", "😐", "😓", "🥵"];
 
 /** 30 seconds after submitting: how long it really took and what was hard. Feeds future estimates. */
-function Autopsy({ code, item, onDone }: { code: string; item: ChecklistItem; onDone: () => void }) {
+export function Autopsy({ code, item, onDone }: { code: string; item: Pick<ChecklistItem, "n" | "type" | "answer" | "spent">; onDone: () => void }) {
   const [hours, setHours] = useState(item.spent ? String(Math.round(item.spent / 6) / 10) : "");
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [hard, setHard] = useState("");

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { Tabs } from "@/components/Fold";
+import { Fold, Tabs } from "@/components/Fold";
 import { Icon } from "@/components/Icon";
 import { ReadChips } from "@/components/ReadChips";
 import { MathText } from "@/components/MathText";
@@ -12,21 +12,20 @@ import { VideoStrip } from "@/components/VideoStrip";
 import { StuckList } from "@/components/StuckList";
 import { QuestionsForTutor } from "@/components/QuestionsForTutor";
 import { examLines, meetupHref, questionLines } from "@/lib/meetup";
-import { AssignmentChecklist } from "@/components/AssignmentChecklist";
 import { GradeCalculator } from "@/components/GradeCalculator";
 import { ruleHe, StandingText, WeightBar } from "@/components/CourseParts";
 import { CourseLook } from "@/components/CourseManager";
 import { PALETTE } from "@/lib/semester";
 import { ExamDates, ExamNag } from "@/components/ExamDates";
 import { PastExamBank } from "@/components/PastExamBank";
-import { AssignmentQuestions } from "@/components/AssignmentQuestions";
 import { AssignmentFiles } from "@/components/AssignmentFiles";
 import { assignmentFileUrls, getAssignmentFiles } from "@/lib/assignmentFilesData";
 import { answerFor, extrasFor, linkFor, sheetFor } from "@/lib/assignmentFiles";
-import { AllAssignmentsLink } from "@/components/AssignmentLinks";
-import { StrategyPanel } from "@/components/Strategy";
+import { AllAssignmentsButton } from "@/components/AssignmentLinks";
 import { aimedExam, attemptScore, getMockAttempts, getPastExams, runway, semesterEnd, type Runway } from "@/lib/exams";
-import { getChecks, getPaceLog, getQuestions } from "@/lib/trackerData";
+import { getChecks, getPaceLog, getQuestions, getSubmitStates } from "@/lib/trackerData";
+import { AssignmentBoard } from "@/components/assignments/AssignmentBoard";
+import { CrunchList, StrategyBody } from "@/components/Strategy";
 import { paceWindow } from "@/lib/pace";
 import { courseStrategy, crunches as findCrunches, freeMinutes } from "@/lib/strategy";
 import { busyFromEvents } from "@/lib/planfor";
@@ -106,19 +105,8 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
     const mine = attempts.filter((a) => a.exam_id === e.id && a.finished_at);
     return { id: e.id, label: e.label, url: e.url, duration_minutes: e.duration_minutes, questions: e.questions, attempts: mine.length, lastScore: mine[0] ? attemptScore(mine[0]) : null };
   });
-  const tracked = c.assignments
-    .filter((a) => a.type === "file" && a.due >= today && !["submitted", "skipped"].includes(progress[progressKey(code, a.n)]?.status ?? ""))
-    .map((a) => ({
-      n: a.n,
-      label: `${typeLabel[a.type]} ${a.n}`,
-      dueLabel: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }),
-      daysLeft: daysBetween(today, a.due),
-      questions: questions[a.n] ?? [],
-      checks: checks[a.n] ?? [],
-      due: a.due,
-      pace: pace[a.n] ?? [],
-      window: paceWindow(c.assignments, a.n, CURRENT_SEMESTER.starts),
-    }));
+  const openFiles = c.assignments.filter((a) => a.type === "file" && a.due >= today && !["submitted", "skipped"].includes(progress[progressKey(code, a.n)]?.status ?? ""));
+  const states = await getSubmitStates(code, openFiles.map((a) => a.n), c.assignments);
   const upcoming = plan.sessions.filter((s) => s.courseCode === code && s.date >= today && s.date <= addDays(today, 13));
   const courseForum = forum.filter((f) => f.courseCode === code);
   const myStuck = stuck.filter((x) => x.course_code === code);
@@ -249,67 +237,83 @@ async function Course({ params }: Pick<PageProps<"/courses/[code]">, "params">) 
               key: "assignments",
               label: "מטלות",
               panel: (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-                  <div className="space-y-6">
-                  <section className="panel px-5 pb-2 pt-5">
-                    <h2 className="section-title">מטלות הקורס</h2>
-                    {supabaseEnabled && (
-                      <p className="mt-1 text-sm">
-                        <AllAssignmentsLink code={code} url={assignmentData.allUrl} />
-                      </p>
-                    )}
-                    <AssignmentChecklist
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="section-title me-auto">מטלות הקורס</h2>
+                      {supabaseEnabled && <AllAssignmentsButton code={code} url={assignmentData.allUrl} editable={supabaseEnabled} />}
+                      <AssignmentFiles
+                        compact
+                        code={code}
+                        editable={supabaseEnabled}
+                        files={sheets
+                          .filter((f) => f.kind === "sheet" && f.path)
+                          .map((f) => ({ id: f.id, n: f.n, kind: f.kind, name: f.name, size: f.size, lastPage: f.lastPage, url: f.url, pdf: f.pdf, href: f.pdf ? null : linkOf(f) }))}
+                        assignments={c.assignments.map((a) => ({ n: a.n, label: `${typeLabel[a.type]} ${a.n}` }))}
+                      />
+                    </div>
+                    <AssignmentBoard
                       code={code}
                       color={c.color}
                       editable={supabaseEnabled}
-                      items={c.assignments.map((a) => ({
+                      options={c.assignments.map((a) => ({ n: a.n, label: `${typeLabel[a.type]} ${a.n}` }))}
+                      cards={c.assignments.map((a) => ({
                         n: a.n,
-                        reading: plans.assignments[code]?.[a.n] ?? null,
-                        forum: courseForum.filter((f) => f.assignment === a.n).slice(0, 3).map((f) => ({ topic: f.topic, href: `/mail?open=${f.mailId}` })),
                         label: `${typeLabel[a.type]} ${a.n}`,
-                        due: formatHebrewDate(a.due, { day: "numeric", month: "numeric" }) + (a.originalDue ? " (הוארך)" : ""),
+                        type: a.type,
+                        due: a.due,
+                        dueLabel: formatHebrewDate(a.due, { weekday: "short", day: "numeric", month: "numeric" }),
+                        daysLeft: daysBetween(today, a.due),
                         weight: a.weight,
+                        extended: !!a.originalDue,
                         past: a.due < today,
                         progress: progress[progressKey(code, a.n)] ?? { status: "todo", grade: null },
-                        spent: spent[`${code}|${a.n}`],
+                        reading: plans.assignments[code]?.[a.n] ?? null,
+                        forum: courseForum.filter((f) => f.assignment === a.n).slice(0, 3).map((f) => ({ topic: f.topic, href: `/mail?open=${f.mailId}` })),
                         review: reviews.find((r) => r.course_code === code && r.n === a.n) ?? null,
+                        spent: spent[`${code}|${a.n}`],
                         sheetHref: sheetFor(sheets, a.n) ? `/courses/${code}/assignment/${a.n}` : null,
-                        type: a.type,
                         link: linkFor(sheets, a.n)?.url ?? null,
                         answer: (() => {
                           const f = answerFor(sheets, a.n);
                           return f ? { id: f.id, name: f.name, href: linkOf(f) } : null;
                         })(),
                         extras: extrasFor(sheets, a.n).map((f) => ({ id: f.id, name: f.name, href: linkOf(f) })),
+                        files: sheets.filter((f) => f.n === a.n && f.kind === "sheet" && f.path).map((f) => ({ id: f.id, name: f.name })),
+                        questions: questions[a.n] ?? [],
+                        checks: checks[a.n] ?? [],
+                        state: states[a.n] ?? null,
+                        pace: pace[a.n] ?? [],
+                        window: paceWindow(c.assignments, a.n, CURRENT_SEMESTER.starts),
                       }))}
                     />
-                  </section>
-                  <AssignmentFiles
-                    code={code}
-                    editable={supabaseEnabled}
-                    files={sheets
-                      .filter((f) => f.kind === "sheet" && f.path)
-                      .map((f) => ({ id: f.id, n: f.n, kind: f.kind, name: f.name, size: f.size, lastPage: f.lastPage, url: f.url, pdf: f.pdf, href: f.pdf ? null : linkOf(f) }))}
-                    assignments={c.assignments.map((a) => ({ n: a.n, label: `${typeLabel[a.type]} ${a.n}` }))}
-                  />
-                  <section className="panel px-5 pb-2 pt-5">
-                    <h2 className="section-title">איפה אני בממ״נים</h2>
-                    <p className="mt-1 text-sm text-ink-soft">שאלה אחר שאלה. ולפני ההגשה: בדיקה שכל סעיף קיבל תשובה.</p>
-                    <AssignmentQuestions code={code} color={c.color} items={tracked} editable={supabaseEnabled} />
-                  </section>
                   </div>
-                  <div className="space-y-6">
-                  <StrategyPanel s={strategy} crunches={crunchList} color={c.color} />
-                  <section className="panel overflow-hidden">
-                    <GradeCalculator
-                      color={c.color}
-                      max={c.assignmentWeight.max}
-                      rows={c.assignments.map((a) => {
-                        const p = progress[progressKey(code, a.n)];
-                        return { n: a.n, label: `${typeLabel[a.type]} ${a.n}`, weight: a.weight, grade: p?.status === "submitted" ? (p.grade ?? null) : null, status: p?.status ?? "todo" };
-                      })}
-                    />
-                  </section>
+                  <div className="space-y-4">
+                    <Fold id={`strategy-${code}`} title="אסטרטגיית מטלות" summary={strategy.lines[0]?.text} defaultOpen={false}>
+                      <StrategyBody s={strategy} color={c.color} />
+                    </Fold>
+                    {crunchList.length > 0 && (
+                      <Fold
+                        id={`crunch-${code}`}
+                        title="שבועות עמוסים"
+                        summary={`${crunchList.length === 1 ? "תקופה אחת" : `${crunchList.length} תקופות`} עם כמה הגשות · הקרובה ב־${formatHebrewDate(crunchList[0].first, { day: "numeric", month: "numeric" })}${crunchList.some((k) => k.tone === "warn") ? " · אחת צפופה מדי" : ""}`}
+                        defaultOpen={false}
+                      >
+                        <CrunchList crunches={crunchList} />
+                      </Fold>
+                    )}
+                    <section className="panel overflow-hidden">
+                      <GradeCalculator
+                        color={c.color}
+                        max={c.assignmentWeight.max}
+                        className=""
+                        hint={`נצברו ${c.assignments.filter((a) => progress[progressKey(code, a.n)]?.status === "submitted").reduce((w, a) => w + a.weight, 0)} נקודות משקל מתוך ${c.assignmentWeight.max}`}
+                        rows={c.assignments.map((a) => {
+                          const p = progress[progressKey(code, a.n)];
+                          return { n: a.n, label: `${typeLabel[a.type]} ${a.n}`, weight: a.weight, grade: p?.status === "submitted" ? (p.grade ?? null) : null, status: p?.status ?? "todo" };
+                        })}
+                      />
+                    </section>
                   </div>
                 </div>
               ),

@@ -21,9 +21,27 @@ function put(url: string, file: File) {
 }
 
 /** A link with a small inline editor: paste, save, or clear. */
-function LinkEditor({ url, label, empty, onSave }: { url: string | null; label: string; empty: string; onSave: (v: string) => Promise<unknown> }) {
+function LinkEditor({
+  url,
+  label,
+  empty,
+  onSave,
+  startEditing,
+  onClose,
+}: {
+  url: string | null;
+  label: string;
+  empty: string;
+  onSave: (v: string) => Promise<unknown>;
+  startEditing?: boolean;
+  onClose?: () => void;
+}) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingRaw] = useState(!!startEditing);
+  const setEditing = (v: boolean) => {
+    setEditingRaw(v);
+    if (!v) onClose?.();
+  };
   const [value, setValue] = useState(url ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -95,13 +113,55 @@ function LinkEditor({ url, label, empty, onSave }: { url: string | null; label: 
 }
 
 /** An online assignment (ממ"ח): the link to its quiz on Opal. */
-export function OnlineLink({ code, n, url }: { code: string; n: string; url: string | null }) {
-  return <LinkEditor url={url} label="פתיחת המטלה באופל" empty="אין קישור למטלה." onSave={(v) => setAssignmentLink(code, n, v)} />;
+export function OnlineLink({ code, n, url, startEditing, onClose }: { code: string; n: string; url: string | null; startEditing?: boolean; onClose?: () => void }) {
+  return <LinkEditor url={url} label="פתיחת המטלה באופל" empty="אין קישור למטלה." onSave={(v) => setAssignmentLink(code, n, v)} startEditing={startEditing} onClose={onClose} />;
 }
 
 /** The course's Opal page with all its assignments. */
-export function AllAssignmentsLink({ code, url }: { code: string; url: string | null }) {
-  return <LinkEditor url={url} label="כל המטלות של הקורס באופל" empty="אין קישור לדף המטלות באופל." onSave={(v) => setAssignmentsUrl(code, v)} />;
+export function AllAssignmentsLink({ code, url, startEditing, onClose }: { code: string; url: string | null; startEditing?: boolean; onClose?: () => void }) {
+  return <LinkEditor url={url} label="כל המטלות של הקורס באופל" empty="אין קישור לדף המטלות באופל." onSave={(v) => setAssignmentsUrl(code, v)} startEditing={startEditing} onClose={onClose} />;
+}
+
+/**
+ * Uploading the file I submitted, for a button of the caller's own: open() picks the file,
+ * `input` must be rendered once.
+ */
+export function useAnswerUpload(code: string, n: string) {
+  const router = useRouter();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const upload = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > ASSIGNMENT_FILE_MAX) return setError("הקובץ גדול מ־50MB");
+    setError(null);
+    setBusy(true);
+    try {
+      const { path, url } = await assignmentUploadUrl(code, f.name, f.size);
+      await put(url, f);
+      await addAssignmentFile(code, n, f.name, path, f.size, "answer");
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message || "ההעלאה נכשלה");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const input = (
+    <input
+      ref={ref}
+      type="file"
+      accept={ANSWER_ACCEPT}
+      className="sr-only"
+      tabIndex={-1}
+      aria-hidden
+      onChange={(e) => {
+        upload(e.target.files?.[0]);
+        e.target.value = "";
+      }}
+    />
+  );
+  return { open: () => ref.current?.click(), input, busy, error };
 }
 
 /** The file I submitted for a file assignment: upload it when done, open it later. */
@@ -183,4 +243,35 @@ export function AnswerUpload({ code, n, answer }: { code: string; n: string; ans
       )}
     </span>
   );
+}
+
+/** The course's Opal assignments page as a button, with a small edit button next to it. */
+export function AllAssignmentsButton({ code, url, editable }: { code: string; url: string | null; editable: boolean }) {
+  const [editing, setEditing] = useState(false);
+  if (editing)
+    return (
+      <div className="w-full">
+        <AllAssignmentsLink code={code} url={url} startEditing onClose={() => setEditing(false)} />
+      </div>
+    );
+  if (url)
+    return (
+      <span className="inline-flex items-center gap-0.5">
+        <a href={url} target="_blank" rel="noreferrer" className="btn">
+          כל המטלות באופל
+          <Icon name="chevronLeft" className="size-4" />
+        </a>
+        {editable && (
+          <button type="button" className="btn-ghost size-9 !px-0" aria-label="עריכת הקישור לדף המטלות באופל" onClick={() => setEditing(true)}>
+            <Icon name="pencil" className="size-4" />
+          </button>
+        )}
+      </span>
+    );
+  return editable ? (
+    <button type="button" className="btn" onClick={() => setEditing(true)}>
+      <Icon name="plus" className="size-4" />
+      קישור לדף המטלות באופל
+    </button>
+  ) : null;
 }

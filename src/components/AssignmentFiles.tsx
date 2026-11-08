@@ -32,13 +32,17 @@ export function AssignmentFiles({
   files,
   assignments,
   editable,
+  compact = false,
 }: {
   code: string;
   files: AssignmentFile[];
   /** the course's assignments: n and "ממ״ן 11" */
   assignments: { n: string; label: string }[];
   editable: boolean;
+  /** only a button that opens the upload (the files themselves are shown in each assignment's card) */
+  compact?: boolean;
 }) {
+  const [shown, setShown] = useState(false);
   const router = useRouter();
   const [queue, setQueue] = useState<Pending[]>([]);
   const [busy, setBusy] = useState<{ n: number; of: number; pct: number } | null>(null);
@@ -100,41 +104,8 @@ export function AssignmentFiles({
     </select>
   );
 
-  return (
-    <section className={`panel p-5 ${pending ? "opacity-80" : ""}`}>
-      <h2 className="section-title">דפי המטלות</h2>
-      <p className="mt-1 text-sm text-ink-soft">
-        {files.length ? "נפתחים בקורא ובטיימר הריכוז, ליד המעקב אחרי השאלות." : "מורידים פעם בסמסטר מאתר הקורס באופל ומעלים כאן, כולם יחד. כל קובץ מותאם לממ״ן שלו לפי השם."}
-      </p>
-
-      {files.length > 0 && (
-        <ul className="mt-3 divide-y divide-rule border-y border-rule">
-          {files.map((f) => (
-            <li key={f.id} className="flex flex-wrap items-center gap-2 py-2.5">
-              <Icon name="clip" className="size-4 shrink-0 text-ink-soft" />
-              {f.pdf ? (
-                <Link href={`/courses/${code}/assignment/${f.n}`} className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
-                  {f.name}
-                </Link>
-              ) : (
-                <a href={f.href ?? undefined} download className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
-                  {f.name}
-                </a>
-              )}
-              {f.size != null && <span className="text-xs tabular-nums text-ink-soft">{fileSize(f.size)}</span>}
-              {editable ? select(f.n, (n) => run(() => setAssignmentFileN(f.id, n)), `המטלה של ${f.name}`) : <span className="text-sm text-ink-soft">{label(f.n)}</span>}
-              {editable && (
-                <button type="button" onClick={() => run(() => deleteAssignmentFile(f.id))} className="grid size-8 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-bad" aria-label={`מחיקה: ${f.name}`}>
-                  <Icon name="close" className="size-3.5" />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {editable && (
-        <>
+  const dropZone = (
+    <>
           <label
             onDragOver={(e) => {
               e.preventDefault();
@@ -191,9 +162,73 @@ export function AssignmentFiles({
               </div>
             </div>
           )}
-        </>
+    </>
+  );
+
+  if (compact) {
+    if (!editable) return null;
+    return (
+      <>
+        <button type="button" className="btn" onClick={() => setShown(!shown)} aria-expanded={shown}>
+          <Icon name="plus" className="size-4" />
+          {files.length ? "העלאת דפי מטלות" : "העלאת דפי המטלות"}
+        </button>
+        {shown && (
+          <section className="panel w-full p-5" aria-label="העלאת דפי מטלות">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-ink-soft">
+                מורידים פעם בסמסטר מאתר הקורס באופל ומעלים כאן, כולם יחד. כל קובץ מותאם למטלה שלו לפי השם; אפשר לתקן לפני ההעלאה.
+              </p>
+              <button type="button" className="btn-ghost shrink-0" onClick={() => setShown(false)}>
+                סגירה
+              </button>
+            </div>
+            {dropZone}
+            {error && (
+              <p className="mt-3 text-sm text-bad" role="alert">
+                {error}
+              </p>
+            )}
+          </section>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <section className={`panel p-5 ${pending ? "opacity-80" : ""}`}>
+      <h2 className="section-title">דפי המטלות</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        {files.length ? "נפתחים בקורא ובטיימר הריכוז, ליד המעקב אחרי השאלות." : "מורידים פעם בסמסטר מאתר הקורס באופל ומעלים כאן, כולם יחד. כל קובץ מותאם לממ״ן שלו לפי השם."}
+      </p>
+
+      {files.length > 0 && (
+        <ul className="mt-3 divide-y divide-rule border-y border-rule">
+          {files.map((f) => (
+            <li key={f.id} className="flex flex-wrap items-center gap-2 py-2.5">
+              <Icon name="clip" className="size-4 shrink-0 text-ink-soft" />
+              {f.pdf ? (
+                <Link href={`/courses/${code}/assignment/${f.n}`} className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
+                  {f.name}
+                </Link>
+              ) : (
+                <a href={f.href ?? undefined} download className="min-w-0 flex-1 truncate underline decoration-rule underline-offset-2 hover:text-ink" dir="auto">
+                  {f.name}
+                </a>
+              )}
+              {f.size != null && <span className="text-xs tabular-nums text-ink-soft">{fileSize(f.size)}</span>}
+              {editable ? select(f.n, (n) => run(() => setAssignmentFileN(f.id, n)), `המטלה של ${f.name}`) : <span className="text-sm text-ink-soft">{label(f.n)}</span>}
+              {editable && (
+                <button type="button" onClick={() => run(() => deleteAssignmentFile(f.id))} className="grid size-8 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-bad" aria-label={`מחיקה: ${f.name}`}>
+                  <Icon name="close" className="size-3.5" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
+      {editable && dropZone}
       {error && (
         <p className="mt-3 text-sm text-bad" role="alert">
           {error}

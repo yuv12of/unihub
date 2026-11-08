@@ -16,7 +16,7 @@ interface Row {
  * weights (up to the course maximum) and the exam carries the rest; the final grade counts only
  * when the exam grade is at least 60.
  */
-export function GradeCalculator({ rows, max, color }: { rows: Row[]; max: number; color: string }) {
+export function GradeCalculator({ rows, max, color, hint, className = "border-t border-rule" }: { rows: Row[]; max: number; color: string; hint?: string; className?: string }) {
   const graded = rows.filter((r) => r.grade != null);
   const avg = graded.length ? Math.round(graded.reduce((s, r) => s + r.grade! * r.weight, 0) / graded.reduce((s, r) => s + r.weight, 0)) : 85;
 
@@ -50,9 +50,12 @@ export function GradeCalculator({ rows, max, color }: { rows: Row[]; max: number
     needed <= 60 ? "60 (המינימום למעבר)" : needed > 100 ? "יותר מ־100, כלומר לא אפשרי עם המטלות האלה" : String(needed);
 
   return (
-    <details className="group border-t border-rule px-5 py-4">
+    <details className={`group px-5 py-4 ${className}`}>
       <summary className="summary-clean flex min-h-10 items-center gap-2 text-sm font-semibold">
-        <span className="flex-1">מחשבון ציון</span>
+        <span className="flex-1">
+          מחשבון ציון
+          {hint && <span className="block text-xs font-normal text-ink-soft">{hint}</span>}
+        </span>
         <Chevron />
       </summary>
       <div className="mt-3 space-y-3 text-sm">

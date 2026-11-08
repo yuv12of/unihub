@@ -30,3 +30,24 @@ export async function getPaceLog(code: string): Promise<Record<string, import("@
   const { paceLog } = await import("@/lib/submitState");
   return paceLog(await createClient(), code);
 }
+
+/**
+ * "Ready to submit" for the course's open file assignments (src/lib/submitState.ts), so the
+ * assignments tab can show each one's parts and pace without opening anything.
+ */
+export async function getSubmitStates(
+  code: string,
+  ns: string[],
+  assignments: import("@/lib/semester").Assignment[],
+): Promise<Record<string, import("@/lib/submitState").SubmitCheck>> {
+  if (!supabaseEnabled || !ns.length) return {};
+  const { getUserId } = await import("@/lib/userdata");
+  const me = await getUserId();
+  if (!me) return {};
+  const { submitStates } = await import("@/lib/submitState");
+  try {
+    return (await submitStates(await createClient(), me, code, ns, assignments)).checks;
+  } catch {
+    return {};
+  }
+}
