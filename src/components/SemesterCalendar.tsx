@@ -20,7 +20,7 @@ import { Icon } from "@/components/Icon";
 import { SessionEditor, type EditorCourse } from "@/components/SessionEditor";
 import { describeRepeat, type Repeat } from "@/lib/repeat";
 import { hoursLabel, weekBalance, type WeekBalance } from "@/lib/weekBalance";
-import type { Vacation } from "@/lib/vacation";
+import { vacationImpact, type Vacation } from "@/lib/vacation";
 
 export type CalKind =
   "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
@@ -409,6 +409,7 @@ export function SemesterCalendar({
         editable={editable}
         isOff={offDays.includes(selected)}
         vacation={vacations.find((v) => v.from <= selected && selected <= v.to) ?? null}
+        allItems={items}
         today={today}
         onEdit={(item) => setEditor({ mode: item.routine ? "routine" : item.study ? "study" : "edit", item })}
         onNew={() =>
@@ -1208,12 +1209,15 @@ function DayPanel({
   editable,
   isOff,
   vacation,
+  allItems,
   today,
   onEdit,
   onNew,
 }: {
   date: string;
   items: CalItem[];
+  /** every item on the calendar, for what a vacation would touch */
+  allItems: CalItem[];
   editable: boolean;
   isOff: boolean;
   vacation: Vacation | null;
@@ -1223,7 +1227,12 @@ function DayPanel({
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [planning, setPlanning] = useState(false);
+  const [planning, setPlanningRaw] = useState(false);
+  const [range, setRange] = useState({ from: date, to: date });
+  const setPlanning = (v: boolean) => {
+    if (v) setRange({ from: date, to: date });
+    setPlanningRaw(v);
+  };
 
   const run = (fn: () => Promise<void>) =>
     start(async () => {
@@ -1430,11 +1439,27 @@ function DayPanel({
             >
               <label className="flex flex-col gap-1">
                 <span className="text-ink-soft">מ־</span>
-                <input name="from" type="date" required min={today} defaultValue={date} className="h-10 rounded-lg border border-rule-strong bg-surface px-2" />
+                <input
+                  name="from"
+                  type="date"
+                  required
+                  min={today}
+                  value={range.from}
+                  onChange={(e) => setRange((r) => ({ from: e.target.value, to: r.to < e.target.value ? e.target.value : r.to }))}
+                  className="h-10 rounded-lg border border-rule-strong bg-surface px-2"
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-ink-soft">עד (כולל)</span>
-                <input name="to" type="date" required min={today} defaultValue={date} className="h-10 rounded-lg border border-rule-strong bg-surface px-2" />
+                <input
+                  name="to"
+                  type="date"
+                  required
+                  min={range.from || today}
+                  value={range.to}
+                  onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+                  className="h-10 rounded-lg border border-rule-strong bg-surface px-2"
+                />
               </label>
               <button className="btn-primary" disabled={pending}>
                 הוספת החופשה
@@ -1442,7 +1467,7 @@ function DayPanel({
               <button type="button" className="btn-ghost" onClick={() => setPlanning(false)}>
                 ביטול
               </button>
-              <p className="w-full text-xs text-ink-soft">הלימוד המתוכנן בימים האלה יעבור לימים שלפני ואחרי, התזכורות ישתקו והרצפים יישמרו.</p>
+              {range.from && range.to && range.to >= range.from && <VacationImpact items={allItems} from={range.from} to={range.to} />}
             </form>
           )}
           {error && (
@@ -2076,3 +2101,66 @@ function Chip({
   );
 }
 
+
+/** What a vacation would touch, shown while its dates are picked (before it's saved). */
+function VacationImpact({ items, from, to }: { items: CalItem[]; from: string; to: string }) {
+  const i = vacationImpact(items, from, to);
+  const day = (d: string) => fmt(d, { weekday: "short", day: "numeric", month: "numeric" });
+  const hours = i.studyMinutes ? durationShort(i.studyMinutes) : null;
+  const nothing = !i.dueInside.length && !i.dueAfter.length && !i.exams.length && !i.meetings.length && !i.sessions;
+  return (
+    <div className="w-full space-y-1.5" aria-live="polite">
+      <p className="text-xs font-semibold text-ink-soft">מה החופשה הזו משנה</p>
+      {nothing ? (
+        <p className="flex items-center gap-1.5">
+          <Icon name="check" className="size-4" />
+          אין בימים האלה הגשות, בחינות או לימוד מתוכנן.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {i.dueInside.map((x, k) => (
+            <li key={`in${k}`} className="flex gap-1.5">
+              <Icon name="alert" className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span className="hl">הגשה בתוך החופשה:</span> {x.label}, {day(x.date)}. כדאי להגיש לפני שיוצאים.
+              </span>
+            </li>
+          ))}
+          {i.exams.map((x, k) => (
+            <li key={`ex${k}`} className="flex gap-1.5">
+              <Icon name="alert" className="mt-0.5 size-4 shrink-0" />
+              <span>
+                <span className="hl">{x.date <= to ? "בחינה בתוך החופשה:" : "בחינה מיד אחרי:"}</span> {x.label}, {day(x.date)}.
+              </span>
+            </li>
+          ))}
+          {i.dueAfter.map((x, k) => (
+            <li key={`af${k}`} className="flex gap-1.5">
+              <Icon name="calendar" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
+              <span>
+                הגשה מיד אחרי: {x.label}, {day(x.date)}. ההכנה אליה תוקדם לפני החופשה.
+              </span>
+            </li>
+          ))}
+          {i.meetings.map((x, k) => (
+            <li key={`mt${k}`} className="flex gap-1.5">
+              <Icon name="calendar" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
+              <span>
+                תפספס/י: {x.label}, {day(x.date)}.
+              </span>
+            </li>
+          ))}
+          {i.sessions > 0 && (
+            <li className="flex gap-1.5">
+              <Icon name="timer" className="mt-0.5 size-4 shrink-0 text-ink-soft" />
+              <span>
+                {hours} לימוד מתוכנן ({i.sessions === 1 ? "מפגש אחד" : `${i.sessions} מפגשים`}) יעבור לימים שלפני ואחרי.
+              </span>
+            </li>
+          )}
+        </ul>
+      )}
+      <p className="text-xs text-ink-soft">בימי החופשה התזכורות שותקות והרצפים נשמרים.</p>
+    </div>
+  );
+}
