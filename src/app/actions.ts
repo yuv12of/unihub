@@ -977,6 +977,32 @@ export async function setDayOff(date: string, reason: "sick" | "reserve" | "fami
   });
 }
 
+/**
+ * A vacation: every day from `from` to `to` (both included) becomes a rest day with the reason
+ * "vacation", so study moves around it, reminders stay quiet and streaks are kept.
+ */
+export async function setVacation(from: string, to: string) {
+  return action("setVacation", async ({ supabase, userId }) => {
+    if (!DATE.test(from) || !DATE.test(to)) throw new Error("תאריך לא תקין");
+    const { daysOf, VACATION_MAX_DAYS } = await import("@/lib/vacation");
+    const days = daysOf(from, to);
+    if (!days.length) throw new Error("תאריך הסיום לפני תאריך ההתחלה");
+    if (days.length > VACATION_MAX_DAYS) throw new Error(`חופשה עד ${VACATION_MAX_DAYS} ימים`);
+    must(await supabase.from("day_off").upsert(days.map((date) => ({ user_id: userId, date, reason: "vacation" }))));
+    refresh();
+    return days.length;
+  });
+}
+
+/** Cancels a vacation: its vacation days only (another kind of rest day inside it stays). */
+export async function cancelVacation(from: string, to: string) {
+  return action("cancelVacation", async ({ supabase, userId }) => {
+    if (!DATE.test(from) || !DATE.test(to)) throw new Error("תאריך לא תקין");
+    must(await supabase.from("day_off").delete().match({ user_id: userId, reason: "vacation" }).gte("date", from).lte("date", to));
+    refresh();
+  });
+}
+
 // ---------- Quick add ----------
 
 /** Saves what the one-line quick add understood (the parse happens in the browser, shown before saving). */

@@ -7,8 +7,10 @@ import { useSearchParams } from "next/navigation";
 import {
   addEvent,
   deleteEvent,
+  cancelVacation,
   setDayOff,
   setRoutineOccurrence,
+  setVacation,
   setRoutineTiming,
   setSessionMove,
   setSessionStatus,
@@ -18,6 +20,7 @@ import { Icon } from "@/components/Icon";
 import { SessionEditor, type EditorCourse } from "@/components/SessionEditor";
 import { describeRepeat, type Repeat } from "@/lib/repeat";
 import { hoursLabel, weekBalance, type WeekBalance } from "@/lib/weekBalance";
+import type { Vacation } from "@/lib/vacation";
 
 export type CalKind =
   "due" | "exam" | "study" | "event" | "tutorial" | "academic" | "routine";
@@ -151,6 +154,7 @@ export function SemesterCalendar({
   editable,
   people = [],
   offDays = [],
+  vacations = [],
   repeatUntil,
   balance,
   courses = [],
@@ -163,6 +167,8 @@ export function SemesterCalendar({
   balance?: { studied: Record<string, number>; goal: number | null; wake: number; bed: number; nowMin: number };
   /** rough days / days off */
   offDays?: string[];
+  /** runs of vacation days, shown and cancelled as one */
+  vacations?: Vacation[];
   items: CalItem[];
   today: string;
   legend: { color: string; label: string }[];
@@ -402,6 +408,7 @@ export function SemesterCalendar({
         items={byDate.get(selected) ?? []}
         editable={editable}
         isOff={offDays.includes(selected)}
+        vacation={vacations.find((v) => v.from <= selected && selected <= v.to) ?? null}
         today={today}
         onEdit={(item) => setEditor({ mode: item.routine ? "routine" : item.study ? "study" : "edit", item })}
         onNew={() =>
@@ -1200,6 +1207,7 @@ function DayPanel({
   items,
   editable,
   isOff,
+  vacation,
   today,
   onEdit,
   onNew,
@@ -1208,12 +1216,14 @@ function DayPanel({
   items: CalItem[];
   editable: boolean;
   isOff: boolean;
+  vacation: Vacation | null;
   today: string;
   onEdit: (item: CalItem) => void;
   onNew: () => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   const run = (fn: () => Promise<void>) =>
     start(async () => {
@@ -1233,8 +1243,16 @@ function DayPanel({
       <h3 className="font-semibold">
         {fmt(date, { weekday: "long", day: "numeric", month: "long" })}
       </h3>
-      {isOff && (
-        <p className="mt-1 text-sm">יום מנוחה: בלי לימוד, והרצפים נשמרים.</p>
+      {vacation ? (
+        <p className="mt-1 text-sm">
+          חופשה{" "}
+          {vacation.from === vacation.to
+            ? `ב־${fmt(vacation.from, { day: "numeric", month: "numeric" })}`
+            : `מ־${fmt(vacation.from, { day: "numeric", month: "numeric" })} עד ${fmt(vacation.to, { day: "numeric", month: "numeric" })}`}
+          : בלי לימוד, בלי תזכורות, והרצפים נשמרים.
+        </p>
+      ) : (
+        isOff && <p className="mt-1 text-sm">יום מנוחה: בלי לימוד, והרצפים נשמרים.</p>
       )}
 
       {items.length === 0 ? (
@@ -1370,18 +1388,63 @@ function DayPanel({
               <Icon name="plus" className="size-4" />
               אירוע חדש
             </button>
-            {date >= today && (
+            {date >= today && !vacation && (
               <button
                 type="button"
                 onClick={() =>
                   run(() => setDayOff(date, isOff ? null : "other"))
                 }
-                className="text-sm text-ink-soft underline underline-offset-4 decoration-rule hover:text-ink"
+                className="btn-ghost"
               >
+                <Icon name="sofa" className="size-4" />
                 {isOff ? "ביטול יום המנוחה" : "יום מנוחה / מילואים"}
               </button>
             )}
+            {vacation
+              ? vacation.to >= today && (
+                  <button type="button" className="btn-ghost" onClick={() => run(() => cancelVacation(vacation.from, vacation.to))}>
+                    ביטול החופשה
+                  </button>
+                )
+              : date >= today &&
+                !planning && (
+                  <button type="button" className="btn-ghost" onClick={() => setPlanning(true)} aria-expanded={false}>
+                    <Icon name="calendar" className="size-4" />
+                    חופשה של כמה ימים
+                  </button>
+                )}
           </div>
+          {planning && !vacation && (
+            <form
+              className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-bg p-3 text-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                const from = String(f.get("from"));
+                const to = String(f.get("to"));
+                run(async () => {
+                  await setVacation(from, to);
+                  setPlanning(false);
+                });
+              }}
+            >
+              <label className="flex flex-col gap-1">
+                <span className="text-ink-soft">מ־</span>
+                <input name="from" type="date" required min={today} defaultValue={date} className="h-10 rounded-lg border border-rule-strong bg-surface px-2" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-ink-soft">עד (כולל)</span>
+                <input name="to" type="date" required min={today} defaultValue={date} className="h-10 rounded-lg border border-rule-strong bg-surface px-2" />
+              </label>
+              <button className="btn-primary" disabled={pending}>
+                הוספת החופשה
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setPlanning(false)}>
+                ביטול
+              </button>
+              <p className="w-full text-xs text-ink-soft">הלימוד המתוכנן בימים האלה יעבור לימים שלפני ואחרי, התזכורות ישתקו והרצפים יישמרו.</p>
+            </form>
+          )}
           {error && (
             <p role="alert" className="mt-2 text-sm">
               <span className="hl">{error}</span>

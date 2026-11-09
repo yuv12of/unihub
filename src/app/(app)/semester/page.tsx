@@ -4,7 +4,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { SemesterCalendar, type CalItem } from "@/components/SemesterCalendar";
 import { progressKey } from "@/lib/progress";
-import { getMyProfile, getMyStudyDays, getNames, getPeople, getUserPlan } from "@/lib/userdata";
+import { getMyProfile, getMyStudyDays, getNames, getPeople, getUserPlan, getVacationDays } from "@/lib/userdata";
+import { vacationsOf } from "@/lib/vacation";
 import { occurrencesFor } from "@/lib/planfor";
 import { awakeWindow, CATEGORY } from "@/lib/routines";
 import { addDays } from "@/lib/semester";
@@ -135,6 +136,8 @@ async function Semester() {
       if (jp.times && d.candles) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `🕯️ הדלקת נרות ${d.candles}` });
       if (jp.times && d.havdalah) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✨ הבדלה ${d.havdalah}${d.parasha ? ` · ${d.parasha}` : ""}` });
     }
+  const vacationDays = await getVacationDays();
+  for (const d of vacationDays) items.push({ date: d, kind: "academic", color: "var(--ink-soft)", label: "🏖️ חופשה", holiday: true });
   for (const a of academicByDay()) {
     items.push({ date: a.date, kind: "academic", color: "var(--ink-soft)", label: a.title, holiday: a.holiday });
   }
@@ -147,6 +150,7 @@ async function Semester() {
         editable={supabaseEnabled}
         people={connected.map((p) => ({ id: p.id, name: p.name }))}
         offDays={manualOff}
+        vacations={vacationsOf(vacationDays)}
         balance={{ studied, goal: me?.weekly_goal_minutes ?? null, wake, bed, nowMin: nh * 60 + nm }}
         repeatUntil={courses.flatMap((c) => c.assignments.map((a) => a.due)).sort().at(-1) ?? addDays(today, 90)}
         legend={courses.map((c) => ({ color: themeOf(courses, c.code).color, label: c.name }))}

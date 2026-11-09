@@ -502,6 +502,15 @@ export const getBadges = cache(async (): Promise<{ friends?: number; admin?: num
   return (data ?? {}) as { friends?: number; admin?: number | null };
 });
 
+/** My vacation days (rest days with the reason "vacation") of the last few months and ahead. */
+export const getVacationDays = cache(async (): Promise<string[]> => {
+  if (!supabaseEnabled) return [];
+  const supabase = await createClient();
+  const since = addDays(todayInIsrael(), -120);
+  const { data } = await supabase.from("day_off").select("date").eq("reason", "vacation").gte("date", since);
+  return (data ?? []).map((r) => r.date as string);
+});
+
 /** My rough days (sick, reserve duty…) of the last few months and ahead. */
 export const getOffDays = cache(async (): Promise<string[]> => {
   if (!supabaseEnabled) return [];
