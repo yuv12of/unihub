@@ -1,4 +1,4 @@
--- NOT APPLIED YET (written 13.11.2026). Goals board for everyone, students or not.
+-- Applied 13.11.2026. Goals board for everyone, students or not.
 -- A goal has a finish line (a hobby doesn't). Progress comes from its tasks, its milestones,
 -- a number (₪, km, kg) or a manual percent; goal_logs keeps the history the graphs draw.
 -- tasks is the general to-do list: goal_id null = a plain task. repeat/source leave room for

@@ -122,3 +122,23 @@ test("today's steps: one per active goal, dated first, plus loose tasks due", as
   const d: GoalData = { goals: [a, b, c], milestones: [], logs: [], tasks: [t("a1", "a", null), t("b1", "b", "2026-11-14"), t("c1", "c", null), t("l1", null, "2026-11-12"), t("l2", null, "2026-11-20"), t("l3", null, null)] };
   assert.deepEqual(todaySteps(d, "2026-11-13").map((s) => s.id), ["b1", "a1", "l1"]);
 });
+
+test("time on goals and badge stats", async () => {
+  const { goalBadgeStats, goalMinutesByDay, goalMinutesSince } = await import("@/lib/goalMeta");
+  const g = goal();
+  const done = goal({ id: "d", status: "done", done_at: "2026-11-01T10:00:00Z" });
+  const d: GoalData = {
+    goals: [g, done],
+    milestones: [ms("m", "2026-10-03")],
+    tasks: [task("a", "2026-10-05"), task("b", "2026-11-12"), task("c", null)],
+    logs: [log("2026-11-12", { minutes: 40 }), log("2026-11-12", { minutes: 20 }), log("2026-11-02", { minutes: 30 }), log("2026-11-12", { value: 3 })],
+  };
+  assert.deepEqual(goalMinutesByDay(d), { "2026-11-12": 60, "2026-11-02": 30 });
+  assert.equal(goalMinutesSince(g, d, "2026-11-08"), 60);
+  const s = goalBadgeStats(d, "2026-11-08");
+  assert.equal(s.done, 1);
+  assert.equal(s.steps, 3);
+  assert.equal(s.movedThisWeek, 1);
+  assert.equal(s.minutes, 90);
+  assert.equal(s.comebacks, 2); // 5.10 → 2.11 and 2.11 → 12.11 are both gaps of 10+ days
+});

@@ -12,7 +12,7 @@ import { Icon } from "@/components/Icon";
 
 const EMOJIS = ["🦊", "🐼", "🦉", "🐢", "🐙", "🦁", "🐧", "🐝", "🌵", "🌻", "🍀", "⚡", "🚀", "🎧", "📚", "🧠", "☕", "🎨", "⚽", "🎸", "🏀", "🐱", "🐶", "🦄"];
 
-export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo: string | null }) {
+export function ProfileEditor({ initial, photo, student = true }: { initial: ProfileInput; photo: string | null; student?: boolean }) {
   const [f, setF] = useState(initial);
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -68,7 +68,7 @@ export function ProfileEditor({ initial, photo }: { initial: ProfileInput; photo
         שם
         <input value={f.name} onChange={(e) => set("name", e.target.value)} maxLength={60} className={`${field} mt-1`} />
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={student ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
         <label className="block text-sm">
           מסלול לימודים
           <input value={f.program} onChange={(e) => set("program", e.target.value)} maxLength={80} placeholder="למשל: מדעי המחשב" className={`${field} mt-1`} />

@@ -253,3 +253,33 @@ export function goalPushes(d: GoalData, now: { date: string; minutes: number }):
   }
   return out;
 }
+
+/** Minutes logged on goals per day (the focus timer, manual logs, ticking a goal's routine). */
+export function goalMinutesByDay(d: GoalData): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of d.logs) if (l.minutes) out[l.date] = (out[l.date] ?? 0) + l.minutes;
+  return out;
+}
+
+/** Minutes logged on one goal from a date on (inclusive). */
+export function goalMinutesSince(g: Goal, d: GoalData, since: string): number {
+  return d.logs.reduce((n, l) => n + (l.goal_id === g.id && l.minutes && l.date >= since ? l.minutes : 0), 0);
+}
+
+/** The numbers the goals badges are computed from. */
+export function goalBadgeStats(d: GoalData, weekStartDay: string): { done: number; steps: number; movedThisWeek: number; minutes: number; comebacks: number } {
+  let comebacks = 0;
+  for (const g of d.goals) {
+    const { tasks, milestones, logs } = partsOf(g, d);
+    const moves = [...tasks.map((t) => day(t.done_at)), ...milestones.map((m) => day(m.done_at)), ...logs.map((l) => l.date)].filter(Boolean).sort() as string[];
+    // moving again after standing still: a gap of STALL_DAYS or more between two movements
+    for (let i = 1; i < moves.length; i++) if (daysBetween(moves[i - 1], moves[i]) >= STALL_DAYS) comebacks++;
+  }
+  return {
+    done: d.goals.filter((g) => g.status === "done").length,
+    steps: d.tasks.filter((t) => t.done_at).length + d.milestones.filter((m) => m.done_at).length,
+    movedThisWeek: d.goals.filter((g) => g.status === "active" && movedSince(g, d, weekStartDay)).length,
+    minutes: d.logs.reduce((n, l) => n + (l.minutes ?? 0), 0),
+    comebacks,
+  };
+}

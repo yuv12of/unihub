@@ -800,6 +800,18 @@ export async function toggleRoutine(id: string, date: string, done: boolean) {
           must(await supabase.from("hobby_logs").insert({ user_id: userId, hobby_id: hobby.id, date, minutes: Math.max(5, r?.minutes ?? 30), routine_date: date }));
         }
       } else await supabase.from("hobby_logs").delete().match({ hobby_id: hobby.id, user_id: userId, routine_date: date });
+    } else {
+      // A goal's routine works the same way: ticking it logs that time on the goal.
+      const { data: goal } = await supabase.from("goals").select("id").match({ routine_id: id, user_id: userId }).maybeSingle();
+      if (goal) {
+        if (done) {
+          const { data: had } = await supabase.from("goal_logs").select("id").match({ goal_id: goal.id, date }).not("minutes", "is", null).limit(1);
+          if (!had?.length) {
+            const { data: r } = await supabase.from("routines").select("minutes").eq("id", id).single();
+            must(await supabase.from("goal_logs").insert({ user_id: userId, goal_id: goal.id, date, minutes: Math.max(5, r?.minutes ?? 30), routine_date: date }));
+          }
+        } else await supabase.from("goal_logs").delete().match({ goal_id: goal.id, user_id: userId, routine_date: date });
+      }
     }
     refresh();
   });

@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Icon } from "@/components/Icon";
 import { ChartLegend, GoalChart } from "@/components/GoalViz";
-import { GoalLogForm, GoalSettings, MilestoneList, TaskList } from "@/components/GoalParts";
-import { AREAS, STATUSES, colorVar, currentValue, getGoals, partsOf, plannedNow, progressAt, progressText, projectedFinish, series, stalledDays } from "@/lib/goals";
+import { GoalLogForm, GoalSettings, GoalTime, MilestoneList, TaskList } from "@/components/GoalParts";
+import { weekStart } from "@/lib/routines";
+import { AREAS, STATUSES, colorVar, currentValue, getGoals, goalMinutesSince, partsOf, plannedNow, progressAt, progressText, projectedFinish, series, stalledDays } from "@/lib/goals";
 import { daysBetween, formatHebrewDate, relativeDays, todayInIsrael } from "@/lib/semester";
 
 export default function GoalPage({ params }: PageProps<"/goals/[id]">) {
@@ -111,6 +112,13 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           משימות
         </h2>
         <TaskList goalId={g.id} tasks={tasks} today={today} />
+      </section>
+
+      <section className="panel p-4 sm:p-5" aria-labelledby="time-title">
+        <h2 id="time-title" className="section-title mb-2">
+          זמן על המטרה
+        </h2>
+        <GoalTime goalId={g.id} title={g.title} week={goalMinutesSince(g, data, weekStart(today))} weekly={g.weekly_minutes} total={goalMinutesSince(g, data, "0000-00-00")} scheduled={!!g.routine_id} />
       </section>
 
       <section className="panel p-4 sm:p-5" aria-labelledby="set-title">

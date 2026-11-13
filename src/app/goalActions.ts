@@ -63,7 +63,7 @@ export async function createGoal(input: GoalInput) {
 
 export async function updateGoal(id: string, patch: { title?: string; area?: GoalArea; color?: string; why?: string; due?: string | null; status?: GoalStatus; target?: number | null; unit?: string }) {
   return action("updateGoal", async ({ supabase: sb, userId: uid }) => {
-    const { data: g } = await sb.from("goals").select("title, status, start_value, progress_mode").match({ id, user_id: uid }).maybeSingle();
+    const { data: g } = await sb.from("goals").select("title, status, start_value, progress_mode, routine_id, weekly_minutes").match({ id, user_id: uid }).maybeSingle();
     if (!g) throw new Error("לא נמצא");
     const row: Record<string, unknown> = {};
     if (patch.title !== undefined) row.title = text(patch.title, 80) || g.title;
@@ -82,13 +82,22 @@ export async function updateGoal(id: string, patch: { title?: string; area?: Goa
       row.done_at = patch.status === "done" ? new Date().toISOString() : null;
     }
     if (Object.keys(row).length) must(await sb.from("goals").update(row).match({ id, user_id: uid }));
+    // the goal's calendar routine follows it: same name, resting while the goal isn't active
+    if (g.routine_id && (row.status !== undefined || row.title !== undefined)) {
+      const r: Record<string, unknown> = {};
+      if (row.title !== undefined) r.title = row.title;
+      if (row.status !== undefined) r.active = row.status === "active" && (g.weekly_minutes ?? 0) > 0;
+      await sb.from("routines").update(r).match({ id: g.routine_id, user_id: uid });
+    }
     refresh();
   });
 }
 
 export async function deleteGoal(id: string) {
   return action("deleteGoal", async ({ supabase: sb, userId: uid }) => {
+    const { data: g } = await sb.from("goals").select("routine_id").match({ id, user_id: uid }).maybeSingle();
     must(await sb.from("goals").delete().match({ id, user_id: uid }));
+    if (g?.routine_id) await sb.from("routines").delete().match({ id: g.routine_id, user_id: uid });
     refresh();
   });
 }
@@ -172,6 +181,51 @@ export async function setMilestoneDone(id: string, done: boolean) {
 export async function deleteMilestone(id: string) {
   return action("deleteMilestone", async ({ supabase: sb, userId: uid }) => {
     must(await sb.from("goal_milestones").delete().match({ id, user_id: uid }));
+    refresh();
+  });
+}
+
+/* ---------- Time on a goal ---------- */
+
+/** Weekly time → a flexible routine: sessions of about an hour, never more than one a day (same rule as hobbies). */
+function sessionsFor(weekly: number) {
+  const per = Math.max(1, Math.min(7, Math.round(weekly / 60)));
+  const minutes = Math.max(15, Math.round(weekly / per / 5) * 5);
+  return { per, minutes };
+}
+
+/** Time spent on a goal (from the focus timer or logged by hand). Counts as doing the goal's routine that day. */
+export async function logGoalTime(id: string, minutes: number, day?: string) {
+  return action("logGoalTime", async ({ supabase: sb, userId: uid }) => {
+    const m = Math.round(minutes);
+    if (!(m >= 1 && m <= 720)) throw new Error("כמה דקות?");
+    const { data: g } = await sb.from("goals").select("routine_id").match({ id, user_id: uid }).maybeSingle();
+    if (!g) throw new Error("לא נמצא");
+    const today = todayInIsrael();
+    const d = date(day) && day! <= today ? day! : today;
+    must(await sb.from("goal_logs").insert({ user_id: uid, goal_id: id, date: d, minutes: m }));
+    if (g.routine_id) await sb.from("routine_logs").upsert({ routine_id: g.routine_id, user_id: uid, date: d }, { onConflict: "routine_id,user_id,date", ignoreDuplicates: true });
+    refresh();
+  });
+}
+
+/** How much time a week the goal should get; above zero it sits in the calendar as a flexible routine. */
+export async function setGoalWeekly(id: string, weekly: number) {
+  return action("setGoalWeekly", async ({ supabase: sb, userId: uid }) => {
+    const w = Math.max(0, Math.min(1200, Math.round(weekly || 0)));
+    const { data: g } = await sb.from("goals").select("title, status, routine_id").match({ id, user_id: uid }).maybeSingle();
+    if (!g) throw new Error("לא נמצא");
+    must(await sb.from("goals").update({ weekly_minutes: w }).match({ id, user_id: uid }));
+    const { per, minutes } = sessionsFor(w);
+    if (g.routine_id) {
+      must(await sb.from("routines").update(w > 0 ? { per_week: per, minutes, title: g.title, active: g.status === "active" } : { active: false }).match({ id: g.routine_id, user_id: uid }));
+    } else if (w > 0) {
+      const routineId = crypto.randomUUID();
+      must(
+        await sb.from("routines").insert({ id: routineId, user_id: uid, title: g.title, emoji: "🎯", category: "habit", mode: "flexible", days: [], start_time: null, minutes, per_week: per, time_window: "any", blocks_study: true, active: g.status === "active", starts_on: todayInIsrael() }),
+      );
+      must(await sb.from("goals").update({ routine_id: routineId }).match({ id, user_id: uid }));
+    }
     refresh();
   });
 }

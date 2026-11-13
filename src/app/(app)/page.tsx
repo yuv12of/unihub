@@ -30,7 +30,7 @@ import { FirstSteps } from "@/components/FirstSteps";
 import { ModePicker, ModuleOffNote } from "@/components/ModuleParts";
 import { STUDY_TODAY_KEYS, modulesChosen } from "@/lib/modules";
 import { NextSteps } from "@/components/GoalParts";
-import { getGoals, todaySteps } from "@/lib/goals";
+import { getGoals, goalBadgeStats, todaySteps } from "@/lib/goals";
 import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -172,12 +172,14 @@ async function Today() {
   const jNext = !jp.show ? undefined : Object.values(jdays)
     .filter((d) => d.date > today && d.holidays.some((h) => h.major))
     .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const goalData = mods.goals ? await getGoals() : null;
   const earned = computeBadges({
     today,
-    studyDays,
+    studyDays: mods.study ? studyDays : undefined,
     weeklyGoal: profile?.weekly_goal_minutes,
-    courses,
-    progress,
+    courses: mods.study ? courses : undefined,
+    progress: mods.study ? progress : undefined,
+    goals: goalData ? goalBadgeStats(goalData, weekStart(today)) : undefined,
     routines,
     logs,
     offDays,
@@ -635,7 +637,7 @@ async function Today() {
 
         {supabaseEnabled && show("quickadd") && (
           <Fold id="today-quickadd" title="הוספה מהירה" summary="אירוע בשורה אחת, למשל ״אימון מחר 18:00״" defaultOpen={false}>
-            <QuickAdd today={today} people={connected} />
+            <QuickAdd today={today} people={connected} goals={goalData?.goals.filter((g) => g.status === "active" || g.status === "idea").map((g) => ({ id: g.id, title: g.title }))} />
           </Fold>
         )}
 

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
-import { addMilestone, addTask, createGoal, deleteGoal, deleteMilestone, deleteTask, logGoal, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { addMilestone, addTask, createGoal, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { FocusTimer } from "@/components/SessionToggle";
+import { duration } from "@/lib/time";
 import { Icon } from "@/components/Icon";
 import { ProgressRing, Spark } from "@/components/GoalViz";
 import { AREAS, BOARD, COLORS, MODES, STATUSES, TEMPLATES, colorVar, type GoalArea, type GoalColor, type GoalStatus, type Milestone, type ProgressMode, type Task } from "@/lib/goalMeta";
@@ -50,18 +52,32 @@ export interface GoalCard {
   stalled: number;
 }
 
-function Card({ g }: { g: GoalCard }) {
+function Card({ g, onDragStart }: { g: GoalCard; onDragStart?: (id: string) => void }) {
   const { pending, error, run } = useRun();
   const color = colorVar(g.color);
   return (
-    <li className="panel p-4">
+    <li
+      className="panel p-4 xl:cursor-grab xl:active:cursor-grabbing"
+      draggable={!!onDragStart}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", g.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart?.(g.id);
+      }}
+    >
       <Link href={`/goals/${g.id}`} className="flex items-center gap-3">
         <ProgressRing p={g.p} color={color} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold hover:underline">{g.title}</span>
+          <span className="line-clamp-2 font-semibold hover:underline">{g.title}</span>
           <span className="block text-xs text-ink-soft">{[g.area, g.line, g.due].filter(Boolean).join(" · ")}</span>
+          {g.stalled > 0 && <span className="mt-1 inline-block rounded-md bg-highlight px-2 py-0.5 text-xs font-semibold text-highlight-ink">תקוע {g.stalled} ימים</span>}
         </span>
-        {g.stalled ? <span className="shrink-0 rounded-md bg-highlight px-2 py-0.5 text-xs font-semibold text-highlight-ink">תקוע {g.stalled} ימים</span> : g.status === "active" && <Spark points={g.spark} color={color} />}
+        {/* the trend line needs room: phones and very wide screens, not the four narrow columns */}
+        {g.status === "active" && !g.stalled && (
+          <span className="xl:hidden 2xl:block">
+            <Spark points={g.spark} color={color} />
+          </span>
+        )}
       </Link>
       {g.status === "active" && (g.next || g.stalled > 0) && (
         <div className="mt-3 flex min-h-11 items-center gap-2 border-t border-rule pt-2 text-sm">
@@ -96,7 +112,33 @@ function Card({ g }: { g: GoalCard }) {
 export function GoalBoard({ cards }: { cards: GoalCard[] }) {
   const [tab, setTab] = useState<GoalStatus>("active");
   const pick = setTab;
-  const of = (s: GoalStatus) => cards.filter((c) => c.status === s);
+  // Dragging a card to another column (wide screens): shown at once, saved in the background, put back if saving fails.
+  const [moved, setMoved] = useState<Record<string, GoalStatus>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<GoalStatus | null>(null);
+  const { error: dropError, run: runDrop } = useRun();
+  const statusOf = (c: GoalCard) => moved[c.id] ?? c.status;
+  const drop = (s: GoalStatus, id: string) => {
+    setOver(null);
+    setDragging(null);
+    const card = cards.find((c) => c.id === id);
+    if (!card || statusOf(card) === s) return;
+    setMoved((m) => ({ ...m, [id]: s }));
+    const settle = () =>
+      setMoved((m) => {
+        const n = { ...m };
+        delete n[id];
+        return n;
+      });
+    runDrop(async () => {
+      try {
+        await updateGoal(id, { status: s });
+      } finally {
+        settle();
+      }
+    });
+  };
+  const of = (s: GoalStatus) => cards.filter((c) => statusOf(c) === s).map((c) => ({ ...c, status: s }));
   const empty: Record<string, string> = { active: "אין מטרות בתהליך. מתחילים אחת?", idea: "רעיונות למטרות שעוד לא התחילו יחכו כאן.", paused: "מטרה שהושהתה לא נעלמת, היא מחכה כאן.", done: "מטרות שהושלמו יופיעו כאן." };
   return (
     <div>
@@ -109,7 +151,24 @@ export function GoalBoard({ cards }: { cards: GoalCard[] }) {
       </div>
       <div className="mt-3 grid gap-5 xl:mt-0 xl:grid-cols-4">
         {BOARD.map((s) => (
-          <section key={s} aria-label={STATUSES[s]} className={tab === s ? "" : "hidden xl:block"}>
+          <section
+            key={s}
+            aria-label={STATUSES[s]}
+            className={`${tab === s ? "" : "hidden xl:block"} rounded-xl xl:-m-2 xl:p-2 ${over === s && dragging ? "bg-rule/60" : ""}`}
+            onDragOver={(e) => {
+              if (!dragging) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              if (over !== s) setOver(s);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver((o) => (o === s ? null : o));
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              drop(s, e.dataTransfer.getData("text/plain") || dragging || "");
+            }}
+          >
             <h2 className="mb-2 hidden items-baseline justify-between text-sm font-semibold xl:flex">
               {STATUSES[s]}
               <span className="font-normal text-ink-soft">{of(s).length}</span>
@@ -117,7 +176,7 @@ export function GoalBoard({ cards }: { cards: GoalCard[] }) {
             {of(s).length ? (
               <ul className="space-y-3">
                 {of(s).map((g) => (
-                  <Card key={g.id} g={g} />
+                  <Card key={g.id} g={g} onDragStart={setDragging} />
                 ))}
               </ul>
             ) : (
@@ -126,6 +185,8 @@ export function GoalBoard({ cards }: { cards: GoalCard[] }) {
           </section>
         ))}
       </div>
+      <p className="mt-4 hidden text-xs text-ink-soft xl:block">אפשר לגרור מטרה מעמודה לעמודה.</p>
+      <Err error={dropError} />
     </div>
   );
 }
@@ -500,6 +561,84 @@ export function NextSteps({ rows, today }: { rows: NextStepRow[]; today: string 
         ))}
       </ul>
       <Err error={error} />
+    </div>
+  );
+}
+
+/* ---------- Time on a goal: timer, quick log, weekly target ---------- */
+
+export function GoalTime({ goalId, title, week, weekly, total, scheduled }: { goalId: string; title: string; week: number; weekly: number; total: number; scheduled: boolean }) {
+  const [timer, setTimer] = useState<number | null>(null);
+  const [w, setW] = useState(weekly);
+  const { pending, error, run } = useRun();
+  const pct = weekly ? Math.min(100, Math.round((week / weekly) * 100)) : 0;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm">
+          <b>{duration(week)}</b> השבוע{weekly ? ` מתוך ${duration(weekly)}` : ""}
+          {total > week && <span className="text-ink-soft">, {duration(total)} בסך הכל</span>}
+        </p>
+        {weekly > 0 && (
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-rule" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="הזמן השבועי">
+            <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="text-sm text-ink-soft">להתחיל טיימר</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {[25, 45, 60].map((m) => (
+            <button key={m} type="button" onClick={() => setTimer(m)} className="btn-primary min-h-11 px-4">
+              {m} דק׳
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-sm text-ink-soft">או לרשום זמן שכבר עבדתי</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {[15, 30, 60, 90].map((m) => (
+            <button key={m} type="button" disabled={pending} onClick={() => run(() => logGoalTime(goalId, m))} className="btn min-h-11">
+              {duration(m)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <form
+        className="border-t border-rule pt-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(() => setGoalWeekly(goalId, w));
+        }}
+      >
+        <label className="block text-sm">
+          <span className="flex justify-between text-ink-soft">
+            <span>כמה זמן בשבוע למטרה?</span>
+            <b className="text-ink">{w ? duration(w) : "בלי זמן קבוע"}</b>
+          </span>
+          <input type="range" min={0} max={600} step={15} value={w} onChange={(e) => setW(Number(e.target.value))} className="mt-2 w-full" />
+        </label>
+        <p className="mt-1 text-xs text-ink-soft">{scheduled && weekly > 0 ? "משובץ בלוח כשגרה גמישה. סימון השגרה רושם את הזמן כאן." : "עם זמן שבועי, המטרה משתבצת בלוח כשגרה גמישה בזמן פנוי."}</p>
+        {w !== weekly && (
+          <button disabled={pending} className="btn mt-2 min-h-11">
+            שמירה
+          </button>
+        )}
+      </form>
+      <Err error={error} />
+      {timer != null && (
+        <FocusTimer
+          storageKey={`focus:goal:${goalId}`}
+          title={title}
+          minutes={timer}
+          onClose={() => setTimer(null)}
+          onFinish={(studied) => {
+            setTimer(null);
+            run(() => logGoalTime(goalId, studied));
+          }}
+        />
+      )}
     </div>
   );
 }

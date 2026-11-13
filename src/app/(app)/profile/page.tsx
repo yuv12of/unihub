@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getCheerCounts, getModules, getMyProfile, getMyStudyDays, getPeople, getUserPlan } from "@/lib/userdata";
+import { getCheerCounts, getFocus, getModules, getMyProfile, getMyStudyDays, getPeople, getUserPlan } from "@/lib/userdata";
 import { computeBadges } from "@/lib/badges";
 import { standing } from "@/lib/progress";
 import { weekStart } from "@/lib/routines";
+import { getGoals, goalBadgeStats } from "@/lib/goals";
 import { duration } from "@/lib/time";
 import { todayInIsrael } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
@@ -30,14 +31,18 @@ async function Profile() {
   // Local design previews (no database) show a sample person.
   const me = mine ?? (!supabaseEnabled && process.env.UNIHUB_DEMO ? DEMO_ME : null);
   if (!me) return <p>הפרופיל זמין אחרי התחברות.</p>;
-  const { study } = await getModules();
+  const { study, goals: goalsOn } = await getModules();
+  const [goalData, focus] = await Promise.all([goalsOn ? getGoals() : null, study ? null : getFocus(me.id)]);
+  const focusDays = focus?.days ?? {};
   const friends = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").length;
   const badges = computeBadges({
     today,
-    studyDays: days,
+    // non-students don't get study or course badges dangling at zero
+    studyDays: study ? days : undefined,
     weeklyGoal: me.weekly_goal_minutes,
-    courses: plan.courses,
-    progress: plan.progress,
+    courses: study ? plan.courses : undefined,
+    progress: study ? plan.progress : undefined,
+    goals: goalData ? goalBadgeStats(goalData, weekStart(today)) : undefined,
     routines: plan.routines,
     logs: plan.logs,
     offDays: plan.offDays,
@@ -49,6 +54,7 @@ async function Profile() {
   const ws = weekStart(today);
   const week = Object.entries(days).filter(([d]) => d >= ws && d <= today).reduce((n, [, m]) => n + m, 0);
   const goal = me.weekly_goal_minutes ?? 0;
+  const focusWeek = Object.entries(focusDays).filter(([d]) => d >= ws && d <= today).reduce((n, [, m]) => n + m, 0);
   const submitted = plan.courses.reduce((n, c) => n + standing(c, plan.progress, today).submittedCount, 0);
   const name = me.name ?? me.email.split("@")[0];
   const since = new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric" }).format(new Date(me.created_at));
@@ -73,6 +79,7 @@ async function Profile() {
           {me.bio && <p className="mt-2 max-w-xl leading-relaxed">{me.bio}</p>}
           <div className="mt-3">
             <ProfileEditor
+              student={study}
               photo={me.avatar_url}
               initial={{
                 name,
@@ -89,21 +96,33 @@ async function Profile() {
       </header>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {tile("השבוע", duration(week), goal ? `מתוך יעד של ${duration(goal)}` : "בלי יעד שבועי")}
-        {tile("סך הכל", `${Math.round(total / 60)} ש׳`, "לימוד שסומן")}
-        {tile("מטלות שהוגשו", String(submitted))}
+        {study ? (
+          <>
+            {tile("השבוע", duration(week), goal ? `מתוך יעד של ${duration(goal)}` : "בלי יעד שבועי")}
+            {tile("סך הכל", `${Math.round(total / 60)} ש׳`, "לימוד שסומן")}
+            {tile("מטלות שהוגשו", String(submitted))}
+          </>
+        ) : (
+          <>
+            {tile("השבוע", duration(focusWeek), "על מטרות ותחביבים")}
+            {tile("מטרות בתהליך", String(goalData?.goals.filter((g) => g.status === "active").length ?? 0))}
+            {tile("מטרות שהושלמו", String(goalData?.goals.filter((g) => g.status === "done").length ?? 0))}
+          </>
+        )}
         {tile("חברים", String(friends), cheers.received ? `${cheers.received} פרגונים התקבלו` : undefined)}
       </section>
       <div className="-mt-4 flex items-center gap-3">
-        {goal > 0 && (
+        {study && goal > 0 && (
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-rule" role="progressbar" aria-valuemin={0} aria-valuemax={goal} aria-valuenow={week} aria-label="התקדמות ליעד השבועי">
             <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${Math.min(100, (week / goal) * 100)}%` }} />
           </div>
         )}
         {/* the goal is set in one place: Settings → study times */}
-        <Link href="/settings#study" className="btn-ghost text-xs">
-          {goal ? "שינוי היעד" : "קביעת יעד שבועי"}
-        </Link>
+        {study && (
+          <Link href="/settings#study" className="btn-ghost text-xs">
+            {goal ? "שינוי היעד" : "קביעת יעד שבועי"}
+          </Link>
+        )}
       </div>
 
       <Tabs
@@ -116,10 +135,10 @@ async function Profile() {
           },
           {
             key: "days",
-            label: "ימי לימוד",
+            label: study ? "ימי לימוד" : "ימי פעילות",
             panel: (
               <section className="panel overflow-x-auto p-5">
-                <Heatmap days={days} today={today} weeks={20} />
+                <Heatmap days={study ? days : focusDays} today={today} weeks={20} />
               </section>
             ),
           },

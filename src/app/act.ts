@@ -185,3 +185,5 @@ export const deleteTask = w(G.deleteTask);
 export const addMilestone = w(G.addMilestone);
 export const setMilestoneDone = w(G.setMilestoneDone);
 export const deleteMilestone = w(G.deleteMilestone);
+export const logGoalTime = w(G.logGoalTime);
+export const setGoalWeekly = w(G.setGoalWeekly);

@@ -623,3 +623,20 @@ export const getModules = cache(async (): Promise<import("@/lib/modules").Module
   if (!supabaseEnabled) return process.env.UNIHUB_DEMO === "life" ? MODE_PRESETS.life : MODE_PRESETS.both;
   return modulesOf((await getMyProfile())?.prefs);
 });
+
+export interface Focus {
+  /** does this user have student mode on (decides which league they are in) */
+  study: boolean;
+  /** minutes per day on goals and hobbies; empty when they don't share hours */
+  days: Record<string, number>;
+}
+
+/** Focus minutes (time on goals + hobby practice) of me or of someone I follow. null if not allowed or on error. */
+export const getFocus = cache(async (id: string): Promise<Focus | null> => {
+  if (!supabaseEnabled) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("focus_minutes", { p_user: id });
+  if (error || !data) return null;
+  const f = data as { study?: boolean; days?: Record<string, number> };
+  return { study: f.study !== false, days: f.days ?? {} };
+});
