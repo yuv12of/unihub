@@ -144,7 +144,7 @@ export function ShareSettingsForm({ initial }: { initial: ShareSettings }) {
       {box("courses", "הקורסים שלי", "שמות הקורסים ומועדי הבחינות")}
       {box("progress", "התקדמות במטלות", "כמה נקודות מטלה צברתי", !s.courses)}
       {box("grades", "ציונים", "ממוצע במטלות", !s.progress || !s.courses)}
-      {box("study", "שעות לימוד", "כמה למדתי השבוע (מפגשים שסימנתי)")}
+      {box("study", "שעות", "כמה למדתי השבוע, או כמה זמן נתתי למטרות ולתחביבים")}
       {box("routines", "שגרה והרגלים", "השגרות שלי והרצפים")}
       <fieldset>
         <legend>הלו״ז שלי</legend>

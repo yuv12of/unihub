@@ -800,6 +800,18 @@ export async function toggleRoutine(id: string, date: string, done: boolean) {
           must(await supabase.from("hobby_logs").insert({ user_id: userId, hobby_id: hobby.id, date, minutes: Math.max(5, r?.minutes ?? 30), routine_date: date }));
         }
       } else await supabase.from("hobby_logs").delete().match({ hobby_id: hobby.id, user_id: userId, routine_date: date });
+    } else {
+      // A goal's routine works the same way: ticking it logs that time on the goal.
+      const { data: goal } = await supabase.from("goals").select("id").match({ routine_id: id, user_id: userId }).maybeSingle();
+      if (goal) {
+        if (done) {
+          const { data: had } = await supabase.from("goal_logs").select("id").match({ goal_id: goal.id, date }).not("minutes", "is", null).limit(1);
+          if (!had?.length) {
+            const { data: r } = await supabase.from("routines").select("minutes").eq("id", id).single();
+            must(await supabase.from("goal_logs").insert({ user_id: userId, goal_id: goal.id, date, minutes: Math.max(5, r?.minutes ?? 30), routine_date: date }));
+          }
+        } else await supabase.from("goal_logs").delete().match({ goal_id: goal.id, user_id: userId, routine_date: date });
+      }
     }
     refresh();
   });
@@ -1142,15 +1154,29 @@ export async function saveLook(patch: import("@/lib/themes").LookPrefs) {
     if (next.style && !["classic", "soft", "bold", "glass", "notebook"].includes(next.style)) delete next.style;
     if (next.theme && !["system", "light", "dark"].includes(next.theme)) delete next.theme;
     if (next.size && !["sm", "md", "lg", "xl"].includes(next.size)) delete next.size;
+    next.modules = (data?.prefs as import("@/lib/themes").LookPrefs | null)?.modules; // only saveModules changes these
     if (next.calm != null) next.calm = !!next.calm;
     if (next.music && !/^[A-Za-z0-9]{22}$/.test(next.music)) next.music = null;
     if (next.hidden) next.hidden = next.hidden.filter((h) => /^[a-z]{2,20}$/.test(h)).slice(0, 20);
     if (next.tabs) {
-      const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/books", "/study", "/log", "/hobbies", "/mail", "/profile", "/settings"];
+      const ok = ["/", "/semester", "/routines", "/friends", "/courses", "/books", "/study", "/log", "/hobbies", "/goals", "/mail", "/profile", "/settings"];
       next.tabs = [...new Set(next.tabs.filter((t) => ok.includes(t)))].slice(0, 4);
     }
     const { error } = await supabase.from("profiles").update({ prefs: next }).eq("id", userId);
     if (error) throw new Error(error.message);
+    refresh();
+  });
+}
+
+/** Turns parts of Unihub on or off for this user (student mode, hobbies, goals). Hides only, never deletes. */
+export async function saveModules(patch: Partial<import("@/lib/modules").Modules>) {
+  return action("saveModules", async ({ supabase, userId }) => {
+    const { cleanModules, modulesOf } = await import("@/lib/modules");
+    const { data } = await supabase.from("profiles").select("prefs").eq("id", userId).maybeSingle();
+    const prefs = ((data?.prefs as object) ?? {}) as import("@/lib/themes").LookPrefs;
+    // stored in full, so a later change of the defaults never flips a choice someone made
+    const modules = { ...modulesOf(prefs), ...cleanModules(patch) };
+    must(await supabase.from("profiles").update({ prefs: { ...prefs, modules } }).eq("id", userId));
     refresh();
   });
 }

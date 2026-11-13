@@ -3,13 +3,14 @@ import { connection } from "next/server";
 import { headers } from "next/headers";
 import { resetFeed, resetIngestToken, saveExams, saveJewish, savePrefs } from "@/app/actions";
 import { Tabs } from "@/components/Fold";
+import { ModuleSwitches } from "@/components/ModuleParts";
 import { ActionForm } from "@/components/ActionForm";
 import { GoogleCalImport } from "@/components/GoogleCalImport";
 import { CITIES, jewishPrefs } from "@/lib/hebcal";
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getMyProfile, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getMyProfile, getOpalFeed, getPrefs, getModules } from "@/lib/userdata";
 import { LookPicker, WeeklyGoal } from "@/components/ProfileParts";
 import { SpotifyCard } from "@/components/SpotifyCard";
 import { CourseChip } from "@/components/CourseChip";
@@ -55,6 +56,7 @@ async function Settings() {
     getGoogleFeed(),
     getMyProfile(),
   ]);
+  const mods = await getModules();
   const name = me?.name ?? me?.email.split("@")[0] ?? "";
   const profileInput = {
     name,
@@ -82,8 +84,24 @@ async function Settings() {
           mail: "connect",
           share: "connect",
           spotify: "music",
+          modules: "general",
         }}
         tabs={[
+          {
+            key: "general",
+            label: "כללי",
+            panel: (
+              <section id="modules" className="panel max-w-2xl p-5 sm:p-6" aria-labelledby="modules-title">
+                <h2 id="modules-title" className="section-title">
+                  מה מופיע אצלי
+                </h2>
+                <p className="mt-1 text-sm text-ink-soft">Unihub מתאים גם למי שלא לומד. כאן בוחרים אילו חלקים להציג.</p>
+                <div className="mt-3">
+                  <ModuleSwitches initial={mods} />
+                </div>
+              </section>
+            ),
+          },
           {
             key: "study",
             label: "זמני לימוד",
@@ -419,7 +437,7 @@ async function Settings() {
               </section>
             ),
           },
-        ]}
+        ].filter((t) => mods.study || t.key !== "study")}
       />
     </div>
   );

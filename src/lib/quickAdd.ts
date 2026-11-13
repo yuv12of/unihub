@@ -164,3 +164,37 @@ export function parseQuick(input: string, today: string, people: { id: string; n
     dateLabel,
   };
 }
+
+export interface TaskParse {
+  title: string;
+  due: string | null;
+  dueLabel: string | null;
+  goal: { id: string; title: string } | null;
+  /** text after "למטרה" that matched no goal */
+  unknownGoal: string | null;
+}
+
+/**
+ * "משימה לחדש דרכון מחר" · "משימה: צילומי מסך ביום שלישי למטרה אתר" → a task instead of an event.
+ * Only lines that start with "משימה" are tasks. A day or date becomes the due date; without one the
+ * task has none. "למטרה <name>" at the end ties it to the goal whose name starts with (or contains) that text.
+ */
+export function parseTask(input: string, today: string, goals: { id: string; title: string }[]): TaskParse | null {
+  const m = input.match(/^\s*משימה(?:\s*:\s*|\s+)(.+)$/);
+  if (!m) return null;
+  let rest = m[1].trim();
+  let goal: TaskParse["goal"] = null;
+  let unknownGoal: string | null = null;
+  const gm = rest.match(/(?:^|\s)למטרה\s+(.+)$/);
+  if (gm) {
+    const want = gm[1].trim();
+    goal = goals.find((g) => g.title === want) ?? goals.find((g) => g.title.startsWith(want)) ?? goals.find((g) => g.title.includes(want)) ?? null;
+    if (!goal) unknownGoal = want;
+    rest = rest.slice(0, gm.index).trim();
+  }
+  if (!rest) return null;
+  const p = parseQuick(rest, today, []);
+  // parseQuick falls back to today; a task only gets a date when one was written
+  const dated = p.date !== today || /(?:^|\s)היום(?:\s|$)/.test(rest) || p.dateLabel !== "היום";
+  return { title: p.title || rest, due: dated ? p.date : null, dueLabel: dated ? p.dateLabel : null, goal, unknownGoal };
+}

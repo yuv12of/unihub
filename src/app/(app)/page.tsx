@@ -6,7 +6,7 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { hasPushSubscription, getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getPrefs, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { hasPushSubscription, getCheerCounts, getModules, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getPrefs, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
 import { Fold } from "@/components/Fold";
 import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
@@ -27,6 +27,10 @@ import { academicEvents, academicOn } from "@/lib/academic";
 import { SessionToggle } from "@/components/SessionToggle";
 import { ShareDay } from "@/components/ShareDay";
 import { FirstSteps } from "@/components/FirstSteps";
+import { ModePicker, ModuleOffNote } from "@/components/ModuleParts";
+import { STUDY_TODAY_KEYS, modulesChosen } from "@/lib/modules";
+import { NextSteps } from "@/components/GoalParts";
+import { getGoals, goalBadgeStats, todaySteps } from "@/lib/goals";
 import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -61,6 +65,33 @@ export default function TodayPage() {
     <Suspense fallback={<Skeleton />}>
       <Today />
     </Suspense>
+  );
+}
+
+/** The next step of each active goal, tickable from Today. */
+async function GoalsToday({ today }: { today: string }) {
+  const data = await getGoals();
+  const rows = todaySteps(data, today).map((s) => ({ goalId: s.goal?.id ?? null, goal: s.goal?.title ?? null, color: s.goal?.color ?? "slate", kind: s.kind, id: s.id, title: s.title, due: s.due }));
+  if (!rows.length)
+    return data.goals.length ? null : (
+      <Link href="/goals" className="panel flex min-h-12 items-center gap-3 px-4 py-2.5 text-sm hover:border-ink-soft">
+        <Icon name="plus" className="size-4 text-ink-soft" />
+        <span className="flex-1">מטרה ראשונה: פרויקט, חיסכון, ריצה</span>
+        <Chevron dir="forward" />
+      </Link>
+    );
+  return (
+    <section className="panel px-4 py-3 sm:px-5" aria-labelledby="goals-next-title">
+      <div className="flex items-baseline justify-between">
+        <h2 id="goals-next-title" className="section-title">
+          הצעד הבא
+        </h2>
+        <Link href="/goals" className="text-sm text-ink-soft hover:text-ink">
+          כל המטרות
+        </Link>
+      </div>
+      <NextSteps rows={rows} today={today} />
+    </section>
   );
 }
 
@@ -122,7 +153,9 @@ async function Today() {
   const reading = readingByCourse(books);
   const forumNew = forum.filter((f) => !f.isRead && daysBetween(f.at.slice(0, 10), today) <= 14).slice(0, 4);
   const weekOf = (code: string | null | undefined, date: string) => (code ? weekFor(plans.weeks[code], date) : null);
-  const hidden = new Set(profile?.prefs?.hidden ?? []);
+  // Non-students: the study sections are hidden the same way a user hides a section themselves.
+  const mods = await getModules();
+  const hidden = new Set([...(profile?.prefs?.hidden ?? []), ...(mods.study ? [] : STUDY_TODAY_KEYS)]);
   const show = (k: string) => !hidden.has(k);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
   const isOff = manualOff.includes(today);
@@ -139,12 +172,14 @@ async function Today() {
   const jNext = !jp.show ? undefined : Object.values(jdays)
     .filter((d) => d.date > today && d.holidays.some((h) => h.major))
     .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const goalData = mods.goals ? await getGoals() : null;
   const earned = computeBadges({
     today,
-    studyDays,
+    studyDays: mods.study ? studyDays : undefined,
     weeklyGoal: profile?.weekly_goal_minutes,
-    courses,
-    progress,
+    courses: mods.study ? courses : undefined,
+    progress: mods.study ? progress : undefined,
+    goals: goalData ? goalBadgeStats(goalData, weekStart(today)) : undefined,
     routines,
     logs,
     offDays,
@@ -244,10 +279,15 @@ async function Today() {
       {/* ---------- Tier 1: Now ---------- */}
       <section aria-label="עכשיו" className="min-w-0 space-y-4 md:col-start-1 md:row-start-2">
         <BadgeToast earned={earned} />
+        <Suspense fallback={null}>
+          <ModuleOffNote />
+        </Suspense>
+        {/* New accounts only: nobody who already added courses or made a choice is asked. */}
+        {supabaseEnabled && profile && !modulesChosen(profile.prefs) && courses.length === 0 && <ModePicker />}
 
         {isOff && supabaseEnabled && <DayOff date={today} isOff sessionsToday={0} routinesToday={0} />}
 
-        {meetupOn && (
+        {mods.study && meetupOn && (
           <Suspense fallback={null}>
             <MeetupBanner
               code={meetupOn.event.course_code!}
@@ -405,7 +445,7 @@ async function Today() {
           </Suspense>
         )}
 
-        {courses.length > 0 && (
+        {mods.study && courses.length > 0 && (
           <Suspense fallback={null}>
             <MeetupFilesCard today={today} nowMin={nowMin} />
           </Suspense>
@@ -523,8 +563,14 @@ async function Today() {
 
         {updates.length > 0 && <UpdatesList updates={updates} />}
 
-        <PracticeMarksCard />
-        <ExamCandidates />
+        {mods.goals && show("goals") && (
+          <Suspense fallback={null}>
+            <GoalsToday today={today} />
+          </Suspense>
+        )}
+
+        {mods.study && <PracticeMarksCard />}
+        {mods.study && <ExamCandidates />}
         {show("degree") && (
           <Suspense fallback={null}>
             <DegreeTodayCard today={today} current={semester.semester} />
@@ -557,13 +603,14 @@ async function Today() {
 
         <FirstSteps
           steps={[
-            { label: "להוסיף את הקורסים של הסמסטר", href: "/courses", done: courses.length > 0 },
+            ...(mods.study ? [{ label: "להוסיף את הקורסים של הסמסטר", href: "/courses", done: courses.length > 0 }] : []),
             { label: "להוסיף שגרה: שינה, ארוחות, ספורט", href: "/routines", done: routines.length > 0 },
+            ...(mods.study ? [] : [{ label: "לחבר את יומן Google", href: "/settings#google", done: events.some((e) => e.source === "google") }]),
             { label: "להפעיל התראות בטלפון", href: "/settings#notify", done: hasPush },
           ]}
         />
 
-        <ExamCandidates />
+        {mods.study && <ExamCandidates />}
 
         {show("forums") && forumNew.length > 0 && (
           <Fold id="today-forums" title="חדש בפורומים" summary={`${forumNew.length} הודעות חדשות`} defaultOpen={false}>
@@ -590,7 +637,7 @@ async function Today() {
 
         {supabaseEnabled && show("quickadd") && (
           <Fold id="today-quickadd" title="הוספה מהירה" summary="אירוע בשורה אחת, למשל ״אימון מחר 18:00״" defaultOpen={false}>
-            <QuickAdd today={today} people={connected} />
+            <QuickAdd today={today} people={connected} goals={goalData?.goals.filter((g) => g.status === "active" || g.status === "idea").map((g) => ({ id: g.id, title: g.title }))} />
           </Fold>
         )}
 

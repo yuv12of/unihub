@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getFamilyLinks, getFollowRequests, getFriendView, getMyStudyDays, getNames, getNotifications, getPeople, getShare, getUserId } from "@/lib/userdata";
+import { getFamilyLinks, getFocus, getFollowRequests, getFriendView, getModules, getMyStudyDays, getNames, getNotifications, getPeople, getShare, getUserId } from "@/lib/userdata";
 import { Heatmap } from "@/components/Heatmap";
 import { CheerButtons, GroupFinder, NotificationsList } from "@/components/SocialBits";
 import { weekStart } from "@/lib/routines";
@@ -42,6 +42,10 @@ async function Friends() {
   const requesters = await getNames(requests);
   const following = people.filter((p) => p.i_follow === "accepted");
   const views = await Promise.all(following.map((p) => getFriendView(p.id)));
+  // Two leagues: students compete on study hours; everyone else on time spent on goals and hobbies.
+  const [mods, myFocus, focus] = await Promise.all([getModules(), me ? getFocus(me) : null, Promise.all(following.map((p) => getFocus(p.id)))]);
+  const student = mods.study;
+  const weekOf = (days: Record<string, number>) => Object.entries(days).filter(([d]) => d >= weekStart(today) && d <= today).reduce((n, [, m]) => n + m, 0);
   const others = people.filter((p) => p.i_follow !== "accepted");
   const ws = weekStart(today);
   const myWeek = Object.entries(myDays)
@@ -54,12 +58,13 @@ async function Friends() {
       avatar_url: null as string | null,
       avatar_emoji: null as string | null | undefined,
       avatar_color: null as string | null | undefined,
-      minutes: myWeek,
+      minutes: student ? myWeek : weekOf(myFocus?.days ?? {}),
       mine: true,
     },
     ...following.flatMap((p, i) => {
       const v = views[i];
-      return v?.share.study
+      // a friend is listed only in the league of their own kind
+      return v?.share.study && (focus[i]?.study ?? true) === student
         ? [
             {
               id: p.id,
@@ -67,7 +72,7 @@ async function Friends() {
               avatar_url: p.avatar_url,
               avatar_emoji: p.avatar_emoji,
               avatar_color: p.avatar_color,
-              minutes: summarize(v, today).week,
+              minutes: student ? summarize(v, today).week : weekOf(focus[i]?.days ?? {}),
               mine: false,
             },
           ]
@@ -106,7 +111,7 @@ async function Friends() {
                               <div className="min-w-0 flex-1">
                                 <div className="font-semibold">{p.name}</div>
                                 <div className="text-sm text-ink-soft">
-                                  {s && v?.share.study ? `השבוע: ${minutesLabel(s.week)} לימוד` : "לא משתף/ת שעות לימוד"}
+                                  {!v?.share.study ? "לא משתף/ת שעות" : focus[i]?.study === false ? `השבוע: ${minutesLabel(weekOf(focus[i]?.days ?? {}))} על מטרות ותחביבים` : s ? `השבוע: ${minutesLabel(s.week)} לימוד` : ""}
                                 </div>
                               </div>
                               <span className="text-ink-soft" aria-hidden>
@@ -224,7 +229,7 @@ async function Friends() {
                 {league.length > 1 && (
                   <section className="panel p-5">
                     <h2 className="font-semibold">הליגה השבועית</h2>
-                    <p className="mt-1 text-xs text-ink-soft">שעות לימוד מיום ראשון, מבין מי שמשתף שעות לימוד.</p>
+                    <p className="mt-1 text-xs text-ink-soft">{student ? "שעות לימוד מיום ראשון, מבין הסטודנטים שמשתפים שעות." : "זמן על מטרות ותחביבים מיום ראשון, מבין מי שלא במצב סטודנט ומשתף שעות."}</p>
                     <ol className="mt-3 space-y-2">
                       {league.map((r, i) => (
                         <li key={r.id} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${r.mine ? "bg-highlight/30" : ""}`}>
@@ -238,9 +243,9 @@ async function Friends() {
                   </section>
                 )}
                 <section className="panel p-5">
-                  <h2 className="font-semibold">הלימוד שלי</h2>
+                  <h2 className="font-semibold">{student ? "הלימוד שלי" : "הזמן שלי על מטרות ותחביבים"}</h2>
                   <div className="mt-3 overflow-x-auto">
-                    <Heatmap days={myDays} today={today} />
+                    <Heatmap days={student ? myDays : (myFocus?.days ?? {})} today={today} />
                   </div>
                 </section>
               </div>

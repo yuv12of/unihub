@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseEnabled, supabaseKey, supabaseUrl } from "@/lib/supabase/config";
+import { moduleOfPath, modulesOf } from "@/lib/modules";
 
 const PUBLIC_PATHS = ["/login", "/privacy", "/terms", "/auth", "/family", "/api/calendar", "/api/ingest", "/api/digest", "/api/push/tick", "/api/sync", "/api/weekly", "/api/books", "/api/share", "/api/import"];
 
@@ -34,7 +35,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
   if (!isPublic && email) {
-    const { data: profile } = await supabase.from("profiles").select("status").maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("status, prefs").maybeSingle();
     const approved = profile?.status === "approved";
     if (!approved && path !== "/pending") {
       const url = request.nextUrl.clone();
@@ -45,6 +46,15 @@ export async function proxy(request: NextRequest) {
     if (approved && path === "/pending") {
       const url = request.nextUrl.clone();
       url.pathname = "/";
+      return NextResponse.redirect(url);
+    }
+    // A page of a module this user turned off (say, courses for a non-student): back to Today,
+    // which explains where to turn it on. Nothing is deleted, the pages are only out of reach.
+    const mod = approved ? moduleOfPath(path) : null;
+    if (mod && !modulesOf(profile?.prefs as { modules?: Record<string, unknown> } | null)[mod]) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = `?off=${mod}`;
       return NextResponse.redirect(url);
     }
   }

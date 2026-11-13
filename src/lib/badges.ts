@@ -21,6 +21,8 @@ export interface BadgeStats {
   friends?: number;
   cheersSent?: number;
   cheersReceived?: number;
+  /** from goalBadgeStats; undefined = the goals module is off */
+  goals?: { done: number; steps: number; movedThisWeek: number; minutes: number; comebacks: number };
 }
 
 export interface Badge {
@@ -31,7 +33,7 @@ export interface Badge {
   value: number;
   target: number;
   earned: boolean;
-  group: "study" | "courses" | "routines" | "social";
+  group: "study" | "courses" | "routines" | "goals" | "social";
 }
 
 function longestStreak(days: Record<string, number>): number {
@@ -114,6 +116,17 @@ export function computeBadges(s: BadgeStats): Badge[] {
     add({ id: "ticks20", emoji: "✅", title: "שבוע מסודר", desc: "20 סימונים בשגרה בשבוע אחד", value: ticks, target: 20, group: "routines" });
   }
 
+  if (s.goals) {
+    const g = s.goals;
+    add({ id: "step1", emoji: "👣", title: "צעד במטרה", desc: "משימה או אבן דרך ראשונה שסומנה", value: g.steps, target: 1, group: "goals" });
+    add({ id: "step25", emoji: "🧗", title: "25 צעדים", desc: "25 משימות ואבני דרך שסומנו", value: g.steps, target: 25, group: "goals" });
+    add({ id: "goal1", emoji: "🏁", title: "קו הסיום", desc: "מטרה ראשונה שהושלמה", value: g.done, target: 1, group: "goals" });
+    add({ id: "goal5", emoji: "🏆", title: "חמש מטרות", desc: "5 מטרות שהושלמו", value: g.done, target: 5, group: "goals" });
+    add({ id: "moving3", emoji: "🚀", title: "שלוש בתנועה", desc: "3 מטרות התקדמו באותו שבוע", value: g.movedThisWeek, target: 3, group: "goals" });
+    add({ id: "comeback", emoji: "🌤️", title: "חזרה למסלול", desc: "מטרה שזזה שוב אחרי 10 ימים בלי תזוזה", value: g.comebacks, target: 1, group: "goals" });
+    add({ id: "focus10", emoji: "⏳", title: "10 שעות על מטרות", desc: "10 שעות שנרשמו על מטרות", value: Math.floor(g.minutes / 60), target: 10, group: "goals" });
+  }
+
   if (s.friends != null) add({ id: "friend1", emoji: "🤝", title: "חבר/ה ראשון/ה", desc: "חיבור ראשון ב־Unihub", value: s.friends, target: 1, group: "social" });
   if (s.friends != null) add({ id: "friend5", emoji: "👯", title: "חבורה", desc: "5 חברים ב־Unihub", value: s.friends, target: 5, group: "social" });
   if (s.cheersSent != null) add({ id: "cheer10", emoji: "📣", title: "מעודד/ת", desc: "שלחת 10 פרגונים", value: s.cheersSent, target: 10, group: "social" });
@@ -126,5 +139,6 @@ export const BADGE_GROUPS: Record<Badge["group"], string> = {
   study: "לימוד",
   courses: "קורסים",
   routines: "שגרה",
+  goals: "מטרות",
   social: "חברים",
 };

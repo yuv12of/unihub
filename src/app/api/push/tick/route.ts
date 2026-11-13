@@ -13,6 +13,9 @@ import type { SheiltaSnapshot } from "@/lib/sheilta";
 import { paceWarnings, paceWindow, type PacePoint } from "@/lib/pace";
 import { progressKey } from "@/lib/progress";
 import { CURRENT_SEMESTER, semester, typeLabel } from "@/lib/semester";
+import { isStudyPush, modulesOf } from "@/lib/modules";
+import { goalPushes } from "@/lib/goalMeta";
+import { loadGoals } from "@/lib/goals";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -35,8 +38,12 @@ export async function POST(req: Request) {
   if (data.feed.subscriptions.length) {
     const { data: degree } = await anonClient().rpc("degree_feed", { p_token: token });
     const me = admin0 ? await userOfToken(admin0, token) : null;
-    const pace = admin0 && me ? await pacePushes(admin0, me, data, now) : [];
-    sent += await sendPush(token, data.feed.subscriptions, [...remindersFor(data, now, await extrasByToken(token)), ...degreePushes(degree, now, data.offDays), ...pace]);
+    // Student mode off: no study, deadline, degree or pace pushes (routines, events and the rest stay).
+    const study = admin0 && me ? (await studyOn(admin0, [me])).has(me) : true;
+    const pace = study && admin0 && me ? await pacePushes(admin0, me, data, now) : [];
+    const goals = admin0 && me ? await goalPushesFor(admin0, me, now, data.offDays) : [];
+    const base = [...remindersFor(data, now, await extrasByToken(token)), ...goals];
+    sent += await sendPush(token, data.feed.subscriptions, study ? [...base, ...degreePushes(degree, now, data.offDays), ...pace] : base.filter((p) => !isStudyPush(p.key)));
   }
 
   const admin = adminClient();
@@ -53,17 +60,24 @@ export async function POST(req: Request) {
     const byUser = new Map<string, { endpoint: string; p256dh: string; auth: string }[]>();
     for (const s of subs ?? []) byUser.set(s.user_id, [...(byUser.get(s.user_id) ?? []), s]);
     const mine = new Set(data.feed.subscriptions.map((s) => s.endpoint));
+    const students = await studyOn(admin, [...byUser.keys()]);
     for (const [userId, list] of byUser) {
       if (list.some((s) => mine.has(s.endpoint))) continue; // that's the caller, done above
       const { data: feed } = await admin.rpc("_feed_for", { uid: userId });
       if (!feed) continue;
       const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
       const built = buildFromFeed(full, await restForFeed(full));
+      const goals = await goalPushesFor(admin, userId, now, built.offDays);
+      if (!students.has(userId)) {
+        others += await sendPushAsServer(userId, list, [...remindersFor(built, now, await extrasByUser(admin, userId)).filter((p) => !isStudyPush(p.key)), ...goals]);
+        continue;
+      }
       const { data: degree } = await admin.from("degree_plans").select("plan, sheilta").eq("user_id", userId).maybeSingle();
       others += await sendPushAsServer(userId, list, [
         ...remindersFor(built, now, await extrasByUser(admin, userId)),
         ...degreePushes(degree, now, built.offDays),
         ...(await pacePushes(admin, userId, built, now)),
+        ...goals,
       ]);
     }
     pdfs = await backfillAttachmentText(admin).catch(() => 0);
@@ -74,6 +88,27 @@ export async function POST(req: Request) {
     google = await syncDueGoogle(admin);
   }
   return Response.json({ sent, others, google, pdfs, exams });
+}
+
+/** Goal reminders for a user who turned the goals module on; none on a rough day, none if anything fails. */
+async function goalPushesFor(admin: NonNullable<ReturnType<typeof adminClient>>, userId: string, now: { date: string; minutes: number }, offDays: string[]) {
+  if (offDays.includes(now.date) || now.minutes < 10 * 60) return [];
+  try {
+    const { data: p } = await admin.from("profiles").select("prefs").eq("id", userId).maybeSingle();
+    if (!modulesOf(p?.prefs as { modules?: Record<string, unknown> } | null).goals) return [];
+    return goalPushes(await loadGoals(admin, userId), now);
+  } catch {
+    return [];
+  }
+}
+
+/** Which of these users have student mode on. If the lookup fails, everyone counts as a student (nothing is silenced by mistake). */
+async function studyOn(admin: NonNullable<ReturnType<typeof adminClient>>, ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const { data, error } = await admin.from("profiles").select("id, prefs").in("id", ids);
+  if (error || !data) return new Set(ids);
+  const off = new Set(data.filter((p) => !modulesOf(p.prefs as { modules?: Record<string, unknown> } | null).study).map((p) => p.id as string));
+  return new Set(ids.filter((id) => !off.has(id)));
 }
 
 async function userOfToken(admin: NonNullable<ReturnType<typeof adminClient>>, token: string): Promise<string | null> {
