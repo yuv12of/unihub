@@ -116,6 +116,7 @@ export const TODAY_SECTIONS: [string, string][] = [
   ["live", "לומדים עכשיו"],
   ["dayoff", "כפתור יום קשה"],
   ["routines", "השגרה של היום"],
+  ["goals", "הצעד הבא במטרות"],
   ["deadlines", "הגשות קרובות"],
   ["exams", "ספירה לאחור לבחינות"],
   ["reading", "לקריאה השבוע"],

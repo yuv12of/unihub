@@ -71,8 +71,8 @@ export function defaultTabs(m: Modules): string[] {
   return want.filter((h) => pathAllowed(h, m) && (h !== "/goals" || GOALS_BUILT)).slice(0, 4);
 }
 
-/** The goals pages don't exist yet; flips when they ship so tabs never point at a missing page. */
-export const GOALS_BUILT = false;
+/** The goals pages exist (since 13.11.2026). Kept so the switch and tabs can be pulled in one place. */
+export const GOALS_BUILT = true;
 
 /** The user's four phone tabs: their own picks that are still visible, topped up from the defaults. */
 export function tabsFor(chosen: string[] | null | undefined, m: Modules, exists: (href: string) => boolean = () => true): string[] {

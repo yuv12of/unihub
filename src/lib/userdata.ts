@@ -613,3 +613,13 @@ export async function getCheerCounts(): Promise<{ sent: number; received: number
   ]);
   return { sent: sent ?? 0, received: received ?? 0 };
 }
+
+/**
+ * Which parts of Unihub this user sees (lib/modules). Local design previews (UNIHUB_DEMO, no
+ * database) show everything; UNIHUB_DEMO=life previews the non-student app.
+ */
+export const getModules = cache(async (): Promise<import("@/lib/modules").Modules> => {
+  const { MODE_PRESETS, modulesOf } = await import("@/lib/modules");
+  if (!supabaseEnabled) return process.env.UNIHUB_DEMO === "life" ? MODE_PRESETS.life : MODE_PRESETS.both;
+  return modulesOf((await getMyProfile())?.prefs);
+});

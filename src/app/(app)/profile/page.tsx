@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getCheerCounts, getMyProfile, getMyStudyDays, getPeople, getUserPlan } from "@/lib/userdata";
+import { getCheerCounts, getModules, getMyProfile, getMyStudyDays, getPeople, getUserPlan } from "@/lib/userdata";
 import { computeBadges } from "@/lib/badges";
 import { standing } from "@/lib/progress";
 import { weekStart } from "@/lib/routines";
@@ -30,6 +30,7 @@ async function Profile() {
   // Local design previews (no database) show a sample person.
   const me = mine ?? (!supabaseEnabled && process.env.UNIHUB_DEMO ? DEMO_ME : null);
   if (!me) return <p>הפרופיל זמין אחרי התחברות.</p>;
+  const { study } = await getModules();
   const friends = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").length;
   const badges = computeBadges({
     today,
@@ -67,7 +68,7 @@ async function Profile() {
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-4xl">{name}</h1>
           <p className="text-ink-soft">
-            {[me.program, me.study_year].filter(Boolean).join(" · ") || "האוניברסיטה הפתוחה"} · ב־Unihub מ{since}
+            {study ? `${[me.program, me.study_year].filter(Boolean).join(" · ") || "האוניברסיטה הפתוחה"} · ` : ""}ב־Unihub מ{since}
           </p>
           {me.bio && <p className="mt-2 max-w-xl leading-relaxed">{me.bio}</p>}
           <div className="mt-3">

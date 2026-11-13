@@ -6,7 +6,7 @@ import { connection } from "next/server";
 import { DeadlineList, type DeadlineRowData } from "@/components/DeadlineList";
 import { standingSentence } from "@/components/CourseParts";
 import { progressKey, standing } from "@/lib/progress";
-import { hasPushSubscription, getCheerCounts, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getPrefs, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
+import { hasPushSubscription, getCheerCounts, getModules, getMyProfile, getMyStudyDays, getNames, getPendingInvites, getPeople, getPrefs, getStudyingNow, getUpdates, getUserPlan } from "@/lib/userdata";
 import { Fold } from "@/components/Fold";
 import { LiveClock } from "@/components/LiveClock";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
@@ -28,7 +28,9 @@ import { SessionToggle } from "@/components/SessionToggle";
 import { ShareDay } from "@/components/ShareDay";
 import { FirstSteps } from "@/components/FirstSteps";
 import { ModePicker, ModuleOffNote } from "@/components/ModuleParts";
-import { STUDY_TODAY_KEYS, modulesChosen, modulesOf } from "@/lib/modules";
+import { STUDY_TODAY_KEYS, modulesChosen } from "@/lib/modules";
+import { NextSteps } from "@/components/GoalParts";
+import { getGoals, todaySteps } from "@/lib/goals";
 import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -63,6 +65,33 @@ export default function TodayPage() {
     <Suspense fallback={<Skeleton />}>
       <Today />
     </Suspense>
+  );
+}
+
+/** The next step of each active goal, tickable from Today. */
+async function GoalsToday({ today }: { today: string }) {
+  const data = await getGoals();
+  const rows = todaySteps(data, today).map((s) => ({ goalId: s.goal?.id ?? null, goal: s.goal?.title ?? null, color: s.goal?.color ?? "slate", kind: s.kind, id: s.id, title: s.title, due: s.due }));
+  if (!rows.length)
+    return data.goals.length ? null : (
+      <Link href="/goals" className="panel flex min-h-12 items-center gap-3 px-4 py-2.5 text-sm hover:border-ink-soft">
+        <Icon name="plus" className="size-4 text-ink-soft" />
+        <span className="flex-1">מטרה ראשונה: פרויקט, חיסכון, ריצה</span>
+        <Chevron dir="forward" />
+      </Link>
+    );
+  return (
+    <section className="panel px-4 py-3 sm:px-5" aria-labelledby="goals-next-title">
+      <div className="flex items-baseline justify-between">
+        <h2 id="goals-next-title" className="section-title">
+          הצעד הבא
+        </h2>
+        <Link href="/goals" className="text-sm text-ink-soft hover:text-ink">
+          כל המטרות
+        </Link>
+      </div>
+      <NextSteps rows={rows} today={today} />
+    </section>
   );
 }
 
@@ -125,7 +154,7 @@ async function Today() {
   const forumNew = forum.filter((f) => !f.isRead && daysBetween(f.at.slice(0, 10), today) <= 14).slice(0, 4);
   const weekOf = (code: string | null | undefined, date: string) => (code ? weekFor(plans.weeks[code], date) : null);
   // Non-students: the study sections are hidden the same way a user hides a section themselves.
-  const mods = modulesOf(profile?.prefs);
+  const mods = await getModules();
   const hidden = new Set([...(profile?.prefs?.hidden ?? []), ...(mods.study ? [] : STUDY_TODAY_KEYS)]);
   const show = (k: string) => !hidden.has(k);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
@@ -531,6 +560,12 @@ async function Today() {
         {invites.length > 0 && <InvitesList invites={invites} names={inviters} />}
 
         {updates.length > 0 && <UpdatesList updates={updates} />}
+
+        {mods.goals && show("goals") && (
+          <Suspense fallback={null}>
+            <GoalsToday today={today} />
+          </Suspense>
+        )}
 
         {mods.study && <PracticeMarksCard />}
         {mods.study && <ExamCandidates />}

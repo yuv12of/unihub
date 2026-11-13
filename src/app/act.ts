@@ -7,6 +7,7 @@ import * as A from "@/app/actions";
 import type { Failed } from "@/app/guard";
 import * as B from "@/app/bookActions";
 import * as H from "@/app/hobbyActions";
+import * as G from "@/app/goalActions";
 
 function w<P extends unknown[], R>(f: (...a: P) => Promise<R>) {
   return async (...a: P): Promise<Exclude<R, Failed>> => {
@@ -171,3 +172,16 @@ import * as Degree from "@/app/degreeActions";
 export const saveDegreePlan = w(Degree.saveDegreePlan);
 export const saveScenarios = w(Degree.saveScenarios);
 export const importSheilta = w(Degree.importSheilta);
+
+// goals
+export const createGoal = w(G.createGoal);
+export const updateGoal = w(G.updateGoal);
+export const deleteGoal = w(G.deleteGoal);
+export const logGoal = w(G.logGoal);
+export const deleteGoalLog = w(G.deleteGoalLog);
+export const addTask = w(G.addTask);
+export const setTaskDone = w(G.setTaskDone);
+export const deleteTask = w(G.deleteTask);
+export const addMilestone = w(G.addMilestone);
+export const setMilestoneDone = w(G.setMilestoneDone);
+export const deleteMilestone = w(G.deleteMilestone);

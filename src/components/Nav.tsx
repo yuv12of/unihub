@@ -25,6 +25,7 @@ const items: Item[] = [
   { href: "/study", label: "תרגול", icon: IconStudy, group: "study" },
   { href: "/log", label: "יומן שעות", icon: IconLog, group: "study" },
   { href: "/routines", label: "שגרה", icon: IconRoutine, group: "life" },
+  { href: "/goals", label: "מטרות", icon: IconGoals, group: "life" },
   { href: "/hobbies", label: "תחביבים", icon: IconHobbies, group: "life" },
   { href: "/friends", label: "חברים", icon: IconFriends, badge: "friends", group: "social" },
   { href: "/mail", label: "דואר", icon: IconMail, group: "account" },
@@ -230,6 +231,16 @@ function IconDegree() {
       <path d="M2.5 9 12 4.5 21.5 9 12 13.5z" />
       <path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11" />
       <path d="M21.5 9v5" />
+    </svg>
+  );
+}
+
+function IconGoals() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="0.8" fill="currentColor" />
     </svg>
   );
 }

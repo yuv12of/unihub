@@ -37,7 +37,7 @@ test("default tabs never point at a hidden or missing page", () => {
   const life = defaultTabs(MODE_PRESETS.life);
   assert.equal(life.length, 4);
   assert.ok(life.every((h) => pathAllowed(h, MODE_PRESETS.life)));
-  assert.ok(!life.includes("/goals")); // until the goals pages ship
+  assert.deepEqual(life, ["/", "/semester", "/goals", "/routines"]);
   assert.ok(!defaultTabs({ study: false, goals: false, hobbies: false }).includes("/hobbies"));
 });
 

@@ -1,3 +1,5 @@
+import { colorVar, getGoals } from "@/lib/goals";
+import { getModules } from "@/lib/userdata";
 import { Suspense } from "react";
 import { jewishDays, jewishPrefs } from "@/lib/hebcal";
 import Link from "next/link";
@@ -136,6 +138,18 @@ async function Semester() {
       if (jp.times && d.candles) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `🕯️ הדלקת נרות ${d.candles}` });
       if (jp.times && d.havdalah) items.push({ date: d.date, kind: "academic", color: "var(--ink-soft)", label: `✨ הבדלה ${d.havdalah}${d.parasha ? ` · ${d.parasha}` : ""}` });
     }
+  // Goals: deadlines, and open milestones and tasks that have a date, as all-day items.
+  if ((await getModules()).goals) {
+    const gd = await getGoals();
+    for (const g of gd.goals) {
+      if (g.status !== "active") continue;
+      const color = colorVar(g.color);
+      if (g.due) items.push({ date: g.due, kind: "academic", color, label: `יעד: ${g.title}` });
+      for (const m of gd.milestones) if (m.goal_id === g.id && m.due && !m.done_at) items.push({ date: m.due, kind: "academic", color, label: `${m.title} (${g.title})` });
+      for (const t of gd.tasks) if (t.goal_id === g.id && t.due && !t.done_at) items.push({ date: t.due, kind: "academic", color, label: `${t.title} (${g.title})` });
+    }
+    for (const t of gd.tasks) if (!t.goal_id && t.due && !t.done_at) items.push({ date: t.due, kind: "academic", color: "var(--ink-soft)", label: t.title });
+  }
   const vacationDays = await getVacationDays();
   for (const d of vacationDays) items.push({ date: d, kind: "academic", color: "var(--ink-soft)", label: "🏖️ חופשה", holiday: true });
   for (const a of academicByDay()) {

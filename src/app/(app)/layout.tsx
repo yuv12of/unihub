@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { SideNav, TabBar } from "@/components/Nav";
-import { getBadges, getCourses, getMyProfile, hasSpotify } from "@/lib/userdata";
+import { getBadges, getCourses, getModules, getMyProfile, hasSpotify } from "@/lib/userdata";
 import { MusicBar } from "@/components/SpotifyPlayer";
 import { QuickLog } from "@/components/QuickLog";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -11,7 +11,6 @@ import { LiveClock } from "@/components/LiveClock";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SwRegister } from "@/components/SwRegister";
 import { semester, themeOf } from "@/lib/semester";
-import { modulesOf } from "@/lib/modules";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -75,15 +74,14 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 
 async function SideNavWithBadges() {
   await connection();
-  const [badges, me] = await Promise.all([getBadges(), getMyProfile()]);
-  return <SideNav badges={badges} modules={modulesOf(me?.prefs)} />;
+  const [badges, modules] = await Promise.all([getBadges(), getModules()]);
+  return <SideNav badges={badges} modules={modules} />;
 }
 
 /** The semester name, for students only. */
 async function SemesterLabel() {
   await connection();
-  const me = supabaseEnabled ? await getMyProfile() : null;
-  return <span>{modulesOf(me?.prefs).study ? `סמסטר ${semester.semester}` : ""}</span>;
+  return <span>{(await getModules()).study ? `סמסטר ${semester.semester}` : ""}</span>;
 }
 
 async function MusicBarMount() {
@@ -95,13 +93,13 @@ async function QuickLogMount() {
   await connection();
   const me = supabaseEnabled ? await getMyProfile() : null;
   // the quick log records study hours per course: students only
-  if (!me || !modulesOf(me.prefs).study) return null;
+  if (!me || !(await getModules()).study) return null;
   const courses = await getCourses();
   return <QuickLog courses={courses.map((c) => ({ code: c.code, short: themeOf(courses, c.code).short, color: themeOf(courses, c.code).color }))} />;
 }
 
 async function TabBarWithBadges() {
   await connection();
-  const [badges, me] = await Promise.all([getBadges(), getMyProfile()]);
-  return <TabBar badges={badges} tabs={me?.prefs?.tabs} modules={modulesOf(me?.prefs)} />;
+  const [badges, me, modules] = await Promise.all([getBadges(), getMyProfile(), getModules()]);
+  return <TabBar badges={badges} tabs={me?.prefs?.tabs} modules={modules} />;
 }

@@ -4,14 +4,13 @@ import { headers } from "next/headers";
 import { resetFeed, resetIngestToken, saveExams, saveJewish, savePrefs } from "@/app/actions";
 import { Tabs } from "@/components/Fold";
 import { ModuleSwitches } from "@/components/ModuleParts";
-import { modulesOf } from "@/lib/modules";
 import { ActionForm } from "@/components/ActionForm";
 import { GoogleCalImport } from "@/components/GoogleCalImport";
 import { CITIES, jewishPrefs } from "@/lib/hebcal";
 import { mailScript } from "@/lib/appsScript";
 import { CopyField, SaveButton } from "@/components/FormBits";
 import { PushSetup } from "@/components/PushSetup";
-import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getMyProfile, getOpalFeed, getPrefs } from "@/lib/userdata";
+import { getCourses, getExams, getFeedToken, getGoogleFeed, getIngestToken, getMyProfile, getOpalFeed, getPrefs, getModules } from "@/lib/userdata";
 import { LookPicker, WeeklyGoal } from "@/components/ProfileParts";
 import { SpotifyCard } from "@/components/SpotifyCard";
 import { CourseChip } from "@/components/CourseChip";
@@ -57,7 +56,7 @@ async function Settings() {
     getGoogleFeed(),
     getMyProfile(),
   ]);
-  const mods = modulesOf(me?.prefs);
+  const mods = await getModules();
   const name = me?.name ?? me?.email.split("@")[0] ?? "";
   const profileInput = {
     name,

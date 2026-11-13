@@ -14,6 +14,8 @@ import { paceWarnings, paceWindow, type PacePoint } from "@/lib/pace";
 import { progressKey } from "@/lib/progress";
 import { CURRENT_SEMESTER, semester, typeLabel } from "@/lib/semester";
 import { isStudyPush, modulesOf } from "@/lib/modules";
+import { goalPushes } from "@/lib/goalMeta";
+import { loadGoals } from "@/lib/goals";
 
 /**
  * Called every 10 minutes by any user's Apps Script.
@@ -39,7 +41,8 @@ export async function POST(req: Request) {
     // Student mode off: no study, deadline, degree or pace pushes (routines, events and the rest stay).
     const study = admin0 && me ? (await studyOn(admin0, [me])).has(me) : true;
     const pace = study && admin0 && me ? await pacePushes(admin0, me, data, now) : [];
-    const base = remindersFor(data, now, await extrasByToken(token));
+    const goals = admin0 && me ? await goalPushesFor(admin0, me, now, data.offDays) : [];
+    const base = [...remindersFor(data, now, await extrasByToken(token)), ...goals];
     sent += await sendPush(token, data.feed.subscriptions, study ? [...base, ...degreePushes(degree, now, data.offDays), ...pace] : base.filter((p) => !isStudyPush(p.key)));
   }
 
@@ -64,8 +67,9 @@ export async function POST(req: Request) {
       if (!feed) continue;
       const full = { ...(feed as PrivateFeed), subscriptions: list, mails: [], cards_due: 0 };
       const built = buildFromFeed(full, await restForFeed(full));
+      const goals = await goalPushesFor(admin, userId, now, built.offDays);
       if (!students.has(userId)) {
-        others += await sendPushAsServer(userId, list, remindersFor(built, now, await extrasByUser(admin, userId)).filter((p) => !isStudyPush(p.key)));
+        others += await sendPushAsServer(userId, list, [...remindersFor(built, now, await extrasByUser(admin, userId)).filter((p) => !isStudyPush(p.key)), ...goals]);
         continue;
       }
       const { data: degree } = await admin.from("degree_plans").select("plan, sheilta").eq("user_id", userId).maybeSingle();
@@ -73,6 +77,7 @@ export async function POST(req: Request) {
         ...remindersFor(built, now, await extrasByUser(admin, userId)),
         ...degreePushes(degree, now, built.offDays),
         ...(await pacePushes(admin, userId, built, now)),
+        ...goals,
       ]);
     }
     pdfs = await backfillAttachmentText(admin).catch(() => 0);
@@ -83,6 +88,18 @@ export async function POST(req: Request) {
     google = await syncDueGoogle(admin);
   }
   return Response.json({ sent, others, google, pdfs, exams });
+}
+
+/** Goal reminders for a user who turned the goals module on; none on a rough day, none if anything fails. */
+async function goalPushesFor(admin: NonNullable<ReturnType<typeof adminClient>>, userId: string, now: { date: string; minutes: number }, offDays: string[]) {
+  if (offDays.includes(now.date) || now.minutes < 10 * 60) return [];
+  try {
+    const { data: p } = await admin.from("profiles").select("prefs").eq("id", userId).maybeSingle();
+    if (!modulesOf(p?.prefs as { modules?: Record<string, unknown> } | null).goals) return [];
+    return goalPushes(await loadGoals(admin, userId), now);
+  } catch {
+    return [];
+  }
 }
 
 /** Which of these users have student mode on. If the lookup fails, everyone counts as a student (nothing is silenced by mistake). */
