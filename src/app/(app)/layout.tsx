@@ -11,6 +11,7 @@ import { LiveClock } from "@/components/LiveClock";
 import { ScrollReset } from "@/components/ScrollReset";
 import { SwRegister } from "@/components/SwRegister";
 import { semester, themeOf } from "@/lib/semester";
+import { modulesOf } from "@/lib/modules";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -24,7 +25,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <span className="hidden lg:inline">Unihub</span>
         </Link>
         <p className="mt-1 hidden justify-between text-sm text-ink-soft lg:flex">
-          <span>סמסטר {semester.semester}</span>
+          <Suspense fallback={<span />}>
+            <SemesterLabel />
+          </Suspense>
           <LiveClock />
         </p>
         <Suspense fallback={<div className="mt-8 h-96" />}>
@@ -72,7 +75,15 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 
 async function SideNavWithBadges() {
   await connection();
-  return <SideNav badges={await getBadges()} />;
+  const [badges, me] = await Promise.all([getBadges(), getMyProfile()]);
+  return <SideNav badges={badges} modules={modulesOf(me?.prefs)} />;
+}
+
+/** The semester name, for students only. */
+async function SemesterLabel() {
+  await connection();
+  const me = supabaseEnabled ? await getMyProfile() : null;
+  return <span>{modulesOf(me?.prefs).study ? `סמסטר ${semester.semester}` : ""}</span>;
 }
 
 async function MusicBarMount() {
@@ -82,7 +93,9 @@ async function MusicBarMount() {
 
 async function QuickLogMount() {
   await connection();
-  if (!supabaseEnabled || !(await getMyProfile())) return null;
+  const me = supabaseEnabled ? await getMyProfile() : null;
+  // the quick log records study hours per course: students only
+  if (!me || !modulesOf(me.prefs).study) return null;
   const courses = await getCourses();
   return <QuickLog courses={courses.map((c) => ({ code: c.code, short: themeOf(courses, c.code).short, color: themeOf(courses, c.code).color }))} />;
 }
@@ -90,5 +103,5 @@ async function QuickLogMount() {
 async function TabBarWithBadges() {
   await connection();
   const [badges, me] = await Promise.all([getBadges(), getMyProfile()]);
-  return <TabBar badges={badges} tabs={me?.prefs?.tabs} />;
+  return <TabBar badges={badges} tabs={me?.prefs?.tabs} modules={modulesOf(me?.prefs)} />;
 }

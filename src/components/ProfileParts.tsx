@@ -6,7 +6,8 @@ import { PALETTES, STYLES, applyLook, normalizePalette, type LookPrefs, type Pal
 import { FOCUS_PLAYLISTS, playlistId } from "@/lib/focusMusic";
 import { PALETTE } from "@/lib/semester";
 import { Avatar } from "@/components/Avatar";
-import { DEFAULT_TABS, TAB_CHOICES } from "@/components/Nav";
+import { TAB_CHOICES } from "@/components/Nav";
+import { modulesOf, pathAllowed, tabsFor } from "@/lib/modules";
 import { Icon } from "@/components/Icon";
 
 const EMOJIS = ["🦊", "🐼", "🦉", "🐢", "🐙", "🦁", "🐧", "🐝", "🌵", "🌻", "🍀", "⚡", "🚀", "🎧", "📚", "🧠", "☕", "🎨", "⚽", "🎸", "🏀", "🐱", "🐶", "🦄"];
@@ -277,8 +278,8 @@ export function LookPicker({ initial, part = "look" }: { initial: LookPrefs; par
         <h3 className="text-sm font-semibold">הלשוניות בסרגל התחתון בטלפון</h3>
         <p className="mt-0.5 text-xs text-ink-soft">בוחרים עד 4. כל השאר נמצאים תחת ״עוד״.</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {TAB_CHOICES.map((t) => {
-            const tabs = p.tabs?.length ? p.tabs : DEFAULT_TABS;
+          {TAB_CHOICES.filter((t) => pathAllowed(t.href, modulesOf(p))).map((t) => {
+            const tabs = tabsFor(p.tabs, modulesOf(p));
             const i = tabs.indexOf(t.href);
             const on = i >= 0;
             return (

@@ -27,6 +27,8 @@ import { academicEvents, academicOn } from "@/lib/academic";
 import { SessionToggle } from "@/components/SessionToggle";
 import { ShareDay } from "@/components/ShareDay";
 import { FirstSteps } from "@/components/FirstSteps";
+import { ModePicker, ModuleOffNote } from "@/components/ModuleParts";
+import { STUDY_TODAY_KEYS, modulesChosen, modulesOf } from "@/lib/modules";
 import { UpNext, type UpNextItem } from "@/components/UpNext";
 import { israelNow } from "@/lib/privateFeed";
 import { supabaseEnabled } from "@/lib/supabase/config";
@@ -122,7 +124,9 @@ async function Today() {
   const reading = readingByCourse(books);
   const forumNew = forum.filter((f) => !f.isRead && daysBetween(f.at.slice(0, 10), today) <= 14).slice(0, 4);
   const weekOf = (code: string | null | undefined, date: string) => (code ? weekFor(plans.weeks[code], date) : null);
-  const hidden = new Set(profile?.prefs?.hidden ?? []);
+  // Non-students: the study sections are hidden the same way a user hides a section themselves.
+  const mods = modulesOf(profile?.prefs);
+  const hidden = new Set([...(profile?.prefs?.hidden ?? []), ...(mods.study ? [] : STUDY_TODAY_KEYS)]);
   const show = (k: string) => !hidden.has(k);
   const connected = people.filter((p) => p.i_follow === "accepted" || p.follows_me === "accepted").map((p) => ({ id: p.id, name: p.name }));
   const isOff = manualOff.includes(today);
@@ -244,10 +248,15 @@ async function Today() {
       {/* ---------- Tier 1: Now ---------- */}
       <section aria-label="עכשיו" className="min-w-0 space-y-4 md:col-start-1 md:row-start-2">
         <BadgeToast earned={earned} />
+        <Suspense fallback={null}>
+          <ModuleOffNote />
+        </Suspense>
+        {/* New accounts only: nobody who already added courses or made a choice is asked. */}
+        {supabaseEnabled && profile && !modulesChosen(profile.prefs) && courses.length === 0 && <ModePicker />}
 
         {isOff && supabaseEnabled && <DayOff date={today} isOff sessionsToday={0} routinesToday={0} />}
 
-        {meetupOn && (
+        {mods.study && meetupOn && (
           <Suspense fallback={null}>
             <MeetupBanner
               code={meetupOn.event.course_code!}
@@ -405,7 +414,7 @@ async function Today() {
           </Suspense>
         )}
 
-        {courses.length > 0 && (
+        {mods.study && courses.length > 0 && (
           <Suspense fallback={null}>
             <MeetupFilesCard today={today} nowMin={nowMin} />
           </Suspense>
@@ -523,8 +532,8 @@ async function Today() {
 
         {updates.length > 0 && <UpdatesList updates={updates} />}
 
-        <PracticeMarksCard />
-        <ExamCandidates />
+        {mods.study && <PracticeMarksCard />}
+        {mods.study && <ExamCandidates />}
         {show("degree") && (
           <Suspense fallback={null}>
             <DegreeTodayCard today={today} current={semester.semester} />
@@ -557,13 +566,14 @@ async function Today() {
 
         <FirstSteps
           steps={[
-            { label: "להוסיף את הקורסים של הסמסטר", href: "/courses", done: courses.length > 0 },
+            ...(mods.study ? [{ label: "להוסיף את הקורסים של הסמסטר", href: "/courses", done: courses.length > 0 }] : []),
             { label: "להוסיף שגרה: שינה, ארוחות, ספורט", href: "/routines", done: routines.length > 0 },
+            ...(mods.study ? [] : [{ label: "לחבר את יומן Google", href: "/settings#google", done: events.some((e) => e.source === "google") }]),
             { label: "להפעיל התראות בטלפון", href: "/settings#notify", done: hasPush },
           ]}
         />
 
-        <ExamCandidates />
+        {mods.study && <ExamCandidates />}
 
         {show("forums") && forumNew.length > 0 && (
           <Fold id="today-forums" title="חדש בפורומים" summary={`${forumNew.length} הודעות חדשות`} defaultOpen={false}>

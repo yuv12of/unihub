@@ -57,6 +57,8 @@ export interface LookPrefs {
   music?: string | null;
   /** phone tab bar: up to 4 page paths */
   tabs?: string[];
+  /** which parts of Unihub this user sees (lib/modules); missing = defaults */
+  modules?: Partial<import("@/lib/modules").Modules>;
 }
 
 /** Applies look prefs to <html> and remembers them in this browser (read before first paint). */

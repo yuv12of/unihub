@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import { headers } from "next/headers";
 import { resetFeed, resetIngestToken, saveExams, saveJewish, savePrefs } from "@/app/actions";
 import { Tabs } from "@/components/Fold";
+import { ModuleSwitches } from "@/components/ModuleParts";
+import { modulesOf } from "@/lib/modules";
 import { ActionForm } from "@/components/ActionForm";
 import { GoogleCalImport } from "@/components/GoogleCalImport";
 import { CITIES, jewishPrefs } from "@/lib/hebcal";
@@ -55,6 +57,7 @@ async function Settings() {
     getGoogleFeed(),
     getMyProfile(),
   ]);
+  const mods = modulesOf(me?.prefs);
   const name = me?.name ?? me?.email.split("@")[0] ?? "";
   const profileInput = {
     name,
@@ -82,8 +85,24 @@ async function Settings() {
           mail: "connect",
           share: "connect",
           spotify: "music",
+          modules: "general",
         }}
         tabs={[
+          {
+            key: "general",
+            label: "כללי",
+            panel: (
+              <section id="modules" className="panel max-w-2xl p-5 sm:p-6" aria-labelledby="modules-title">
+                <h2 id="modules-title" className="section-title">
+                  מה מופיע אצלי
+                </h2>
+                <p className="mt-1 text-sm text-ink-soft">Unihub מתאים גם למי שלא לומד. כאן בוחרים אילו חלקים להציג.</p>
+                <div className="mt-3">
+                  <ModuleSwitches initial={mods} />
+                </div>
+              </section>
+            ),
+          },
           {
             key: "study",
             label: "זמני לימוד",
@@ -419,7 +438,7 @@ async function Settings() {
               </section>
             ),
           },
-        ]}
+        ].filter((t) => mods.study || t.key !== "study")}
       />
     </div>
   );

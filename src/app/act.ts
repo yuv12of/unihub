@@ -17,6 +17,7 @@ function w<P extends unknown[], R>(f: (...a: P) => Promise<R>) {
 }
 
 export const setSessionStatus = w(A.setSessionStatus);
+export const saveModules = w(A.saveModules);
 export const addEvent = w(A.addEvent);
 export const updateEvent = w(A.updateEvent);
 export const deleteEvent = w(A.deleteEvent);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useEffect, useState } from "react";
+import { MODULE_DEFAULTS, pathAllowed, tabsFor, type Modules } from "@/lib/modules";
 
 export interface Badges {
   friends?: number;
@@ -42,7 +43,8 @@ function useActive() {
   return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 }
 
-const visible = (badges: Badges) => items.filter((i) => !i.adminOnly || badges.admin != null);
+/** What this user sees: admin page for admins, module pages only for modules that are on. */
+const visible = (badges: Badges, modules: Modules) => items.filter((i) => (!i.adminOnly || badges.admin != null) && pathAllowed(i.href, modules));
 
 function Dot({ n }: { n?: number | null }) {
   if (!n) return null;
@@ -57,15 +59,15 @@ function Dot({ n }: { n?: number | null }) {
  * Vertical navigation: a full sidebar on computers (grouped: study / life / social / account),
  * an icon rail with tooltips on iPad portrait (768–1023px).
  */
-export function SideNav({ badges = {} }: { badges?: Badges }) {
+export function SideNav({ badges = {}, modules = MODULE_DEFAULTS }: { badges?: Badges; modules?: Modules }) {
   const isActive = useActive();
-  const list = visible(badges);
+  const list = visible(badges, modules);
   const groups = (Object.keys(GROUPS) as Group[]).filter((g) => list.some((i) => i.group === g));
   return (
     <nav aria-label="ניווט ראשי" className="mt-6 flex flex-col gap-3 lg:mt-7 lg:gap-4">
       {groups.map((g, gi) => (
         <div key={g} className={gi ? "border-t border-rule pt-3 lg:border-0 lg:pt-0" : ""}>
-          <p className="mb-1 hidden px-3 text-[11px] font-medium text-ink-soft lg:block">{GROUPS[g]}</p>
+          <p className="mb-1 hidden px-3 text-[11px] font-medium text-ink-soft lg:block">{g === "study" && !modules.study ? "ראשי" : GROUPS[g]}</p>
           <ul className="flex flex-col gap-0.5">
             {list
               .filter((i) => i.group === g)
@@ -104,13 +106,13 @@ export function SideNav({ badges = {} }: { badges?: Badges }) {
 }
 
 /** Bottom tab bar on phones: four main places + "more". */
-export function TabBar({ badges = {}, tabs }: { badges?: Badges; tabs?: string[] | null }) {
+export function TabBar({ badges = {}, tabs, modules = MODULE_DEFAULTS }: { badges?: Badges; tabs?: string[] | null; modules?: Modules }) {
   const isActive = useActive();
   const path = usePathname();
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
-  const all = visible(badges);
-  const chosen = (tabs?.length ? tabs : DEFAULT_TABS).filter((h) => all.some((i) => i.href === h)).slice(0, PHONE_MAIN);
+  const all = visible(badges, modules);
+  const chosen = tabsFor(tabs, modules, (h) => all.some((i) => i.href === h)).slice(0, PHONE_MAIN);
   const main = chosen.map((h) => all.find((i) => i.href === h)!);
   const more = all.filter((i) => !chosen.includes(i.href));
   const moreActive = more.some((i) => isActive(i.href));
