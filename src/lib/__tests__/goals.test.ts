@@ -207,3 +207,27 @@ test("a journal entry counts as movement", () => {
   assert.equal(lastMove(g, d), "2026-11-10");
   assert.equal(stalledDays(g, d, "2026-11-13"), 0);
 });
+
+test("a milestone split into steps counts by its steps", async () => {
+  const { stepsOf, timeline } = await import("@/lib/goalMeta");
+  const g = goal({ progress_mode: "milestones", created_at: "2026-11-01T08:00:00Z" });
+  const step = (id: string, ms: string, done: string | null, sort = 0): Task => ({ ...task(id, null, sort), milestone_id: ms, done_at: done });
+  const plain: Milestone = { ...ms("plain", null), done_at: "2026-11-02T09:00:00Z" };
+  const split: Milestone = { ...ms("split", null) };
+  const d = data(g, { milestones: [plain, split], tasks: [step("s2", "split", null, 2), step("s1", "split", "2026-11-03T09:00:00Z", 1), step("s3", "split", "2026-11-06T09:00:00Z", 3), step("s4", "split", null, 4)] });
+  assert.deepEqual(stepsOf(split, d.tasks).map((t) => t.id), ["s1", "s2", "s3", "s4"]);
+  assert.equal(stepsOf(plain, d.tasks).length, 0);
+  // plain = 1, split = 2 of 4 → (1 + 0.5) / 2
+  assert.equal(progressAt(g, d, "2026-11-10"), 0.75);
+  assert.equal(progressAt(g, d, "2026-11-04"), 0.625);
+  assert.equal(progressAt(g, d, "2026-11-01"), 0);
+  // the split milestone's own tick is ignored while it has steps
+  const ticked = data(g, { milestones: [plain, { ...split, done_at: "2026-11-02T10:00:00Z" }], tasks: d.tasks });
+  assert.equal(progressAt(g, ticked, "2026-11-10"), 0.75);
+  // each tick is a point on the chart
+  const pts = timeline(g, d, Date.parse("2026-11-10T09:00:00Z")).filter((q) => q.label);
+  assert.deepEqual(pts.map((q) => [q.label, q.p]), [["plain", 0.5], ["s1", 0.625], ["s3", 0.75]]);
+  // in a tasks-mode goal the steps are simply tasks
+  const tg = goal();
+  assert.equal(progressAt(tg, data(tg, { milestones: [split], tasks: d.tasks }), "2026-11-10"), 0.5);
+});

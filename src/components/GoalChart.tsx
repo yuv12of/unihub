@@ -14,7 +14,7 @@ const DAY = 86_400_000;
  * deadline; the dotted line continues today's pace. Time runs left to right, as in every chart.
  * Moving a finger or the mouse across it reads out any moment; the keyboard arrows do the same.
  */
-export function GoalChart({ points, now, due, projected, color }: { points: ChartPoint[]; now: number; due: string | null; projected: string | null; color: string }) {
+export function GoalChart({ points, now, due, projected, color, marks = [] }: { points: ChartPoint[]; now: number; due: string | null; projected: string | null; color: string; marks?: { date: string; label: string; done: boolean }[] }) {
   const W = 340;
   const H = 200;
   const L = 28;
@@ -46,6 +46,8 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
     .join(" ");
   const area = `${line} L${f(x(now))},${y(0)} L${f(x(t0))},${y(0)} Z`;
   const projEnd = projT == null || pNow >= 1 ? null : projT <= cap ? { x: x(projT), y: y(1) } : { x: x(t1), y: y(pNow + ((1 - pNow) * (t1 - now)) / (projT - now)) };
+  // milestone target dates that fall inside the chart, as small diamonds on the time axis
+  const dots = marks.map((m) => ({ ...m, t: Date.parse(m.date + "T10:00:00Z") })).filter((m) => m.t >= t0 && m.t <= t1);
   const planned = (t: number) => (dueT == null ? null : dueT <= t0 ? 1 : Math.max(0, Math.min(1, (t - t0) / (dueT - t0))));
 
   // --- reading a moment
@@ -56,6 +58,7 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
   const short = t1 - t0 < 3 * DAY;
   const last = future ? undefined : [...points].reverse().find((q) => q.label && q.t <= t);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const near = at == null ? undefined : dots.filter((m) => Math.abs(m.t - t) < (t1 - t0) * 0.03).sort((a, b) => Math.abs(a.t - t) - Math.abs(b.t - t))[0];
   const when = at == null ? "היום" : `${dayFmt.format(t)}${short ? ` ${timeFmt.format(t)}` : ""}`;
 
   const move = (clientX: number) => {
@@ -95,7 +98,13 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
             תחזית {pct(Math.min(1, pNow + ((1 - pNow) * (t - now)) / (projT - now)))}
           </span>
         )}
-        {last && <span className="min-w-0 truncate text-ink-soft">אחרון: {last.label}</span>}
+        {near ? (
+          <span className="min-w-0 truncate">
+            אבן דרך{near.done ? " (הושלמה)" : ""}: {near.label}
+          </span>
+        ) : (
+          last && <span className="min-w-0 truncate text-ink-soft">אחרון: {last.label}</span>
+        )}
       </p>
       <svg
         ref={svg}
@@ -104,7 +113,7 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
         style={{ direction: "ltr" }}
         role="img"
         tabIndex={0}
-        aria-label={`גרף התקדמות. היום ${pct(pNow)}${planned(now) != null ? `, מתוכנן ${pct(planned(now)!)}` : ""}. חיצים ימינה ושמאלה לקריאת נקודות בזמן.`}
+        aria-label={`גרף התקדמות. היום ${pct(pNow)}${planned(now) != null ? `, מתוכנן ${pct(planned(now)!)}` : ""}${dots.length ? `. ${dots.length} תאריכי יעד של אבני דרך מסומנים על ציר הזמן` : ""}. חיצים ימינה ושמאלה לקריאת נקודות בזמן.`}
         onPointerMove={(e) => move(e.clientX)}
         onPointerDown={(e) => move(e.clientX)}
         onPointerLeave={(e) => e.pointerType === "mouse" && setAt(null)}
@@ -132,6 +141,12 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
         <line x1={nowX} x2={nowX} y1={y(pNow)} y2={y(0)} stroke={color} strokeWidth="1" opacity="0.45" />
         <circle cx={nowX} cy={y(pNow)} r="9" fill={color} opacity="0.18" />
         <circle cx={nowX} cy={y(pNow)} r="5" fill={color} stroke="var(--surface)" strokeWidth="2" />
+        {dots.map((m) => {
+          const cx = x(m.t);
+          const cy = y(0);
+          const late = !m.done && m.t < now;
+          return <path key={m.date + m.label} d={`M${cx},${cy - 5} L${cx + 4.5},${cy} L${cx},${cy + 5} L${cx - 4.5},${cy} Z`} fill={m.done ? "var(--ink-soft)" : late ? "var(--highlight)" : "var(--surface)"} stroke={late ? "var(--highlight-ink)" : "var(--ink)"} strokeWidth="1.5" />;
+        })}
         {at != null && (
           <g>
             <line x1={x(at)} x2={x(at)} y1={T} y2={y(0)} stroke="var(--ink)" strokeWidth="1" />

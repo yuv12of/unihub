@@ -74,7 +74,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
             g.status === "active" && p < 1 && <p className="text-sm text-ink-soft">עוד אין מספיק תזוזה לתחזית</p>
           )}
         </div>
-        <GoalChart points={timeline(g, data, now)} now={now} due={g.due} projected={projected} color={color} />
+        <GoalChart points={timeline(g, data, now)} now={now} due={g.due} projected={projected} color={color} marks={milestones.filter((m) => m.due).map((m) => ({ date: m.due!, label: m.title, done: !!m.done_at }))} />
       </section>
 
       <dl className="grid grid-cols-3 gap-3">
@@ -112,14 +112,14 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
         <h2 id="ms-title" className="section-title mb-2">
           אבני דרך
         </h2>
-        <MilestoneList goalId={g.id} milestones={milestones} today={today} />
+        <MilestoneList goalId={g.id} milestones={milestones} steps={tasks.filter((t) => t.milestone_id)} today={today} />
       </section>
 
       <section className="panel p-4 sm:p-5" aria-labelledby="tasks-title">
         <h2 id="tasks-title" className="section-title mb-2">
           משימות
         </h2>
-        <TaskList goalId={g.id} tasks={tasks} today={today} />
+        <TaskList goalId={g.id} tasks={tasks.filter((t) => !t.milestone_id)} today={today} />
       </section>
 
       <section className="panel p-4 sm:p-5" aria-labelledby="time-title">
