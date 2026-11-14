@@ -231,3 +231,32 @@ test("a milestone split into steps counts by its steps", async () => {
   const tg = goal();
   assert.equal(progressAt(tg, data(tg, { milestones: [split], tasks: d.tasks }), "2026-11-10"), 0.5);
 });
+
+test("templates: a goal's shape without its progress, dates as distances from the start", async () => {
+  const { templateFrom, cleanTemplate, templateSummary } = await import("@/lib/goalMeta");
+  const g = goal({ title: "סרטון", progress_mode: "milestones", started_on: "2026-11-01", due: "2026-11-11", description: "תיאור" });
+  const m1: Milestone = { ...ms("צילומים", "2026-11-03", 1), due: "2026-11-04", note: "הערה" };
+  const m2: Milestone = { ...ms("עריכה", null, 2), due: "2026-10-20" }; // before the start: no negative distance
+  const st = (id: string, mid: string, sort: number): Task => ({ ...task(id, "2026-11-02", sort), milestone_id: mid });
+  const d = data(g, { milestones: [m2, m1], tasks: [st("ב", "צילומים", 2), st("א", "צילומים", 1), { ...task("חשבונית", null, 5), due: "2026-11-11" }] });
+  const t = templateFrom(g, d);
+  assert.equal(t.dueDays, 10);
+  assert.deepEqual(t.milestones.map((m) => [m.title, m.dueDays, m.steps.map((s) => s.title)]), [["צילומים", 3, ["א", "ב"]], ["עריכה", 0, []]]);
+  assert.equal(t.milestones[0].note, "הערה");
+  assert.deepEqual(t.tasks, [{ title: "חשבונית", note: null, dueDays: 10 }]);
+  assert.ok(!JSON.stringify(t).includes("done")); // nothing about progress
+  assert.equal(templateSummary(t), "2 אבני דרך, 2 שלבים, משימה אחת");
+  // survives being stored as JSON and read back
+  assert.deepEqual(cleanTemplate(JSON.parse(JSON.stringify(t))), t);
+  // malformed input is dropped, not trusted
+  assert.equal(cleanTemplate(null), null);
+  assert.equal(cleanTemplate({ title: "  " }), null);
+  const messy = cleanTemplate({ title: "x", mode: "nope", area: 7, color: "red; drop", dueDays: -4, milestones: [{ title: "" }, { title: "ok", steps: [{}, { title: "s" }], dueDays: "3" }, "junk"], tasks: "no" })!;
+  assert.equal(messy.mode, "tasks");
+  assert.equal(messy.area, "personal");
+  assert.equal(messy.color, "blue");
+  assert.equal(messy.dueDays, null);
+  assert.deepEqual(messy.milestones, [{ title: "ok", note: null, dueDays: null, steps: [{ title: "s", note: null }] }]);
+  assert.deepEqual(messy.tasks, []);
+  assert.equal(templateSummary(cleanTemplate({ title: "x" })!), "בלי שלבים");
+});

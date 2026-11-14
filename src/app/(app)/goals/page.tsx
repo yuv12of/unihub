@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { GoalBoard, GoalNew, TaskList, type GoalCard } from "@/components/GoalParts";
-import { AREAS, WIP_LIMIT, colorVar, getGoals, movedSince, nextStep, notesOf, progressAt, progressText, spark, stalledDays } from "@/lib/goals";
+import { GoalBoard, GoalNew, TaskList, type GoalCard, type TemplateChoice } from "@/components/GoalParts";
+import { AREAS, WIP_LIMIT, colorVar, getGoalTemplates, getGoals, movedSince, nextStep, notesOf, progressAt, progressText, spark, stalledDays, templateSummary } from "@/lib/goals";
 import { weekStart } from "@/lib/routines";
-import { daysBetween, relativeDays, todayInIsrael } from "@/lib/semester";
+import { addDays, daysBetween, relativeDays, todayInIsrael } from "@/lib/semester";
 
 export default function GoalsPage() {
   return (
@@ -19,7 +19,8 @@ export default function GoalsPage() {
 async function Board() {
   await connection();
   const today = todayInIsrael();
-  const data = await getGoals();
+  const [data, mine] = await Promise.all([getGoals(), getGoalTemplates()]);
+  const templates: TemplateChoice[] = mine.map(({ id, name, data: t }) => ({ id, name, summary: templateSummary(t), area: t.area, color: t.color, mode: t.mode, start: t.start, target: t.target, unit: t.unit, description: t.description, why: t.why, due: t.dueDays == null ? null : addDays(today, t.dueDays) }));
   const shown = data.goals.filter((g) => g.status !== "dropped");
   const cards: GoalCard[] = shown.map((g) => {
     const next = nextStep(g, data);
@@ -75,7 +76,7 @@ async function Board() {
         </section>
       )}
 
-      <GoalNew startOpen={shown.length === 0} />
+      <GoalNew startOpen={shown.length === 0} templates={templates} />
 
       {shown.length > 0 && <GoalBoard cards={cards} />}
 

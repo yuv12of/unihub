@@ -430,3 +430,89 @@ export function curveAt(points: ChartPoint[], t: number, slopes = curveSlopes(po
   }
   return points.at(-1)!.p;
 }
+
+/* ---------- The user's own templates ---------- */
+
+/**
+ * A goal's shape, saved to start the same kind of goal again: how it is measured, its milestones
+ * with their steps, and its tasks. Dates are kept as days from the goal's start, so a new goal made
+ * from the template gets the same spacing from its own first day. Nothing about progress is kept.
+ */
+export interface GoalTemplateData {
+  title: string;
+  area: GoalArea;
+  color: string;
+  mode: ProgressMode;
+  start: number | null;
+  target: number | null;
+  unit: string | null;
+  description: string | null;
+  why: string | null;
+  dueDays: number | null;
+  milestones: { title: string; note: string | null; dueDays: number | null; steps: { title: string; note: string | null }[] }[];
+  tasks: { title: string; note: string | null; dueDays: number | null }[];
+}
+export interface GoalTemplate {
+  id: string;
+  name: string;
+  data: GoalTemplateData;
+}
+
+export function templateFrom(g: Goal, d: GoalData): GoalTemplateData {
+  const { tasks, milestones } = partsOf(g, d);
+  const offset = (due: string | null) => (due ? Math.max(0, daysBetween(g.started_on, due)) : null);
+  const bySort = <T extends { sort: number }>(a: T, b: T) => a.sort - b.sort;
+  return {
+    title: g.title,
+    area: g.area,
+    color: g.color,
+    mode: g.progress_mode,
+    start: g.start_value,
+    target: g.target_value,
+    unit: g.unit,
+    description: g.description ?? null,
+    why: g.why,
+    dueDays: offset(g.due),
+    milestones: [...milestones].sort(bySort).map((m) => ({ title: m.title, note: m.note ?? null, dueDays: offset(m.due), steps: stepsOf(m, tasks).map((s) => ({ title: s.title, note: s.note ?? null })) })),
+    tasks: tasks
+      .filter((t) => !t.milestone_id)
+      .sort(bySort)
+      .map((t) => ({ title: t.title, note: t.note ?? null, dueDays: offset(t.due) })),
+  };
+}
+
+/** Reads a stored template, dropping anything malformed (the column is free-form JSON). null if it isn't one. */
+export function cleanTemplate(raw: unknown): GoalTemplateData | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const days = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(3650, Math.round(v)) : null);
+  const list = (v: unknown, max: number) => (Array.isArray(v) ? v.slice(0, max).filter((x) => x && typeof x === "object") : []) as Record<string, unknown>[];
+  const title = str(r.title, 80);
+  if (!title) return null;
+  return {
+    title,
+    area: (typeof r.area === "string" && r.area in AREAS ? r.area : "personal") as GoalArea,
+    color: COLORS.includes(r.color as GoalColor) ? (r.color as string) : "blue",
+    mode: (typeof r.mode === "string" && r.mode in MODES ? r.mode : "tasks") as ProgressMode,
+    start: n(r.start),
+    target: n(r.target),
+    unit: str(r.unit, 12),
+    description: str(r.description, 2000),
+    why: str(r.why, 300),
+    dueDays: days(r.dueDays),
+    milestones: list(r.milestones, 40).flatMap((m) => {
+      const t = str(m.title, 140);
+      return t ? [{ title: t, note: str(m.note, 500), dueDays: days(m.dueDays), steps: list(m.steps, 30).flatMap((s) => (str(s.title, 140) ? [{ title: str(s.title, 140)!, note: str(s.note, 500) }] : [])) }] : [];
+    }),
+    tasks: list(r.tasks, 100).flatMap((t) => (str(t.title, 140) ? [{ title: str(t.title, 140)!, note: str(t.note, 500), dueDays: days(t.dueDays) }] : [])),
+  };
+}
+
+/** "4 אבני דרך, 9 שלבים, 3 משימות" (only the parts that exist). */
+export function templateSummary(t: GoalTemplateData): string {
+  const steps = t.milestones.reduce((n, m) => n + m.steps.length, 0);
+  const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
+  return [t.milestones.length && count(t.milestones.length, "אבן דרך אחת", "אבני דרך"), steps && count(steps, "שלב אחד", "שלבים"), t.tasks.length && count(t.tasks.length, "משימה אחת", "משימות")].filter(Boolean).join(", ") || "בלי שלבים";
+}

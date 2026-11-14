@@ -2,7 +2,7 @@ import { cache } from "react";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, todayInIsrael } from "@/lib/semester";
-import type { Goal, GoalData, GoalLog, GoalNote, Milestone, Task } from "@/lib/goalMeta";
+import { cleanTemplate, type Goal, type GoalData, type GoalLog, type GoalNote, type GoalTemplate, type Milestone, type Task } from "@/lib/goalMeta";
 
 export * from "@/lib/goalMeta";
 
@@ -89,3 +89,18 @@ function demoGoals(today: string): GoalData {
 
 /** The current moment, for server components (which may not call Date.now() themselves). */
 export const nowMs = () => Date.now();
+
+/** The user's own goal templates, newest first. Empty on any error. */
+export const getGoalTemplates = cache(async (): Promise<GoalTemplate[]> => {
+  if (!supabaseEnabled)
+    return process.env.UNIHUB_DEMO
+      ? [{ id: "tpl1", name: "סרטון ללקוח", data: cleanTemplate({ title: "סרטון ללקוח", area: "work", color: "teal", mode: "milestones", dueDays: 10, milestones: [{ title: "צילומים", dueDays: 3, steps: [{ title: "תסריט" }, { title: "יום צילום" }] }, { title: "עריכה", dueDays: 8, steps: [{ title: "עריכה גסה" }, { title: "צבע וסאונד" }, { title: "קטעים קצרים" }] }, { title: "מסירה", dueDays: 10, steps: [] }], tasks: [{ title: "לשלוח חשבונית", dueDays: 10 }] })! }]
+      : [];
+  const sb = await createClient();
+  const { data, error } = await sb.from("goal_templates").select("id, name, data").order("created_at", { ascending: false }).limit(50);
+  if (error || !data) return [];
+  return data.flatMap((r) => {
+    const d = cleanTemplate(r.data);
+    return d ? [{ id: r.id as string, name: r.name as string, data: d }] : [];
+  });
+});

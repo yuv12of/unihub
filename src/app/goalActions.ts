@@ -2,7 +2,8 @@
 
 import { refresh } from "next/cache";
 import { action, must } from "@/app/guard";
-import { AREAS, COLORS, MODES, STATUSES, type GoalArea, type GoalStatus, type ProgressMode } from "@/lib/goalMeta";
+import { AREAS, COLORS, MODES, STATUSES, cleanTemplate, templateFrom, type Goal, type GoalArea, type GoalStatus, type Milestone, type ProgressMode, type Task } from "@/lib/goalMeta";
+import { addDays } from "@/lib/semester";
 import { todayInIsrael } from "@/lib/semester";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,6 +25,8 @@ export interface GoalInput {
   status?: GoalStatus;
   /** first tasks (tasks mode) or milestones (milestones mode), one per line */
   steps?: string[];
+  /** one of the user's own templates: its milestones, steps and tasks are created with the goal (replaces `steps`) */
+  templateId?: string;
 }
 
 export async function createGoal(input: GoalInput) {
@@ -55,6 +58,21 @@ export async function createGoal(input: GoalInput) {
         sort: Math.floor(Date.now() / 1000),
       }),
     );
+    const tpl = input.templateId ? cleanTemplate((await sb.from("goal_templates").select("data").match({ id: input.templateId, user_id: uid }).maybeSingle()).data?.data) : null;
+    if (input.templateId && !tpl) throw new Error("התבנית לא נמצאה");
+    if (tpl) {
+      // the template's structure, with its dates moved to the same distance from this goal's first day
+      const when = (n: number | null) => (n == null ? null : addDays(today, n));
+      const ms = tpl.milestones.map((m, i) => ({ id: crypto.randomUUID(), user_id: uid, goal_id: id, title: m.title, note: m.note, due: when(m.dueDays), sort: i }));
+      if (ms.length) must(await sb.from("goal_milestones").insert(ms));
+      const rows = [
+        ...tpl.milestones.flatMap((m, i) => m.steps.map((s, j) => ({ user_id: uid, goal_id: id, milestone_id: ms[i].id as string | null, title: s.title, note: s.note, due: null as string | null, sort: i * 100 + j }))),
+        ...tpl.tasks.map((t, i) => ({ user_id: uid, goal_id: id, milestone_id: null as string | null, title: t.title, note: t.note, due: when(t.dueDays), sort: 10_000 + i })),
+      ];
+      if (rows.length) must(await sb.from("tasks").insert(rows));
+      refresh();
+      return id;
+    }
     const steps = (input.steps ?? []).map((s) => text(s, 140)).filter(Boolean).slice(0, 30);
     if (steps.length && mode === "milestones") must(await sb.from("goal_milestones").insert(steps.map((t, i) => ({ user_id: uid, goal_id: id, title: t, sort: i }))));
     else if (steps.length) must(await sb.from("tasks").insert(steps.map((t, i) => ({ user_id: uid, goal_id: id, title: t, sort: i }))));
@@ -286,6 +304,34 @@ export async function setStepNote(kind: "task" | "milestone", id: string, note: 
     const row: Record<string, unknown> = { note: text(note, 500) || null };
     if (due !== undefined) row.due = date(due);
     must(await sb.from(kind === "task" ? "tasks" : "goal_milestones").update(row).match({ id, user_id: uid }));
+    refresh();
+  });
+}
+
+/* ---------- The user's own templates ---------- */
+
+/** Saves a goal's shape (measure, milestones with steps, tasks, date spacing; no progress) as a template to start from again. */
+export async function saveGoalTemplate(goalId: string, name: string) {
+  return action("saveGoalTemplate", async ({ supabase: sb, userId: uid }) => {
+    const [g, m, t, count] = await Promise.all([
+      sb.from("goals").select("id, title, color, area, status, why, description, started_on, due, progress_mode, start_value, target_value, unit, weekly_minutes, routine_id, sort, created_at, done_at").match({ id: goalId, user_id: uid }).maybeSingle(),
+      sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort, note").match({ goal_id: goalId, user_id: uid }),
+      sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note, milestone_id").match({ goal_id: goalId, user_id: uid }),
+      sb.from("goal_templates").select("id", { count: "exact", head: true }).eq("user_id", uid),
+    ]);
+    if (!g.data) throw new Error("לא נמצא");
+    if ((count.count ?? 0) >= 50) throw new Error("יש כבר 50 תבניות. אפשר למחוק אחת בטופס של מטרה חדשה.");
+    const goal = { ...g.data, start_value: g.data.start_value == null ? null : Number(g.data.start_value), target_value: g.data.target_value == null ? null : Number(g.data.target_value) } as Goal;
+    const data = templateFrom(goal, { goals: [goal], milestones: (m.data ?? []) as Milestone[], tasks: (t.data ?? []) as Task[], logs: [] });
+    const label = text(name, 60) || goal.title;
+    must(await sb.from("goal_templates").insert({ user_id: uid, name: label, data: { ...data, title: label } }));
+    refresh();
+  });
+}
+
+export async function deleteGoalTemplate(id: string) {
+  return action("deleteGoalTemplate", async ({ supabase: sb, userId: uid }) => {
+    must(await sb.from("goal_templates").delete().match({ id, user_id: uid }));
     refresh();
   });
 }
