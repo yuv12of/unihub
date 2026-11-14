@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
-import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, deleteGoalTemplate, saveGoalTemplate, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
 import { duration } from "@/lib/time";
 import { Icon } from "@/components/Icon";
@@ -196,7 +196,24 @@ export function GoalBoard({ cards }: { cards: GoalCard[] }) {
 
 /* ---------- New goal ---------- */
 
-export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
+/** One of the user's own templates, as the new-goal form needs it. */
+export interface TemplateChoice {
+  id: string;
+  name: string;
+  summary: string;
+  area: GoalArea;
+  color: string;
+  mode: ProgressMode;
+  start: number | null;
+  target: number | null;
+  unit: string | null;
+  description: string | null;
+  why: string | null;
+  /** the deadline a goal started today would get, if the template has one */
+  due: string | null;
+}
+
+export function GoalNew({ startOpen = false, templates = [] }: { startOpen?: boolean; templates?: TemplateChoice[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(startOpen);
   const [title, setTitle] = useState("");
@@ -211,6 +228,8 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
   const [why, setWhy] = useState("");
   const [about, setAbout] = useState("");
   const [idea, setIdea] = useState(false);
+  const [tplId, setTplId] = useState<string | null>(null);
+  const tpl = templates.find((t) => t.id === tplId) ?? null;
   const { pending, error, run } = useRun();
 
   if (!open)
@@ -220,7 +239,22 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
         מטרה חדשה
       </button>
     );
+  const fillFromMine = (t: TemplateChoice) => {
+    setTplId(t.id);
+    setTitle(t.name);
+    setArea(t.area);
+    setColor(COLORS.includes(t.color as GoalColor) ? (t.color as GoalColor) : "blue");
+    setMode(t.mode);
+    setStart(String(t.start ?? 0));
+    setTarget(t.target != null ? String(t.target) : "");
+    setUnit(t.unit ?? "");
+    setDue(t.due ?? "");
+    setAbout(t.description ?? "");
+    setWhy(t.why ?? "");
+    setSteps("");
+  };
   const fillFrom = (t: (typeof TEMPLATES)[number]) => {
+    setTplId(null);
     setTitle(t.title);
     setArea(t.area);
     setColor(t.color);
@@ -236,16 +270,49 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
       onSubmit={(e) => {
         e.preventDefault();
         run(async () => {
-          const id = await createGoal({ title, area, color, mode, start: Number(start), target: target === "" ? null : Number(target), unit, due: due || null, why, description: about, status: idea ? "idea" : "active", steps: steps.split("\n") });
+          const id = await createGoal({ title, area, color, mode, start: Number(start), target: target === "" ? null : Number(target), unit, due: due || null, why, description: about, status: idea ? "idea" : "active", steps: steps.split("\n"), templateId: tplId ?? undefined });
           router.push(`/goals/${id}`);
         });
       }}
     >
+      {templates.length > 0 && (
+        <div>
+          <p className="text-sm text-ink-soft">התבניות שלי</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {templates.map((t) => (
+              <button key={t.id} type="button" onClick={() => fillFromMine(t)} className="chip" aria-pressed={tplId === t.id}>
+                {t.name}
+              </button>
+            ))}
+          </div>
+          {tpl && (
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-rule px-3 py-2 text-sm">
+              <span className="flex-1">
+                המטרה תיווצר עם {tpl.summary}
+                {tpl.due ? ", והתאריכים יחושבו מהיום." : "."}
+              </span>
+              <button type="button" onClick={() => setTplId(null)} className="btn-ghost text-sm">
+                בלי התבנית
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  if (confirm(`למחוק את התבנית ״${tpl.name}״? מטרות שנוצרו ממנה לא ישתנו.`)) run(() => deleteGoalTemplate(tpl.id), () => setTplId(null));
+                }}
+                className="btn-ghost text-sm text-bad"
+              >
+                מחיקת התבנית
+              </button>
+            </p>
+          )}
+        </div>
+      )}
       <div>
-        <p className="text-sm text-ink-soft">אפשר להתחיל מתבנית</p>
+        <p className="text-sm text-ink-soft">{templates.length > 0 ? "תבניות מוכנות" : "אפשר להתחיל מתבנית"}</p>
         <div className="mt-1.5 flex flex-wrap gap-2">
           {TEMPLATES.map((t) => (
-            <button key={t.title} type="button" onClick={() => fillFrom(t)} className="chip" aria-pressed={title === t.title}>
+            <button key={t.title} type="button" onClick={() => fillFrom(t)} className="chip" aria-pressed={!tplId && title === t.title}>
               {t.title}
             </button>
           ))}
@@ -312,7 +379,7 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
           </label>
         </div>
       )}
-      {(mode === "tasks" || mode === "milestones") && (
+      {!tpl && (mode === "tasks" || mode === "milestones") && (
         <label className="block text-sm">
           <span className="text-ink-soft">{mode === "tasks" ? "משימות" : "אבני דרך"} להתחלה (שורה לכל אחת, לא חובה)</span>
           <textarea value={steps} onChange={(e) => setSteps(e.target.value)} rows={4} className={`${field} mt-1`} />
@@ -934,5 +1001,57 @@ export function GoalJournal({ goalId, notes, today }: { goalId: string; notes: {
         </ol>
       )}
     </div>
+  );
+}
+
+/* ---------- Save this goal's shape as a template ---------- */
+
+export function SaveTemplate({ goalId, title, summary }: { goalId: string; title: string; summary: string }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(title);
+  const [saved, setSaved] = useState<string | null>(null);
+  const { pending, error, run } = useRun();
+  if (!open)
+    return (
+      <div>
+        <button type="button" onClick={() => setOpen(true)} className="btn min-h-11">
+          שמירה כתבנית
+        </button>
+        {saved && (
+          <p role="status" className="mt-2 text-sm text-ok">
+            התבנית ״{saved}״ נשמרה. היא מחכה בטופס של מטרה חדשה.
+          </p>
+        )}
+      </div>
+    );
+  return (
+    <form
+      className="space-y-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        run(
+          () => saveGoalTemplate(goalId, name),
+          () => {
+            setSaved(name.trim() || title);
+            setOpen(false);
+          },
+        );
+      }}
+    >
+      <label className="block text-sm">
+        <span className="text-ink-soft">שם התבנית</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} autoFocus className={`${field} mt-1`} />
+      </label>
+      <p className="text-xs text-ink-soft">נשמרים: אופן המדידה, התיאור, {summary} והמרחק של כל תאריך מתחילת המטרה. ההתקדמות עצמה לא נשמרת.</p>
+      <div className="flex gap-2">
+        <button disabled={pending} className="btn-primary min-h-11 px-5">
+          שמירה
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="btn-ghost min-h-11">
+          ביטול
+        </button>
+      </div>
+      <Err error={error} />
+    </form>
   );
 }

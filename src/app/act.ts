@@ -190,3 +190,5 @@ export const setGoalWeekly = w(G.setGoalWeekly);
 export const addGoalNote = w(G.addGoalNote);
 export const deleteGoalNote = w(G.deleteGoalNote);
 export const setStepNote = w(G.setStepNote);
+export const saveGoalTemplate = w(G.saveGoalTemplate);
+export const deleteGoalTemplate = w(G.deleteGoalTemplate);

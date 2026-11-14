@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Icon } from "@/components/Icon";
 import { GoalChart } from "@/components/GoalChart";
-import { GoalJournal, GoalLogForm, GoalSettings, GoalTime, MilestoneList, TaskList } from "@/components/GoalParts";
+import { GoalJournal, GoalLogForm, GoalSettings, GoalTime, MilestoneList, SaveTemplate, TaskList } from "@/components/GoalParts";
 import { weekStart } from "@/lib/routines";
-import { AREAS, STATUSES, colorVar, currentValue, getGoals, nowMs, goalMinutesSince, notesOf, partsOf, plannedNow, progressAt, progressText, projectedFinish, stalledDays, timeline } from "@/lib/goals";
+import { AREAS, STATUSES, colorVar, currentValue, getGoals, nowMs, goalMinutesSince, notesOf, partsOf, plannedNow, progressAt, progressText, projectedFinish, stalledDays, templateFrom, templateSummary, timeline } from "@/lib/goals";
 import { daysBetween, formatHebrewDate, relativeDays, todayInIsrael } from "@/lib/semester";
 
 export default function GoalPage({ params }: PageProps<"/goals/[id]">) {
@@ -134,6 +134,10 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           הגדרות המטרה
         </h2>
         <GoalSettings id={g.id} status={g.status} due={g.due} why={g.why} description={g.description ?? null} />
+        <div className="mt-4 border-t border-rule pt-4">
+          <p className="mb-2 text-sm text-ink-soft">מטרה שחוזרת על עצמה? אפשר לשמור את המבנה שלה ולהתחיל ממנו בפעם הבאה.</p>
+          <SaveTemplate goalId={g.id} title={g.title} summary={templateSummary(templateFrom(g, data))} />
+        </div>
       </section>
     </article>
   );
