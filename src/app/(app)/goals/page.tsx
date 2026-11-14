@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { GoalBoard, GoalNew, TaskList, type GoalCard } from "@/components/GoalParts";
-import { AREAS, WIP_LIMIT, colorVar, getGoals, movedSince, nextStep, progressAt, progressText, spark, stalledDays } from "@/lib/goals";
+import { AREAS, WIP_LIMIT, colorVar, getGoals, movedSince, nextStep, notesOf, progressAt, progressText, spark, stalledDays } from "@/lib/goals";
 import { weekStart } from "@/lib/routines";
 import { daysBetween, relativeDays, todayInIsrael } from "@/lib/semester";
 
@@ -35,6 +35,7 @@ async function Board() {
       spark: spark(g, data, today),
       next: next?.title ?? null,
       stalled: stalledDays(g, data, today),
+      note: notesOf(g, data)[0]?.body ?? null,
     };
   });
   const active = shown.filter((g) => g.status === "active");

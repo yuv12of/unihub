@@ -30,6 +30,8 @@ export interface Goal {
   area: GoalArea;
   status: GoalStatus;
   why: string | null;
+  /** what the goal is about, in the user's words */
+  description?: string | null;
   started_on: string;
   due: string | null;
   progress_mode: ProgressMode;
@@ -49,6 +51,7 @@ export interface Milestone {
   due: string | null;
   done_at: string | null;
   sort: number;
+  note?: string | null;
 }
 export interface Task {
   id: string;
@@ -59,6 +62,7 @@ export interface Task {
   done_at: string | null;
   sort: number;
   created_at: string;
+  note?: string | null;
 }
 export interface GoalLog {
   id: string;
@@ -68,12 +72,22 @@ export interface GoalLog {
   percent: number | null;
   minutes: number | null;
   note: string | null;
+  created_at?: string;
+}
+/** One entry of the goal's progress journal: a short update the user writes for themselves. */
+export interface GoalNote {
+  id: string;
+  goal_id: string;
+  date: string;
+  body: string;
+  created_at: string;
 }
 export interface GoalData {
   goals: Goal[];
   milestones: Milestone[];
   tasks: Task[];
   logs: GoalLog[];
+  notes?: GoalNote[];
 }
 
 const clamp01 = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0);
@@ -135,7 +149,9 @@ export function progressText(g: Goal, d: GoalData, today: string): string {
 /** The last day anything moved: a task or milestone ticked, a value logged, or the goal created. */
 export function lastMove(g: Goal, d: GoalData): string {
   const { tasks, milestones, logs } = partsOf(g, d);
-  const days = [day(g.created_at) ?? g.started_on, ...tasks.map((t) => day(t.done_at)), ...milestones.map((m) => day(m.done_at)), ...logs.map((l) => l.date)].filter(Boolean) as string[];
+  // writing a progress update counts: someone who reports on a goal hasn't left it
+  const notes = (d.notes ?? []).filter((n) => n.goal_id === g.id).map((n) => n.date);
+  const days = [day(g.created_at) ?? g.started_on, ...tasks.map((t) => day(t.done_at)), ...milestones.map((m) => day(m.done_at)), ...logs.map((l) => l.date), ...notes].filter(Boolean) as string[];
   return days.sort().at(-1)!;
 }
 
@@ -163,7 +179,7 @@ export function nextStep(g: Goal, d: GoalData): { kind: "task" | "milestone"; id
   return m ? { kind: "milestone", id: m.id, title: m.title, due: m.due } : null;
 }
 
-/** Progress over time, one point per step from the goal's start to today, for the chart. */
+/** Progress per day from the goal's start to today. (The chart uses timeline(); this stays for daily summaries and tests.) */
 export function series(g: Goal, d: GoalData, today: string, maxPoints = 40): { date: string; p: number }[] {
   const start = g.started_on <= today ? g.started_on : today;
   const span = Math.max(1, daysBetween(start, today));
@@ -282,4 +298,109 @@ export function goalBadgeStats(d: GoalData, weekStartDay: string): { done: numbe
     minutes: d.logs.reduce((n, l) => n + (l.minutes ?? 0), 0),
     comebacks,
   };
+}
+
+/** The goal's journal, newest first. */
+export function notesOf(g: Goal, d: GoalData): GoalNote[] {
+  return (d.notes ?? []).filter((n) => n.goal_id === g.id).sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at));
+}
+
+export interface ChartPoint {
+  /** time in ms */
+  t: number;
+  p: number;
+  /** what happened at this point (a task ticked, a number logged) */
+  label?: string;
+}
+
+/**
+ * Progress over time for the chart, from the moment the goal was created until now, built from
+ * what actually happened and when (not one point per day, so a goal that is a few hours old
+ * already has a line). One point per step; the chart joins them with a smooth rising curve,
+ * and the stretch from the last step to now is level.
+ */
+export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
+  const { tasks, milestones, logs } = partsOf(g, d);
+  const t0 = Math.min(Date.parse(g.created_at), now);
+  const events: ChartPoint[] = [];
+  const steps = (rows: { title: string; done_at: string | null }[]) => {
+    const done = rows.filter((r) => r.done_at).sort((a, b) => a.done_at!.localeCompare(b.done_at!));
+    done.forEach((r, i) => events.push({ t: Date.parse(r.done_at!), p: (i + 1) / rows.length, label: r.title }));
+  };
+  // a log has a date; its clock time is taken from when it was written, if that was the same day
+  const logTime = (l: GoalLog) => {
+    const noon = Date.parse(l.date + "T12:00:00Z");
+    const made = l.created_at ? Date.parse(l.created_at) : NaN;
+    return Number.isFinite(made) && Math.abs(made - noon) < 36 * 3_600_000 ? made : noon;
+  };
+  if (g.progress_mode === "tasks") steps(tasks);
+  else if (g.progress_mode === "milestones") steps(milestones);
+  else {
+    const key = g.progress_mode === "number" ? "value" : "percent";
+    for (const l of logs) {
+      const v = l[key];
+      if (v == null) continue;
+      events.push(g.progress_mode === "number" ? { t: logTime(l), p: numberProgress(g, v), label: `${v.toLocaleString("he-IL", { maximumFractionDigits: 1 })}${g.unit ? ` ${g.unit}` : ""}` } : { t: logTime(l), p: clamp01(v / 100), label: `${v}%` });
+    }
+    events.sort((a, b) => a.t - b.t);
+  }
+  if (g.status === "done" && g.done_at) events.push({ t: Date.parse(g.done_at), p: 1, label: "הושלם" });
+
+  const out: ChartPoint[] = [{ t: t0, p: 0 }];
+  for (const e of events) {
+    if (!(e.t <= now)) continue;
+    const prev = out.at(-1)!;
+    // a step can't share an instant with the point before it (the curve needs time to pass):
+    // after the starting point it lands a moment later; otherwise the later value replaces the earlier
+    if (e.t > prev.t) out.push(e);
+    else if (out.length === 1) out.push({ ...e, t: prev.t + 1 });
+    else out[out.length - 1] = { ...e, t: prev.t };
+  }
+  if (now > out.at(-1)!.t) out.push({ t: now, p: out.at(-1)!.p });
+  return out;
+}
+
+/**
+ * Slopes for a smooth curve through the points that never overshoots them (monotone cubic,
+ * Fritsch–Carlson): between two points the curve stays between their values, so progress that
+ * only goes up is drawn as a line that only goes up.
+ */
+export function curveSlopes(points: ChartPoint[]): number[] {
+  const n = points.length;
+  if (n < 2) return points.map(() => 0);
+  const d = points.slice(1).map((q, i) => (q.p - points[i].p) / (q.t - points[i].t));
+  const m = points.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const s = a * a + b * b;
+    if (s > 9) {
+      const k = 3 / Math.sqrt(s);
+      m[i] = k * a * d[i];
+      m[i + 1] = k * b * d[i];
+    }
+  }
+  return m;
+}
+
+/** The curve's value at a moment (before the start: the first value; after the end: the last). */
+export function curveAt(points: ChartPoint[], t: number, slopes = curveSlopes(points)): number {
+  if (!points.length) return 0;
+  if (t <= points[0].t) return points[0].p;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (t > b.t) continue;
+    const h = b.t - a.t;
+    const u = (t - a.t) / h;
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * a.p + (u3 - 2 * u2 + u) * h * slopes[i - 1] + (-2 * u3 + 3 * u2) * b.p + (u3 - u2) * h * slopes[i];
+  }
+  return points.at(-1)!.p;
 }

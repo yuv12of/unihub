@@ -20,6 +20,7 @@ export interface GoalInput {
   unit?: string;
   due?: string | null;
   why?: string;
+  description?: string;
   status?: GoalStatus;
   /** first tasks (tasks mode) or milestones (milestones mode), one per line */
   steps?: string[];
@@ -44,6 +45,7 @@ export async function createGoal(input: GoalInput) {
         color: COLORS.includes(input.color as (typeof COLORS)[number]) ? input.color : "blue",
         status: input.status === "idea" ? "idea" : "active",
         why: text(input.why, 300) || null,
+        description: text(input.description, 2000) || null,
         started_on: today,
         due: date(input.due),
         progress_mode: mode,
@@ -61,7 +63,7 @@ export async function createGoal(input: GoalInput) {
   });
 }
 
-export async function updateGoal(id: string, patch: { title?: string; area?: GoalArea; color?: string; why?: string; due?: string | null; status?: GoalStatus; target?: number | null; unit?: string }) {
+export async function updateGoal(id: string, patch: { title?: string; area?: GoalArea; color?: string; why?: string; description?: string; due?: string | null; status?: GoalStatus; target?: number | null; unit?: string }) {
   return action("updateGoal", async ({ supabase: sb, userId: uid }) => {
     const { data: g } = await sb.from("goals").select("title, status, start_value, progress_mode, routine_id, weekly_minutes").match({ id, user_id: uid }).maybeSingle();
     if (!g) throw new Error("לא נמצא");
@@ -70,6 +72,7 @@ export async function updateGoal(id: string, patch: { title?: string; area?: Goa
     if (patch.area !== undefined && patch.area in AREAS) row.area = patch.area;
     if (patch.color !== undefined && COLORS.includes(patch.color as (typeof COLORS)[number])) row.color = patch.color;
     if (patch.why !== undefined) row.why = text(patch.why, 300) || null;
+    if (patch.description !== undefined) row.description = text(patch.description, 2000) || null;
     if (patch.due !== undefined) row.due = date(patch.due);
     if (patch.unit !== undefined) row.unit = text(patch.unit, 12) || null;
     if (patch.target !== undefined && g.progress_mode === "number") {
@@ -226,6 +229,35 @@ export async function setGoalWeekly(id: string, weekly: number) {
       );
       must(await sb.from("goals").update({ routine_id: routineId }).match({ id, user_id: uid }));
     }
+    refresh();
+  });
+}
+
+/* ---------- Words: the progress journal and notes on steps ---------- */
+
+/** A short progress update the user writes for themselves; shown on the goal's page, newest first. */
+export async function addGoalNote(goalId: string, body: string) {
+  return action("addGoalNote", async ({ supabase: sb, userId: uid }) => {
+    const b = text(body, 1000);
+    if (!b) throw new Error("מה התקדם?");
+    const { data: g } = await sb.from("goals").select("id").match({ id: goalId, user_id: uid }).maybeSingle();
+    if (!g) throw new Error("לא נמצא");
+    must(await sb.from("goal_notes").insert({ user_id: uid, goal_id: goalId, date: todayInIsrael(), body: b }));
+    refresh();
+  });
+}
+
+export async function deleteGoalNote(id: string) {
+  return action("deleteGoalNote", async ({ supabase: sb, userId: uid }) => {
+    must(await sb.from("goal_notes").delete().match({ id, user_id: uid }));
+    refresh();
+  });
+}
+
+/** A description under a task or a milestone (empty = remove it). */
+export async function setStepNote(kind: "task" | "milestone", id: string, note: string) {
+  return action("setStepNote", async ({ supabase: sb, userId: uid }) => {
+    must(await sb.from(kind === "task" ? "tasks" : "goal_milestones").update({ note: text(note, 500) || null }).match({ id, user_id: uid }));
     refresh();
   });
 }
