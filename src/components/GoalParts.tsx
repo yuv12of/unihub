@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
-import { addMilestone, addTask, createGoal, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
 import { duration } from "@/lib/time";
 import { Icon } from "@/components/Icon";
@@ -50,6 +50,8 @@ export interface GoalCard {
   spark: number[];
   next: string | null;
   stalled: number;
+  /** the latest journal entry, if any */
+  note: string | null;
 }
 
 function Card({ g, onDragStart }: { g: GoalCard; onDragStart?: (id: string) => void }) {
@@ -96,6 +98,7 @@ function Card({ g, onDragStart }: { g: GoalCard; onDragStart?: (id: string) => v
           )}
         </div>
       )}
+      {g.note && <p className="mt-3 line-clamp-2 border-t border-rule pt-2 text-sm text-ink-soft">{g.note}</p>}
       {g.status !== "active" && g.status !== "done" && (
         <div className="mt-3 border-t border-rule pt-2">
           <button type="button" disabled={pending} onClick={() => run(() => updateGoal(g.id, { status: "active" }))} className="btn-ghost -ms-3">
@@ -206,6 +209,7 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
   const [due, setDue] = useState("");
   const [steps, setSteps] = useState("");
   const [why, setWhy] = useState("");
+  const [about, setAbout] = useState("");
   const [idea, setIdea] = useState(false);
   const { pending, error, run } = useRun();
 
@@ -232,7 +236,7 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
       onSubmit={(e) => {
         e.preventDefault();
         run(async () => {
-          const id = await createGoal({ title, area, color, mode, start: Number(start), target: target === "" ? null : Number(target), unit, due: due || null, why, status: idea ? "idea" : "active", steps: steps.split("\n") });
+          const id = await createGoal({ title, area, color, mode, start: Number(start), target: target === "" ? null : Number(target), unit, due: due || null, why, description: about, status: idea ? "idea" : "active", steps: steps.split("\n") });
           router.push(`/goals/${id}`);
         });
       }}
@@ -250,6 +254,10 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
       <label className="block text-sm">
         <span className="text-ink-soft">שם המטרה</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} placeholder="למשל: אתר תיק עבודות" className={`${field} mt-1 text-lg`} />
+      </label>
+      <label className="block text-sm">
+        <span className="text-ink-soft">תיאור (לא חובה)</span>
+        <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={2} maxLength={2000} placeholder="מה בדיוק רוצים להשיג, ומה נחשב גמור" className={`${field} mt-1`} />
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm">
@@ -333,10 +341,12 @@ export function GoalNew({ startOpen = false }: { startOpen?: boolean }) {
 
 /* ---------- Tasks and milestones ---------- */
 
-type Row = { id: string; title: string; due: string | null; done: boolean };
+type Row = { id: string; title: string; due: string | null; done: boolean; note: string | null };
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`;
 
-function CheckList({ rows, today, onToggle, onDelete, onAdd, addLabel, emptyText }: { rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; addLabel: string; emptyText: string }) {
+function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText }: { rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string) => Promise<unknown>; addLabel: string; emptyText: string }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
   const [shown, setDone] = useOptimistic(rows, (cur, ch: { id: string; done: boolean }) => cur.map((r) => (r.id === ch.id ? { ...r, done: ch.done } : r)));
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
@@ -358,15 +368,48 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, addLabel, emptyText
       {shown.length === 0 && <p className="text-sm text-ink-soft">{emptyText}</p>}
       <ul>
         {shown.map((r) => (
-          <li key={r.id} className="group flex min-h-11 items-center gap-3">
-            <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
-              <input type="checkbox" checked={r.done} onChange={() => toggle(r)} className="size-5 shrink-0 accent-[var(--ink)]" />
-              <span className={r.done ? "text-ink-soft line-through" : ""}>{r.title}</span>
-            </label>
-            {r.due && !r.done && <span className={`shrink-0 text-xs ${r.due < today ? "font-semibold text-bad" : "text-ink-soft"}`}>{r.due === today ? "היום" : shortDate(r.due)}</span>}
-            <button type="button" aria-label={`מחיקת ${r.title}`} onClick={() => run(() => onDelete(r.id))} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink">
-              <Icon name="close" className="size-4" />
-            </button>
+          <li key={r.id}>
+            <div className="flex min-h-11 items-center gap-1">
+              <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                <input type="checkbox" checked={r.done} onChange={() => toggle(r)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                <span className={r.done ? "text-ink-soft line-through" : ""}>{r.title}</span>
+              </label>
+              {r.due && !r.done && <span className={`shrink-0 px-1 text-xs ${r.due < today ? "font-semibold text-bad" : "text-ink-soft"}`}>{r.due === today ? "היום" : shortDate(r.due)}</span>}
+              <button
+                type="button"
+                aria-label={`${r.note ? "עריכת" : "הוספת"} תיאור ל${r.title}`}
+                aria-expanded={editing === r.id}
+                onClick={() => {
+                  setEditing(editing === r.id ? null : r.id);
+                  setDraft(r.note ?? "");
+                }}
+                className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink"
+              >
+                <Icon name="pencil" className="size-4" />
+              </button>
+              <button type="button" aria-label={`מחיקת ${r.title}`} onClick={() => run(() => onDelete(r.id))} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink">
+                <Icon name="close" className="size-4" />
+              </button>
+            </div>
+            {editing === r.id ? (
+              <form
+                className="mb-2 ms-8 flex flex-wrap gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  run(
+                    () => onNote(r.id, draft),
+                    () => setEditing(null),
+                  );
+                }}
+              >
+                <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={500} autoFocus placeholder="תיאור: מה כולל, קישור, מה חסר" aria-label={`תיאור ל${r.title}`} className={`${field} min-w-48 flex-1 text-sm`} />
+                <button disabled={pending} className="btn min-h-11 self-end">
+                  שמירה
+                </button>
+              </form>
+            ) : (
+              r.note && <p className="mb-2 ms-8 whitespace-pre-line text-sm text-ink-soft">{r.note}</p>
+            )}
           </li>
         ))}
       </ul>
@@ -397,13 +440,13 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, addLabel, emptyText
 
 export function TaskList({ goalId, tasks, today }: { goalId: string | null; tasks: Task[]; today: string }) {
   // open tasks first (in their order), finished ones after
-  const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at }));
-  return <CheckList rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
+  const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null }));
+  return <CheckList rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n) => setStepNote("task", id, n)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
 }
 
 export function MilestoneList({ goalId, milestones, today }: { goalId: string; milestones: Milestone[]; today: string }) {
-  const rows = milestones.map((m) => ({ id: m.id, title: m.title, due: m.due, done: !!m.done_at }));
-  return <CheckList rows={rows} today={today} onToggle={setMilestoneDone} onDelete={deleteMilestone} onAdd={(t, d) => addMilestone(goalId, t, d)} addLabel="אבן דרך חדשה" emptyText="אבני דרך הן השלבים הגדולים בדרך. לא חובה." />;
+  const rows = milestones.map((m) => ({ id: m.id, title: m.title, due: m.due, done: !!m.done_at, note: m.note ?? null }));
+  return <CheckList rows={rows} today={today} onToggle={setMilestoneDone} onDelete={deleteMilestone} onNote={(id, n) => setStepNote("milestone", id, n)} onAdd={(t, d) => addMilestone(goalId, t, d)} addLabel="אבן דרך חדשה" emptyText="אבני דרך הן השלבים הגדולים בדרך. לא חובה." />;
 }
 
 /* ---------- Updating a number or a percent ---------- */
@@ -450,12 +493,13 @@ export function GoalLogForm({ goalId, mode, current, unit }: { goalId: string; m
 
 /* ---------- Status, deadline, delete ---------- */
 
-export function GoalSettings({ id, status, due, why }: { id: string; status: GoalStatus; due: string | null; why: string | null }) {
+export function GoalSettings({ id, status, due, why, description }: { id: string; status: GoalStatus; due: string | null; why: string | null; description: string | null }) {
   const router = useRouter();
   const { pending, error, run } = useRun();
   const [confirm, setConfirm] = useState(false);
   const [d, setD] = useState(due ?? "");
   const [w, setW] = useState(why ?? "");
+  const [about, setAbout] = useState(description ?? "");
   return (
     <div className="space-y-4">
       <div>
@@ -472,9 +516,13 @@ export function GoalSettings({ id, status, due, why }: { id: string; status: Goa
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          run(() => updateGoal(id, { due: d || null, why: w }));
+          run(() => updateGoal(id, { due: d || null, why: w, description: about }));
         }}
       >
+        <label className="block w-full text-sm">
+          <span className="text-ink-soft">תיאור המטרה</span>
+          <textarea value={about} onChange={(e) => setAbout(e.target.value)} rows={3} maxLength={2000} placeholder="מה בדיוק רוצים להשיג, ומה נחשב גמור" className={`${field} mt-1`} />
+        </label>
         <label className="block text-sm">
           <span className="text-ink-soft">תאריך יעד</span>
           <input type="date" value={d} onChange={(e) => setD(e.target.value)} className={`${field} mt-1 w-auto`} />
@@ -638,6 +686,52 @@ export function GoalTime({ goalId, title, week, weekly, total, scheduled }: { go
             run(() => logGoalTime(goalId, studied));
           }}
         />
+      )}
+    </div>
+  );
+}
+
+/* ---------- Progress journal: short updates in the user's own words ---------- */
+
+export function GoalJournal({ goalId, notes, today }: { goalId: string; notes: { id: string; date: string; body: string }[]; today: string }) {
+  const [body, setBody] = useState("");
+  const { pending, error, run } = useRun();
+  const label = (iso: string) => (iso === today ? "היום" : `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}${iso.slice(0, 4) === today.slice(0, 4) ? "" : `.${iso.slice(2, 4)}`}`);
+  return (
+    <div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!body.trim()) return;
+          run(
+            () => addGoalNote(goalId, body),
+            () => setBody(""),
+          );
+        }}
+      >
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={1000} placeholder="מה התקדם, מה נתקע, מה הלאה. כמה שורות לעצמי." aria-label="עדכון התקדמות חדש" className={field} />
+        <div className="mt-2 flex items-center gap-3">
+          <button disabled={pending || !body.trim()} className="btn-primary min-h-11 px-5">
+            הוספת עדכון
+          </button>
+          <span className="text-xs text-ink-soft">נשמר עם התאריך של היום</span>
+        </div>
+      </form>
+      <Err error={error} />
+      {notes.length > 0 && (
+        <ol className="mt-4 divide-y divide-rule border-t border-rule">
+          {notes.map((n) => (
+            <li key={n.id} className="flex items-start gap-3 py-3">
+              <time dateTime={n.date} className="w-12 shrink-0 pt-0.5 text-sm font-semibold tabular-nums">
+                {label(n.date)}
+              </time>
+              <p className="min-w-0 flex-1 whitespace-pre-line text-[15px] leading-relaxed">{n.body}</p>
+              <button type="button" aria-label={`מחיקת העדכון מ־${label(n.date)}`} disabled={pending} onClick={() => run(() => deleteGoalNote(n.id))} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink">
+                <Icon name="close" className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );

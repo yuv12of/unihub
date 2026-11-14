@@ -142,3 +142,51 @@ test("time on goals and badge stats", async () => {
   assert.equal(s.minutes, 90);
   assert.equal(s.comebacks, 2); // 5.10 → 2.11 and 2.11 → 12.11 are both gaps of 10+ days
 });
+
+test("timeline: a line from creation to now, flat while quiet, rising into each step", async () => {
+  const { timeline, valueAt } = await import("@/lib/goalMeta");
+  const H = 3_600_000;
+  const at = (iso: string) => Date.parse(iso);
+  const g = goal({ created_at: "2026-11-01T08:00:00Z" });
+  const t = (id: string, done: string | null): Task => ({ ...task(id, null), done_at: done });
+  const d = data(g, { tasks: [t("a", "2026-11-01T10:00:00Z"), t("b", "2026-11-05T10:00:00Z"), t("c", null), t("d", null)] });
+  const now = at("2026-11-07T10:00:00Z");
+  const pts = timeline(g, d, now);
+  assert.equal(pts[0].t, at("2026-11-01T08:00:00Z"));
+  assert.equal(pts[0].p, 0);
+  assert.equal(pts.at(-1)!.t, now);
+  assert.equal(pts.at(-1)!.p, 0.5);
+  for (let i = 1; i < pts.length; i++) assert.ok(pts[i].t >= pts[i - 1].t && pts[i].p >= pts[i - 1].p);
+  assert.deepEqual(pts.filter((q) => q.label).map((q) => q.label), ["a", "b"]);
+  // flat between the two steps, rising only in the half day before the second
+  assert.equal(valueAt(pts, at("2026-11-03T10:00:00Z")), 0.25);
+  assert.equal(valueAt(pts, at("2026-11-04T22:00:00Z")), 0.25);
+  assert.equal(valueAt(pts, at("2026-11-05T04:00:00Z")), 0.375);
+  assert.equal(valueAt(pts, at("2026-11-05T10:00:00Z")), 0.5);
+  assert.equal(valueAt(pts, pts[0].t - H), 0);
+  assert.equal(valueAt(pts, now + H), 0.5);
+});
+
+test("timeline: a goal created minutes ago still has a line; number goals use their logs", async () => {
+  const { timeline } = await import("@/lib/goalMeta");
+  const now = Date.parse("2026-11-14T11:00:00Z");
+  const fresh = goal({ created_at: "2026-11-14T10:00:00Z", started_on: "2026-11-14" });
+  const t = (id: string, done: string | null): Task => ({ ...task(id, null), done_at: done });
+  const pts = timeline(fresh, data(fresh, { tasks: [t("a", "2026-11-14T10:05:00Z"), t("b", "2026-11-14T10:20:00Z"), t("c", "2026-11-14T10:40:00Z"), t("d", null), t("e", null)] }), now);
+  assert.ok(pts.length >= 4);
+  assert.ok(Math.abs(pts.at(-1)!.p - 0.6) < 1e-9);
+  assert.equal(timeline(fresh, data(fresh), now).length, 2); // nothing done: a flat line at zero
+  const n = goal({ progress_mode: "number", start_value: 0, target_value: 10, unit: "ק״מ", created_at: "2026-11-01T08:00:00Z" });
+  const np = timeline(n, data(n, { logs: [log("2026-11-10", { value: 4 }), log("2026-11-03", { value: 2 })] }), now);
+  assert.deepEqual(np.filter((q) => q.label).map((q) => [q.label, q.p]), [["2 ק״מ", 0.2], ["4 ק״מ", 0.4]]);
+  // something dated after "now" is not drawn
+  const future = timeline(n, data(n, { logs: [log("2026-12-01", { value: 9 })] }), now);
+  assert.equal(future.at(-1)!.p, 0);
+});
+
+test("a journal entry counts as movement", () => {
+  const g = goal();
+  const d = { ...data(g, { tasks: [task("a", "2026-10-05")] }), notes: [{ id: "n", goal_id: "g", date: "2026-11-10", body: "x", created_at: "2026-11-10T10:00:00Z" }] };
+  assert.equal(lastMove(g, d), "2026-11-10");
+  assert.equal(stalledDays(g, d, "2026-11-13"), 0);
+});

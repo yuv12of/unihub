@@ -3,10 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Icon } from "@/components/Icon";
-import { ChartLegend, GoalChart } from "@/components/GoalViz";
-import { GoalLogForm, GoalSettings, GoalTime, MilestoneList, TaskList } from "@/components/GoalParts";
+import { GoalChart } from "@/components/GoalChart";
+import { GoalJournal, GoalLogForm, GoalSettings, GoalTime, MilestoneList, TaskList } from "@/components/GoalParts";
 import { weekStart } from "@/lib/routines";
-import { AREAS, STATUSES, colorVar, currentValue, getGoals, goalMinutesSince, partsOf, plannedNow, progressAt, progressText, projectedFinish, series, stalledDays } from "@/lib/goals";
+import { AREAS, STATUSES, colorVar, currentValue, getGoals, nowMs, goalMinutesSince, notesOf, partsOf, plannedNow, progressAt, progressText, projectedFinish, stalledDays, timeline } from "@/lib/goals";
 import { daysBetween, formatHebrewDate, relativeDays, todayInIsrael } from "@/lib/semester";
 
 export default function GoalPage({ params }: PageProps<"/goals/[id]">) {
@@ -21,6 +21,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
   await connection();
   const { id } = await params;
   const today = todayInIsrael();
+  const now = nowMs();
   const data = await getGoals();
   const g = data.goals.find((x) => x.id === id);
   if (!g) notFound();
@@ -49,7 +50,8 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
       <header>
         <h1 className="font-display text-3xl sm:text-4xl">{g.title}</h1>
         <p className="mt-1 text-sm text-ink-soft">{[AREAS[g.area], g.due && `יעד ${day(g.due)}`, g.due && g.status !== "done" && relativeDays(daysBetween(today, g.due))].filter(Boolean).join(" · ")}</p>
-        {g.why && <p className="mt-2 text-sm">{g.why}</p>}
+        {g.description && <p className="mt-3 max-w-prose whitespace-pre-line leading-relaxed">{g.description}</p>}
+        {g.why && <p className="mt-2 text-sm text-ink-soft">למה: {g.why}</p>}
       </header>
 
       {stalled > 0 && (
@@ -72,8 +74,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
             g.status === "active" && p < 1 && <p className="text-sm text-ink-soft">עוד אין מספיק תזוזה לתחזית</p>
           )}
         </div>
-        <GoalChart points={series(g, data, today)} start={g.started_on <= today ? g.started_on : today} today={today} due={g.due} projected={projected} color={color} />
-        <ChartLegend color={color} planned={!!g.due} projected={!!projected} />
+        <GoalChart points={timeline(g, data, now)} now={now} due={g.due} projected={projected} color={color} />
       </section>
 
       <dl className="grid grid-cols-3 gap-3">
@@ -90,6 +91,13 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           <dt className="text-xs text-ink-soft">{milestones.length ? "אבני דרך" : "משימות פתוחות"}</dt>
         </div>
       </dl>
+
+      <section className="panel p-4 sm:p-5" aria-labelledby="journal-title">
+        <h2 id="journal-title" className="section-title mb-2">
+          יומן התקדמות
+        </h2>
+        <GoalJournal goalId={g.id} notes={notesOf(g, data).map((n) => ({ id: n.id, date: n.date, body: n.body }))} today={today} />
+      </section>
 
       {(g.progress_mode === "number" || g.progress_mode === "manual") && (
         <section className="panel p-4 sm:p-5" aria-labelledby="log-title">
@@ -125,7 +133,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
         <h2 id="set-title" className="section-title mb-3">
           הגדרות המטרה
         </h2>
-        <GoalSettings id={g.id} status={g.status} due={g.due} why={g.why} />
+        <GoalSettings id={g.id} status={g.status} due={g.due} why={g.why} description={g.description ?? null} />
       </section>
     </article>
   );

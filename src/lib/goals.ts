@@ -2,7 +2,7 @@ import { cache } from "react";
 import { supabaseEnabled } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, todayInIsrael } from "@/lib/semester";
-import type { Goal, GoalData, GoalLog, Milestone, Task } from "@/lib/goalMeta";
+import type { Goal, GoalData, GoalLog, GoalNote, Milestone, Task } from "@/lib/goalMeta";
 
 export * from "@/lib/goalMeta";
 
@@ -15,11 +15,12 @@ type Db = Pick<Awaited<ReturnType<typeof createClient>>, "from">;
 export async function loadGoals(sb: Db, userId?: string): Promise<GoalData> {
   // Without a userId the filter is a no-op match on nothing, so both clients share one code path.
   const who = userId ? { user_id: userId } : {};
-  const [g, m, t, l] = await Promise.all([
-    sb.from("goals").select("id, title, color, area, status, why, started_on, due, progress_mode, start_value, target_value, unit, weekly_minutes, routine_id, sort, created_at, done_at").match(who).order("sort").order("created_at"),
-    sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort").match(who).order("sort").order("created_at"),
-    sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at").match(who).order("sort").order("created_at").limit(2000),
-    sb.from("goal_logs").select("id, goal_id, date, value, percent, minutes, note").match(who).order("date").limit(5000),
+  const [g, m, t, l, n] = await Promise.all([
+    sb.from("goals").select("id, title, color, area, status, why, description, started_on, due, progress_mode, start_value, target_value, unit, weekly_minutes, routine_id, sort, created_at, done_at").match(who).order("sort").order("created_at"),
+    sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort, note").match(who).order("sort").order("created_at"),
+    sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note").match(who).order("sort").order("created_at").limit(2000),
+    sb.from("goal_logs").select("id, goal_id, date, value, percent, minutes, note, created_at").match(who).order("date").limit(5000),
+    sb.from("goal_notes").select("id, goal_id, date, body, created_at").match(who).order("date").limit(3000),
   ]);
   if (g.error) return EMPTY; // also the case before the migration is applied
   const num = (x: unknown) => (x == null ? null : Number(x));
@@ -28,6 +29,7 @@ export async function loadGoals(sb: Db, userId?: string): Promise<GoalData> {
     milestones: (m.data ?? []) as Milestone[],
     tasks: (t.data ?? []) as Task[],
     logs: (l.data ?? []).map((r) => ({ ...r, value: num(r.value) })) as GoalLog[],
+    notes: (n.data ?? []) as GoalNote[],
   };
 }
 
@@ -48,9 +50,11 @@ function demoGoals(today: string): GoalData {
   const task = (id: string, goal: string | null, title: string, done: number | null, sort: number, due: number | null = null): Task => ({ id, goal_id: goal, title, due: due == null ? null : at(due), minutes: null, done_at: done == null ? null : ts(done), sort, created_at: ts(-43) });
   return {
     goals: [
-      g("site", { title: "אתר תיק עבודות", area: "work", color: "blue", due: at(23), why: "להתחיל לקבל פניות לעבודה" }),
+      g("site", { title: "אתר תיק עבודות", area: "work", color: "blue", due: at(23), why: "להתחיל לקבל פניות לעבודה", description: "אתר של עמוד אחד עם שלושה פרויקטים נבחרים, עמוד ״עליי״ וטופס יצירת קשר. בלי בלוג בשלב הזה." }),
       g("run", { title: "ריצת 10 ק״מ", area: "health", color: "green", progress_mode: "number", start_value: 0, target_value: 10, unit: "ק״מ", due: at(63) }),
       g("save", { title: "חיסכון לטיול", area: "money", color: "orange", progress_mode: "number", start_value: 0, target_value: 12000, unit: "₪" }),
+      // a goal made a few hours ago, most of it ticked at once: the chart must still read well
+      g("clip", { title: "סרטון הסבר", area: "work", color: "teal", due: at(4), started_on: today, created_at: new Date(Date.now() - 5 * 3_600_000).toISOString(), sort: 9 }),
       g("lang", { title: "ספרדית בסיסית", area: "personal", color: "purple", status: "idea", progress_mode: "milestones" }),
       g("book", { title: "לסיים את הספר", area: "personal", color: "amber", status: "paused", progress_mode: "manual" }),
       g("desk", { title: "פינת עבודה בבית", area: "home", color: "teal", status: "done", done_at: ts(-20), started_on: at(-80), created_at: ts(-80) }),
@@ -67,6 +71,7 @@ function demoGoals(today: string): GoalData {
       task("t4", "site", "להעלות את הפרויקט הראשון", -12, 3), task("t5", "site", "טופס יצירת קשר", -3, 4),
       task("t6", "site", "לכתוב את עמוד ״עליי״", null, 5, 2), task("t7", "site", "צילומי מסך לפרויקט השני", null, 6), task("t8", "site", "לחבר דומיין", null, 7),
       task("t9", "desk", "שולחן", -40, 0), task("t10", "desk", "תאורה", -20, 1),
+      ...["צילומים", "טשטוש פרטים", "עריכה גסה", "קטעים קצרים", "ליטושים אחרונים"].map((t, i) => ({ id: `c${i}`, goal_id: "clip", title: t, due: null, minutes: null, done_at: i < 3 ? new Date(Date.now() - (4.5 - i) * 3_600_000).toISOString() : null, sort: i, created_at: ts(0) })),
       task("i1", null, "לחדש דרכון", null, 0, 0), task("i2", null, "לקבוע תור לרופא שיניים", null, 1),
     ],
     logs: [
@@ -74,5 +79,12 @@ function demoGoals(today: string): GoalData {
       ...[[-41, 1000], [-27, 2000], [-12, 3000]].map(([d, v], i) => ({ id: `s${i}`, goal_id: "save", date: at(d), value: v, percent: null, minutes: null, note: null })),
       { id: "b0", goal_id: "book", date: at(-30), value: null, percent: 35, minutes: null, note: null },
     ],
+    notes: [
+      { id: "n1", goal_id: "site", date: at(-12), body: "הפרויקט הראשון באוויר. הצילומים לקחו יותר זמן ממה שחשבתי, בפעם הבאה מצלם לפני שכותב.", created_at: ts(-12) },
+      { id: "n2", goal_id: "site", date: at(-3), body: "טופס יצירת הקשר עובד ושולח למייל. נשאר עמוד ״עליי״ ושני פרויקטים.", created_at: ts(-3) },
+    ],
   };
 }
+
+/** The current moment, for server components (which may not call Date.now() themselves). */
+export const nowMs = () => Date.now();
