@@ -63,6 +63,8 @@ export interface Task {
   sort: number;
   created_at: string;
   note?: string | null;
+  /** set when the task is a step of a milestone */
+  milestone_id?: string | null;
 }
 export interface GoalLog {
   id: string;
@@ -102,6 +104,26 @@ export function partsOf(g: Goal, d: GoalData) {
   };
 }
 
+/** The steps a milestone was split into (tasks that point at it), in order. */
+export function stepsOf(m: Milestone, tasks: Task[]): Task[] {
+  return tasks.filter((t) => t.milestone_id === m.id).sort((a, b) => a.sort - b.sort);
+}
+
+/**
+ * How far one milestone is, 0..1, counting only what was done by a given moment: a plain
+ * milestone is 0 or 1; one split into steps counts by the share of its steps that are done.
+ */
+function milestoneShare(m: Milestone, tasks: Task[], by: (ts: string) => boolean): number {
+  const steps = stepsOf(m, tasks);
+  if (!steps.length) return m.done_at && by(m.done_at) ? 1 : 0;
+  return steps.filter((s) => s.done_at && by(s.done_at)).length / steps.length;
+}
+
+/** Milestones-mode progress: the average of the milestones' shares. */
+function milestonesProgress(milestones: Milestone[], tasks: Task[], by: (ts: string) => boolean): number {
+  return milestones.length ? milestones.reduce((n, m) => n + milestoneShare(m, tasks, by), 0) / milestones.length : 0;
+}
+
 /** Number mode: where a value sits between start and target (works for goals that go down, like weight). */
 export function numberProgress(g: Pick<Goal, "start_value" | "target_value">, value: number): number {
   const start = g.start_value ?? 0;
@@ -122,7 +144,7 @@ export function progressAt(g: Goal, d: GoalData, date: string): number {
   const { tasks, milestones, logs } = partsOf(g, d);
   if (g.status === "done" && g.done_at && day(g.done_at)! <= date) return 1;
   if (g.progress_mode === "tasks") return tasks.length ? tasks.filter((t) => t.done_at && day(t.done_at)! <= date).length / tasks.length : 0;
-  if (g.progress_mode === "milestones") return milestones.length ? milestones.filter((m) => m.done_at && day(m.done_at)! <= date).length / milestones.length : 0;
+  if (g.progress_mode === "milestones") return milestonesProgress(milestones, tasks, (ts) => day(ts)! <= date);
   if (g.progress_mode === "number") {
     const v = latest(logs, "value", date);
     return v == null ? 0 : numberProgress(g, v);
@@ -334,8 +356,12 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
     return Number.isFinite(made) && Math.abs(made - noon) < 36 * 3_600_000 ? made : noon;
   };
   if (g.progress_mode === "tasks") steps(tasks);
-  else if (g.progress_mode === "milestones") steps(milestones);
-  else {
+  else if (g.progress_mode === "milestones") {
+    // every tick moves the line: a whole milestone, or one step of a milestone that was split
+    const split = new Set(tasks.filter((t) => t.milestone_id).map((t) => t.milestone_id));
+    const ticks = [...milestones.filter((m) => !split.has(m.id)), ...tasks.filter((t) => t.milestone_id && milestones.some((m) => m.id === t.milestone_id))].filter((r) => r.done_at).sort((a, b) => a.done_at!.localeCompare(b.done_at!));
+    for (const r of ticks) events.push({ t: Date.parse(r.done_at!), p: milestonesProgress(milestones, tasks, (ts) => ts <= r.done_at!), label: r.title });
+  } else {
     const key = g.progress_mode === "number" ? "value" : "percent";
     for (const l of logs) {
       const v = l[key];

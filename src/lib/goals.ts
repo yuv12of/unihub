@@ -18,7 +18,7 @@ export async function loadGoals(sb: Db, userId?: string): Promise<GoalData> {
   const [g, m, t, l, n] = await Promise.all([
     sb.from("goals").select("id, title, color, area, status, why, description, started_on, due, progress_mode, start_value, target_value, unit, weekly_minutes, routine_id, sort, created_at, done_at").match(who).order("sort").order("created_at"),
     sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort, note").match(who).order("sort").order("created_at"),
-    sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note").match(who).order("sort").order("created_at").limit(2000),
+    sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note, milestone_id").match(who).order("sort").order("created_at").limit(2000),
     sb.from("goal_logs").select("id, goal_id, date, value, percent, minutes, note, created_at").match(who).order("date").limit(5000),
     sb.from("goal_notes").select("id, goal_id, date, body, created_at").match(who).order("date").limit(3000),
   ]);
@@ -72,6 +72,7 @@ function demoGoals(today: string): GoalData {
       task("t6", "site", "לכתוב את עמוד ״עליי״", null, 5, 2), task("t7", "site", "צילומי מסך לפרויקט השני", null, 6), task("t8", "site", "לחבר דומיין", null, 7),
       task("t9", "desk", "שולחן", -40, 0), task("t10", "desk", "תאורה", -20, 1),
       ...["צילומים", "טשטוש פרטים", "עריכה גסה", "קטעים קצרים", "ליטושים אחרונים"].map((t, i) => ({ id: `c${i}`, goal_id: "clip", title: t, due: null, minutes: null, done_at: i < 3 ? new Date(Date.now() - (4.5 - i) * 3_600_000).toISOString() : null, sort: i, created_at: ts(0) })),
+      ...[["צילומי מסך לשלושת הפרויקטים", -5], ["טקסט קצר לכל פרויקט", -1], ["קישור לקוד או לאתר חי", null]].map(([t, done], i) => ({ id: `ms${i}`, goal_id: "site", milestone_id: "m3", title: t as string, due: null, minutes: null, done_at: done == null ? null : ts(done as number), sort: i, created_at: ts(-8) })),
       task("i1", null, "לחדש דרכון", null, 0, 0), task("i2", null, "לקבוע תור לרופא שיניים", null, 1),
     ],
     logs: [

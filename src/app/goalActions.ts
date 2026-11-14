@@ -136,7 +136,24 @@ export async function deleteGoalLog(id: string) {
 }
 
 /** goalId null = a plain task with no goal. */
-export async function addTask(goalId: string | null, title: string, due?: string | null) {
+/** A milestone that was split into steps is done exactly when all its steps are. Called after any change to its steps. */
+async function syncMilestone(sb: Parameters<Parameters<typeof action>[1]>[0]["supabase"], uid: string, milestoneId: string | null | undefined) {
+  if (!milestoneId) return;
+  const [{ data: steps }, { data: m }] = await Promise.all([
+    sb.from("tasks").select("done_at").match({ milestone_id: milestoneId, user_id: uid }),
+    sb.from("goal_milestones").select("done_at").match({ id: milestoneId, user_id: uid }).maybeSingle(),
+  ]);
+  if (!m || !steps?.length) return; // no steps left: it is a plain milestone again, keep its own tick
+  const all = steps.every((s) => s.done_at);
+  if (all && !m.done_at) {
+    // finished at the moment its last step was
+    const last = steps.map((s) => s.done_at as string).sort().at(-1)!;
+    must(await sb.from("goal_milestones").update({ done_at: last }).match({ id: milestoneId, user_id: uid }));
+  } else if (!all && m.done_at) must(await sb.from("goal_milestones").update({ done_at: null }).match({ id: milestoneId, user_id: uid }));
+}
+
+/** goalId null = a plain task with no goal. With milestoneId the task is a step of that milestone. */
+export async function addTask(goalId: string | null, title: string, due?: string | null, milestoneId?: string | null) {
   return action("addTask", async ({ supabase: sb, userId: uid }) => {
     const t = text(title, 140);
     if (!t) throw new Error("מה המשימה?");
@@ -144,21 +161,28 @@ export async function addTask(goalId: string | null, title: string, due?: string
       const { data: g } = await sb.from("goals").select("id").match({ id: goalId, user_id: uid }).maybeSingle();
       if (!g) throw new Error("לא נמצא");
     }
-    must(await sb.from("tasks").insert({ user_id: uid, goal_id: goalId, title: t, due: date(due), sort: Math.floor(Date.now() / 1000) }));
+    if (milestoneId) {
+      const { data: m } = await sb.from("goal_milestones").select("id").match({ id: milestoneId, user_id: uid, goal_id: goalId ?? "" }).maybeSingle();
+      if (!m) throw new Error("אבן הדרך לא נמצאה");
+    }
+    must(await sb.from("tasks").insert({ user_id: uid, goal_id: goalId, milestone_id: milestoneId ?? null, title: t, due: date(due), sort: Math.floor(Date.now() / 1000) }));
+    await syncMilestone(sb, uid, milestoneId); // a new open step reopens a finished milestone
     refresh();
   });
 }
 
 export async function setTaskDone(id: string, done: boolean) {
   return action("setTaskDone", async ({ supabase: sb, userId: uid }) => {
-    must(await sb.from("tasks").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }));
+    const { data: t } = await sb.from("tasks").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }).select("milestone_id").maybeSingle();
+    await syncMilestone(sb, uid, t?.milestone_id as string | null | undefined);
     refresh();
   });
 }
 
 export async function deleteTask(id: string) {
   return action("deleteTask", async ({ supabase: sb, userId: uid }) => {
-    must(await sb.from("tasks").delete().match({ id, user_id: uid }));
+    const { data: t } = await sb.from("tasks").delete().match({ id, user_id: uid }).select("milestone_id").maybeSingle();
+    await syncMilestone(sb, uid, t?.milestone_id as string | null | undefined);
     refresh();
   });
 }
@@ -176,6 +200,8 @@ export async function addMilestone(goalId: string, title: string, due?: string |
 
 export async function setMilestoneDone(id: string, done: boolean) {
   return action("setMilestoneDone", async ({ supabase: sb, userId: uid }) => {
+    const { data: steps } = await sb.from("tasks").select("id").match({ milestone_id: id, user_id: uid }).limit(1);
+    if (steps?.length) throw new Error("אבן דרך עם שלבים מסתיימת כשכל השלבים מסומנים");
     must(await sb.from("goal_milestones").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }));
     refresh();
   });
@@ -254,10 +280,12 @@ export async function deleteGoalNote(id: string) {
   });
 }
 
-/** A description under a task or a milestone (empty = remove it). */
-export async function setStepNote(kind: "task" | "milestone", id: string, note: string) {
+/** A description under a task or a milestone (empty = remove it) and, when `due` is passed, its target date (null = none). */
+export async function setStepNote(kind: "task" | "milestone", id: string, note: string, due?: string | null) {
   return action("setStepNote", async ({ supabase: sb, userId: uid }) => {
-    must(await sb.from(kind === "task" ? "tasks" : "goal_milestones").update({ note: text(note, 500) || null }).match({ id, user_id: uid }));
+    const row: Record<string, unknown> = { note: text(note, 500) || null };
+    if (due !== undefined) row.due = date(due);
+    must(await sb.from(kind === "task" ? "tasks" : "goal_milestones").update(row).match({ id, user_id: uid }));
     refresh();
   });
 }

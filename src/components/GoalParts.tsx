@@ -444,9 +444,209 @@ export function TaskList({ goalId, tasks, today }: { goalId: string | null; task
   return <CheckList rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n) => setStepNote("task", id, n)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
 }
 
-export function MilestoneList({ goalId, milestones, today }: { goalId: string; milestones: Milestone[]; today: string }) {
-  const rows = milestones.map((m) => ({ id: m.id, title: m.title, due: m.due, done: !!m.done_at, note: m.note ?? null }));
-  return <CheckList rows={rows} today={today} onToggle={setMilestoneDone} onDelete={deleteMilestone} onNote={(id, n) => setStepNote("milestone", id, n)} onAdd={(t, d) => addMilestone(goalId, t, d)} addLabel="אבן דרך חדשה" emptyText="אבני דרך הן השלבים הגדולים בדרך. לא חובה." />;
+/**
+ * Milestones, each of which can be split into steps. A plain milestone has its own checkbox;
+ * one with steps shows "2/4" instead and is finished when all its steps are ticked.
+ */
+export function MilestoneList({ goalId, milestones, steps, today }: { goalId: string; milestones: Milestone[]; steps: Task[]; today: string }) {
+  const [shown, setDone] = useOptimistic({ milestones, steps }, (cur, ch: { kind: "m" | "s"; id: string; done: boolean }) => {
+    const stamp = ch.done ? "now" : null;
+    return ch.kind === "m" ? { ...cur, milestones: cur.milestones.map((m) => (m.id === ch.id ? { ...m, done_at: stamp } : m)) } : { ...cur, steps: cur.steps.map((t) => (t.id === ch.id ? { ...t, done_at: stamp } : t)) };
+  });
+  const [, start] = useTransition();
+  const { pending, error, run } = useRun();
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [splitting, setSplitting] = useState<string | null>(null);
+  const [stepTitle, setStepTitle] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [draftDue, setDraftDue] = useState("");
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  const days = (iso: string) => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86_400_000);
+  /** The target date as a small label: how late, how soon, or the date. */
+  const dueLabel = (iso: string) => {
+    const n = days(iso);
+    return n < 0 ? `באיחור ${-n === 1 ? "יום" : `${-n} ימים`}` : n === 0 ? "היום" : n === 1 ? "מחר" : n <= 7 ? `בעוד ${n} ימים` : `עד ${shortDate(iso)}`;
+  };
+
+  const toggle = (kind: "m" | "s", id: string, done: boolean) =>
+    start(async () => {
+      setDone({ kind, id, done });
+      setToggleError(null);
+      try {
+        await (kind === "m" ? setMilestoneDone(id, done) : setTaskDone(id, done));
+      } catch (e) {
+        setToggleError((e as Error).message || "השמירה נכשלה");
+      }
+    });
+  const iconBtn = "grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink";
+
+  return (
+    <div>
+      {shown.milestones.length === 0 && <p className="text-sm text-ink-soft">אבני דרך הן השלבים הגדולים בדרך. כל אחת אפשר לפצל לשלבים קטנים. לא חובה.</p>}
+      <ul className="divide-y divide-rule">
+        {shown.milestones.map((m) => {
+          const mine = shown.steps.filter((t) => t.milestone_id === m.id).sort((a, b) => a.sort - b.sort);
+          const doneSteps = mine.filter((t) => t.done_at).length;
+          const done = mine.length ? doneSteps === mine.length : !!m.done_at;
+          const adding = splitting === m.id || mine.length > 0;
+          return (
+            <li key={m.id} className="py-1">
+              <div className="flex min-h-11 items-center gap-1">
+                {mine.length ? (
+                  <span className="flex min-h-11 flex-1 items-center gap-3">
+                    <span className={`grid h-6 min-w-9 shrink-0 place-items-center rounded-full px-1.5 text-xs font-semibold tabular-nums ${done ? "accent-surface" : "border border-rule-strong"}`} aria-label={`${doneSteps} מתוך ${mine.length} שלבים`} dir="ltr">
+                      {doneSteps}/{mine.length}
+                    </span>
+                    <span className={`font-medium ${done ? "text-ink-soft line-through" : ""}`}>{m.title}</span>
+                  </span>
+                ) : (
+                  <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                    <input type="checkbox" checked={done} onChange={() => toggle("m", m.id, !done)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                    <span className={`font-medium ${done ? "text-ink-soft line-through" : ""}`}>{m.title}</span>
+                  </label>
+                )}
+                {m.due && !done && (
+                  <time dateTime={m.due} title={`תאריך יעד ${shortDate(m.due)}`} className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs ${m.due < today ? "bg-highlight font-semibold text-highlight-ink" : days(m.due) <= 7 ? "font-semibold" : "text-ink-soft"}`}>
+                    {dueLabel(m.due)}
+                  </time>
+                )}
+                {!m.due && !done && editing !== m.id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(m.id);
+                      setDraft(m.note ?? "");
+                      setDraftDue("");
+                    }}
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-ink-soft underline decoration-dotted underline-offset-2 hover:text-ink"
+                  >
+                    תאריך יעד
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={`עריכת ${m.title}: תאריך יעד ותיאור`}
+                  aria-expanded={editing === m.id}
+                  onClick={() => {
+                    setEditing(editing === m.id ? null : m.id);
+                    setDraft(m.note ?? "");
+                    setDraftDue(m.due ?? "");
+                  }}
+                  className={iconBtn}
+                >
+                  <Icon name="pencil" className="size-4" />
+                </button>
+                <button type="button" aria-label={`מחיקת ${m.title}${mine.length ? " והשלבים שלה" : ""}`} disabled={pending} onClick={() => run(() => deleteMilestone(m.id))} className={iconBtn}>
+                  <Icon name="close" className="size-4" />
+                </button>
+              </div>
+
+              {editing === m.id ? (
+                <form
+                  className="mb-2 ms-8 flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    run(
+                      () => setStepNote("milestone", m.id, draft, draftDue || null),
+                      () => setEditing(null),
+                    );
+                  }}
+                >
+                  <label className="block w-full text-sm">
+                    <span className="text-ink-soft">תאריך יעד</span>
+                    <span className="mt-1 flex items-center gap-2">
+                      <input type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} className={`${field} w-auto`} />
+                      {draftDue && (
+                        <button type="button" onClick={() => setDraftDue("")} className="btn-ghost text-sm">
+                          בלי תאריך
+                        </button>
+                      )}
+                    </span>
+                  </label>
+                  <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={500} placeholder="תיאור: מה כולל, קישור, מה חסר" aria-label={`תיאור ל${m.title}`} className={`${field} min-w-48 flex-1 text-sm`} />
+                  <button disabled={pending} className="btn min-h-11 self-end">
+                    שמירה
+                  </button>
+                </form>
+              ) : (
+                m.note && <p className="mb-2 ms-8 whitespace-pre-line text-sm text-ink-soft">{m.note}</p>
+              )}
+
+              {mine.length > 0 && (
+                <ul className="mb-1 ms-4 border-s-2 border-rule ps-4" aria-label={`השלבים של ${m.title}`}>
+                  {mine.map((t) => (
+                    <li key={t.id} className="flex min-h-11 items-center gap-1">
+                      <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                        <input type="checkbox" checked={!!t.done_at} onChange={() => toggle("s", t.id, !t.done_at)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                        <span className={`text-[15px] ${t.done_at ? "text-ink-soft line-through" : ""}`}>{t.title}</span>
+                      </label>
+                      <button type="button" aria-label={`מחיקת השלב ${t.title}`} disabled={pending} onClick={() => run(() => deleteTask(t.id))} className={iconBtn}>
+                        <Icon name="close" className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {adding ? (
+                <form
+                  className="mb-2 ms-4 flex gap-2 ps-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const t = (stepTitle[m.id] ?? "").trim();
+                    if (!t) return;
+                    run(
+                      () => addTask(goalId, t, null, m.id),
+                      () => setStepTitle((s) => ({ ...s, [m.id]: "" })),
+                    );
+                  }}
+                >
+                  <input value={stepTitle[m.id] ?? ""} onChange={(e) => setStepTitle((s) => ({ ...s, [m.id]: e.target.value }))} maxLength={140} autoFocus={splitting === m.id && mine.length === 0} placeholder="שלב חדש" aria-label={`שלב חדש ב${m.title}`} className={`${field} min-w-0 flex-1 text-sm`} />
+                  <button disabled={pending || !(stepTitle[m.id] ?? "").trim()} className="btn min-h-11">
+                    הוספה
+                  </button>
+                </form>
+              ) : (
+                !done && (
+                  <button type="button" onClick={() => setSplitting(m.id)} className="btn-ghost mb-1 ms-5 text-sm">
+                    <Icon name="plus" className="size-3.5" />
+                    פיצול לשלבים
+                  </button>
+                )
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <form
+        className="mt-3 flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!title.trim()) return;
+          run(
+            () => addMilestone(goalId, title, due || null),
+            () => {
+              setTitle("");
+              setDue("");
+            },
+          );
+        }}
+      >
+        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder="אבן דרך חדשה" aria-label="אבן דרך חדשה" className={`${field} min-w-40 flex-1`} />
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
+          תאריך יעד
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${field} w-auto text-ink`} />
+        </label>
+        <button disabled={pending || !title.trim()} className="btn min-h-11">
+          הוספה
+        </button>
+      </form>
+      <Err error={error ?? toggleError} />
+    </div>
+  );
 }
 
 /* ---------- Updating a number or a percent ---------- */
