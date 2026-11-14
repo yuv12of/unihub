@@ -143,28 +143,45 @@ test("time on goals and badge stats", async () => {
   assert.equal(s.comebacks, 2); // 5.10 → 2.11 and 2.11 → 12.11 are both gaps of 10+ days
 });
 
-test("timeline: a line from creation to now, flat while quiet, rising into each step", async () => {
-  const { timeline, valueAt } = await import("@/lib/goalMeta");
-  const H = 3_600_000;
+test("timeline: one point per step from creation to now; the curve is smooth and never overshoots", async () => {
+  const { timeline, curveAt, curveSlopes } = await import("@/lib/goalMeta");
   const at = (iso: string) => Date.parse(iso);
   const g = goal({ created_at: "2026-11-01T08:00:00Z" });
   const t = (id: string, done: string | null): Task => ({ ...task(id, null), done_at: done });
   const d = data(g, { tasks: [t("a", "2026-11-01T10:00:00Z"), t("b", "2026-11-05T10:00:00Z"), t("c", null), t("d", null)] });
   const now = at("2026-11-07T10:00:00Z");
   const pts = timeline(g, d, now);
-  assert.equal(pts[0].t, at("2026-11-01T08:00:00Z"));
-  assert.equal(pts[0].p, 0);
-  assert.equal(pts.at(-1)!.t, now);
-  assert.equal(pts.at(-1)!.p, 0.5);
-  for (let i = 1; i < pts.length; i++) assert.ok(pts[i].t >= pts[i - 1].t && pts[i].p >= pts[i - 1].p);
+  assert.deepEqual(pts.map((q) => [q.t, q.p]), [[at("2026-11-01T08:00:00Z"), 0], [at("2026-11-01T10:00:00Z"), 0.25], [at("2026-11-05T10:00:00Z"), 0.5], [now, 0.5]]);
   assert.deepEqual(pts.filter((q) => q.label).map((q) => q.label), ["a", "b"]);
-  // flat between the two steps, rising only in the half day before the second
-  assert.equal(valueAt(pts, at("2026-11-03T10:00:00Z")), 0.25);
-  assert.equal(valueAt(pts, at("2026-11-04T22:00:00Z")), 0.25);
-  assert.equal(valueAt(pts, at("2026-11-05T04:00:00Z")), 0.375);
-  assert.equal(valueAt(pts, at("2026-11-05T10:00:00Z")), 0.5);
-  assert.equal(valueAt(pts, pts[0].t - H), 0);
-  assert.equal(valueAt(pts, now + H), 0.5);
+  const m = curveSlopes(pts);
+  // passes through every point
+  for (const q of pts) assert.ok(Math.abs(curveAt(pts, q.t, m) - q.p) < 1e-9);
+  // only goes up, stays within 0..0.5, and is level from the last step to now
+  let prev = 0;
+  for (let i = 0; i <= 600; i++) {
+    const v = curveAt(pts, pts[0].t + ((now - pts[0].t) * i) / 600, m);
+    assert.ok(v >= prev - 1e-9 && v <= 0.5 + 1e-9, `at ${i}: ${v}`);
+    prev = v;
+  }
+  assert.ok(Math.abs(curveAt(pts, at("2026-11-06T10:00:00Z"), m) - 0.5) < 1e-9);
+  // between two steps it is on its way up, not waiting on a ledge
+  const mid = curveAt(pts, at("2026-11-03T10:00:00Z"), m);
+  assert.ok(mid > 0.3 && mid < 0.5, String(mid));
+  assert.equal(curveAt(pts, pts[0].t - 1000, m), 0);
+  assert.equal(curveAt(pts, now + 1000, m), 0.5);
+});
+
+test("curve: a number that goes down and up again is followed without overshoot", async () => {
+  const { curveAt, curveSlopes } = await import("@/lib/goalMeta");
+  const pts = [{ t: 0, p: 0 }, { t: 10, p: 0.6 }, { t: 20, p: 0.3 }, { t: 30, p: 0.9 }, { t: 30.001, p: 1 }];
+  const m = curveSlopes(pts);
+  for (let i = 0; i <= 3000; i++) {
+    const v = curveAt(pts, i / 100, m);
+    assert.ok(v >= -1e-9 && v <= 1 + 1e-9, `at ${i}: ${v}`);
+  }
+  for (let i = 1000; i <= 2000; i++) assert.ok(curveAt(pts, i / 100, m) <= 0.6 + 1e-9 && curveAt(pts, i / 100, m) >= 0.3 - 1e-9);
+  assert.deepEqual(curveSlopes([{ t: 0, p: 0.2 }]), [0]);
+  assert.equal(curveAt([{ t: 0, p: 0.2 }], 5), 0.2);
 });
 
 test("timeline: a goal created minutes ago still has a line; number goals use their logs", async () => {
@@ -173,7 +190,7 @@ test("timeline: a goal created minutes ago still has a line; number goals use th
   const fresh = goal({ created_at: "2026-11-14T10:00:00Z", started_on: "2026-11-14" });
   const t = (id: string, done: string | null): Task => ({ ...task(id, null), done_at: done });
   const pts = timeline(fresh, data(fresh, { tasks: [t("a", "2026-11-14T10:05:00Z"), t("b", "2026-11-14T10:20:00Z"), t("c", "2026-11-14T10:40:00Z"), t("d", null), t("e", null)] }), now);
-  assert.ok(pts.length >= 4);
+  assert.equal(pts.length, 5);
   assert.ok(Math.abs(pts.at(-1)!.p - 0.6) < 1e-9);
   assert.equal(timeline(fresh, data(fresh), now).length, 2); // nothing done: a flat line at zero
   const n = goal({ progress_mode: "number", start_value: 0, target_value: 10, unit: "ק״מ", created_at: "2026-11-01T08:00:00Z" });

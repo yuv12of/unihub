@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { valueAt, type ChartPoint } from "@/lib/goalMeta";
+import { curveAt, curveSlopes, type ChartPoint } from "@/lib/goalMeta";
 
 const TZ = "Asia/Jerusalem";
 const dayFmt = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", timeZone: TZ });
@@ -9,7 +9,8 @@ const timeFmt = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-d
 const DAY = 86_400_000;
 
 /**
- * Progress over time. The filled line is what happened; the dashed line is the straight plan to the
+ * Progress over time. The filled line is what happened, drawn as one smooth curve through the steps
+ * (never above or below them); the dashed line is the straight plan to the
  * deadline; the dotted line continues today's pace. Time runs left to right, as in every chart.
  * Moving a finger or the mouse across it reads out any moment; the keyboard arrows do the same.
  */
@@ -32,15 +33,25 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
   const x = (t: number) => L + ((Math.min(Math.max(t, t0), t1) - t0) / (t1 - t0)) * (W - L - R);
   const y = (p: number) => T + (1 - p) * (H - T - B);
   const pNow = points.at(-1)!.p;
-  const line = points.map((q) => `${x(q.t).toFixed(1)},${y(q.p).toFixed(1)}`).join(" ");
-  const area = `${x(t0).toFixed(1)},${y(0)} ${line} ${x(now).toFixed(1)},${y(0)}`;
+  // one cubic segment per pair of points, with the slopes that keep the curve between them
+  const slopes = curveSlopes(points);
+  const f = (n: number) => n.toFixed(1);
+  const line = points
+    .map((q, i) => {
+      if (i === 0) return `M${f(x(q.t))},${f(y(q.p))}`;
+      const a = points[i - 1];
+      const h = (q.t - a.t) / 3;
+      return `C${f(x(a.t + h))},${f(y(a.p + slopes[i - 1] * h))} ${f(x(q.t - h))},${f(y(q.p - slopes[i] * h))} ${f(x(q.t))},${f(y(q.p))}`;
+    })
+    .join(" ");
+  const area = `${line} L${f(x(now))},${y(0)} L${f(x(t0))},${y(0)} Z`;
   const projEnd = projT == null || pNow >= 1 ? null : projT <= cap ? { x: x(projT), y: y(1) } : { x: x(t1), y: y(pNow + ((1 - pNow) * (t1 - now)) / (projT - now)) };
   const planned = (t: number) => (dueT == null ? null : dueT <= t0 ? 1 : Math.max(0, Math.min(1, (t - t0) / (dueT - t0))));
 
   // --- reading a moment
   const t = at ?? now;
   const future = t > now;
-  const pAt = future ? null : valueAt(points, t);
+  const pAt = future ? null : curveAt(points, t, slopes);
   const plan = planned(t);
   const short = t1 - t0 < 3 * DAY;
   const last = future ? undefined : [...points].reverse().find((q) => q.label && q.t <= t);
@@ -115,9 +126,9 @@ export function GoalChart({ points, now, due, projected, color }: { points: Char
           </g>
         ))}
         {dueT != null && dueT > t0 && <line x1={x(t0)} y1={y(0)} x2={x(dueT)} y2={y(1)} stroke="var(--rule-strong)" strokeWidth="1.5" strokeDasharray="5 5" />}
-        <polygon points={area} fill={color} opacity="0.13" />
+        <path d={area} fill={color} opacity="0.13" />
         {projEnd && <line x1={nowX} y1={y(pNow)} x2={projEnd.x} y2={projEnd.y} stroke={color} strokeWidth="2" strokeDasharray="1 5" strokeLinecap="round" />}
-        <polyline points={line} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={line} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         <line x1={nowX} x2={nowX} y1={y(pNow)} y2={y(0)} stroke={color} strokeWidth="1" opacity="0.45" />
         <circle cx={nowX} cy={y(pNow)} r="9" fill={color} opacity="0.18" />
         <circle cx={nowX} cy={y(pNow)} r="5" fill={color} stroke="var(--surface)" strokeWidth="2" />

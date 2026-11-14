@@ -313,13 +313,11 @@ export interface ChartPoint {
   label?: string;
 }
 
-const HALF_DAY = 12 * 3_600_000;
-
 /**
  * Progress over time for the chart, from the moment the goal was created until now, built from
  * what actually happened and when (not one point per day, so a goal that is a few hours old
- * already has a line). The line stays flat while nothing happens and rises into each step over
- * a short stretch (half a day, more on an old goal), so a long quiet time reads as flat, not as a slow climb.
+ * already has a line). One point per step; the chart joins them with a smooth rising curve,
+ * and the stretch from the last step to now is level.
  */
 export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   const { tasks, milestones, logs } = partsOf(g, d);
@@ -348,28 +346,61 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   }
   if (g.status === "done" && g.done_at) events.push({ t: Date.parse(g.done_at), p: 1, label: "הושלם" });
 
-  // on a goal that has run for weeks half a day is a hairline, so the rise scales with the goal's age
-  const ramp = Math.max(HALF_DAY, (now - t0) * 0.08);
   const out: ChartPoint[] = [{ t: t0, p: 0 }];
   for (const e of events) {
     if (!(e.t <= now)) continue;
     const prev = out.at(-1)!;
-    const t = Math.max(e.t, prev.t);
-    const rise = Math.max(prev.t, t - ramp);
-    if (rise > prev.t) out.push({ t: rise, p: prev.p });
-    out.push({ ...e, t });
+    // a step can't share an instant with the point before it (the curve needs time to pass):
+    // after the starting point it lands a moment later; otherwise the later value replaces the earlier
+    if (e.t > prev.t) out.push(e);
+    else if (out.length === 1) out.push({ ...e, t: prev.t + 1 });
+    else out[out.length - 1] = { ...e, t: prev.t };
   }
   if (now > out.at(-1)!.t) out.push({ t: now, p: out.at(-1)!.p });
   return out;
 }
 
-/** The line's value at a moment (linear between points; before the start 0, after the end the last value). */
-export function valueAt(points: ChartPoint[], t: number): number {
-  if (!points.length || t <= points[0].t) return points[0]?.p ?? 0;
+/**
+ * Slopes for a smooth curve through the points that never overshoots them (monotone cubic,
+ * Fritsch–Carlson): between two points the curve stays between their values, so progress that
+ * only goes up is drawn as a line that only goes up.
+ */
+export function curveSlopes(points: ChartPoint[]): number[] {
+  const n = points.length;
+  if (n < 2) return points.map(() => 0);
+  const d = points.slice(1).map((q, i) => (q.p - points[i].p) / (q.t - points[i].t));
+  const m = points.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const s = a * a + b * b;
+    if (s > 9) {
+      const k = 3 / Math.sqrt(s);
+      m[i] = k * a * d[i];
+      m[i + 1] = k * b * d[i];
+    }
+  }
+  return m;
+}
+
+/** The curve's value at a moment (before the start: the first value; after the end: the last). */
+export function curveAt(points: ChartPoint[], t: number, slopes = curveSlopes(points)): number {
+  if (!points.length) return 0;
+  if (t <= points[0].t) return points[0].p;
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1];
     const b = points[i];
-    if (t <= b.t) return b.t === a.t ? b.p : a.p + ((b.p - a.p) * (t - a.t)) / (b.t - a.t);
+    if (t > b.t) continue;
+    const h = b.t - a.t;
+    const u = (t - a.t) / h;
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (2 * u3 - 3 * u2 + 1) * a.p + (u3 - 2 * u2 + u) * h * slopes[i - 1] + (-2 * u3 + 3 * u2) * b.p + (u3 - u2) * h * slopes[i];
   }
   return points.at(-1)!.p;
 }
