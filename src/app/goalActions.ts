@@ -163,11 +163,11 @@ async function syncMilestone(sb: Parameters<Parameters<typeof action>[1]>[0]["su
   ]);
   if (!m || !steps?.length) return; // no steps left: it is a plain milestone again, keep its own tick
   const all = steps.every((s) => s.done_at);
-  if (all && !m.done_at) {
-    // finished at the moment its last step was
-    const last = steps.map((s) => s.done_at as string).sort().at(-1)!;
-    must(await sb.from("goal_milestones").update({ done_at: last }).match({ id: milestoneId, user_id: uid }));
-  } else if (!all && m.done_at) must(await sb.from("goal_milestones").update({ done_at: null }).match({ id: milestoneId, user_id: uid }));
+  if (all) {
+    // finished at the moment its last step was (also after a step's completion time is corrected)
+    const last = steps.map((s) => new Date(s.done_at as string).toISOString()).sort().at(-1)!;
+    if (!m.done_at || new Date(m.done_at as string).toISOString() !== last) must(await sb.from("goal_milestones").update({ done_at: last }).match({ id: milestoneId, user_id: uid }));
+  } else if (m.done_at) must(await sb.from("goal_milestones").update({ done_at: null }).match({ id: milestoneId, user_id: uid }));
 }
 
 /** goalId null = a plain task with no goal. With milestoneId the task is a step of that milestone. */
@@ -332,6 +332,31 @@ export async function saveGoalTemplate(goalId: string, name: string) {
 export async function deleteGoalTemplate(id: string) {
   return action("deleteGoalTemplate", async ({ supabase: sb, userId: uid }) => {
     must(await sb.from("goal_templates").delete().match({ id, user_id: uid }));
+    refresh();
+  });
+}
+
+/**
+ * Corrects when a task, a step or a plain milestone was completed (for something ticked later than
+ * it was done). The chart places each completion at its own minute, so this is what moves a point.
+ */
+export async function setDoneAt(kind: "task" | "milestone", id: string, iso: string) {
+  return action("setDoneAt", async ({ supabase: sb, userId: uid }) => {
+    const t = Date.parse(iso);
+    if (!Number.isFinite(t)) throw new Error("צריך תאריך ושעה");
+    if (t > Date.now() + 2 * 60_000) throw new Error("אי אפשר לסמן השלמה בעתיד");
+    if (t < Date.now() - 10 * 365 * 86_400_000) throw new Error("התאריך רחוק מדי");
+    const when = new Date(Math.floor(t / 60_000) * 60_000).toISOString();
+    if (kind === "task") {
+      const { data: row } = await sb.from("tasks").update({ done_at: when }).match({ id, user_id: uid }).not("done_at", "is", null).select("milestone_id").maybeSingle();
+      if (!row) throw new Error("המשימה לא מסומנת כבוצעה");
+      await syncMilestone(sb, uid, row.milestone_id as string | null);
+    } else {
+      const { data: steps } = await sb.from("tasks").select("id").match({ milestone_id: id, user_id: uid }).limit(1);
+      if (steps?.length) throw new Error("אבן דרך עם שלבים מסתיימת כשהשלב האחרון שלה מסתיים");
+      const { data: row } = await sb.from("goal_milestones").update({ done_at: when }).match({ id, user_id: uid }).not("done_at", "is", null).select("id").maybeSingle();
+      if (!row) throw new Error("אבן הדרך לא מסומנת כהושלמה");
+    }
     refresh();
   });
 }

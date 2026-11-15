@@ -192,3 +192,4 @@ export const deleteGoalNote = w(G.deleteGoalNote);
 export const setStepNote = w(G.setStepNote);
 export const saveGoalTemplate = w(G.saveGoalTemplate);
 export const deleteGoalTemplate = w(G.deleteGoalTemplate);
+export const setDoneAt = w(G.setDoneAt);

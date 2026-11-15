@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
-import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, deleteGoalTemplate, saveGoalTemplate, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, deleteGoalTemplate, saveGoalTemplate, setDoneAt, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
-import { duration } from "@/lib/time";
+import { duration, fromIsraelLocal, israelLocal } from "@/lib/time";
 import { Icon } from "@/components/Icon";
 import { ProgressRing, Spark } from "@/components/GoalViz";
 import { AREAS, BOARD, COLORS, MODES, STATUSES, TEMPLATES, colorVar, type GoalArea, type GoalColor, type GoalStatus, type Milestone, type ProgressMode, type Task } from "@/lib/goalMeta";
@@ -408,10 +408,70 @@ export function GoalNew({ startOpen = false, templates = [] }: { startOpen?: boo
 
 /* ---------- Tasks and milestones ---------- */
 
-type Row = { id: string; title: string; due: string | null; done: boolean; note: string | null };
+type Row = { id: string; title: string; due: string | null; done: boolean; note: string | null; doneAt: string | null };
+
+const doneDay = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", timeZone: "Asia/Jerusalem" });
+const doneClock = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
+
+/**
+ * When something was completed, as a small line under it. Tapping it corrects the day and hour,
+ * for things ticked later than they were done; the chart puts each completion at its own minute.
+ * `fixed` = shown only (a milestone with steps ends when its last step does).
+ */
+function DoneTime({ kind, id, iso, fixed = false }: { kind: "task" | "milestone"; id: string; iso: string | null; fixed?: boolean }) {
+  const ms = iso ? Date.parse(iso) : NaN;
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [max, setMax] = useState("");
+  const { pending, error, run } = useRun();
+  if (!Number.isFinite(ms)) return null; // not done, or ticked a moment ago and not saved yet
+  const label = `${kind === "milestone" ? "הושלמה" : "הושלם"} ${doneDay.format(ms)} ${doneClock.format(ms)}`;
+  if (fixed) return <p className="mb-1 ms-8 text-xs text-ink-soft">{label}</p>;
+  if (!open)
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setValue(israelLocal(ms));
+          setMax(israelLocal(Date.now()));
+          setOpen(true);
+        }}
+        aria-label={`${label}. שינוי מועד ההשלמה`}
+        className="mb-1 ms-8 block rounded text-xs text-ink-soft underline decoration-dotted underline-offset-2 hover:text-ink"
+      >
+        {label}
+      </button>
+    );
+  return (
+    <form
+      className="mb-2 ms-8 flex flex-wrap items-end gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const t = fromIsraelLocal(value);
+        if (t == null) return;
+        run(
+          () => setDoneAt(kind, id, new Date(t).toISOString()),
+          () => setOpen(false),
+        );
+      }}
+    >
+      <label className="block text-sm">
+        <span className="text-ink-soft">מתי זה הושלם?</span>
+        <input type="datetime-local" required value={value} max={max} onChange={(e) => setValue(e.target.value)} className={`${field} mt-1 w-auto`} />
+      </label>
+      <button disabled={pending} className="btn min-h-11">
+        שמירה
+      </button>
+      <button type="button" onClick={() => setOpen(false)} className="btn-ghost min-h-11">
+        ביטול
+      </button>
+      <Err error={error} />
+    </form>
+  );
+}
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`;
 
-function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText }: { rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string) => Promise<unknown>; addLabel: string; emptyText: string }) {
+function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText, doneKind }: { doneKind?: "task" | "milestone"; rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string) => Promise<unknown>; addLabel: string; emptyText: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [shown, setDone] = useOptimistic(rows, (cur, ch: { id: string; done: boolean }) => cur.map((r) => (r.id === ch.id ? { ...r, done: ch.done } : r)));
@@ -458,6 +518,7 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
                 <Icon name="close" className="size-4" />
               </button>
             </div>
+            {r.done && doneKind && <DoneTime kind={doneKind} id={r.id} iso={r.doneAt} />}
             {editing === r.id ? (
               <form
                 className="mb-2 ms-8 flex flex-wrap gap-2"
@@ -507,8 +568,8 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
 
 export function TaskList({ goalId, tasks, today }: { goalId: string | null; tasks: Task[]; today: string }) {
   // open tasks first (in their order), finished ones after
-  const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null }));
-  return <CheckList rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n) => setStepNote("task", id, n)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
+  const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null, doneAt: t.done_at }));
+  return <CheckList doneKind="task" rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n) => setStepNote("task", id, n)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
 }
 
 /**
@@ -610,6 +671,7 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
                 </button>
               </div>
 
+              {done && <DoneTime kind="milestone" id={m.id} iso={m.done_at} fixed={mine.length > 0} />}
               {editing === m.id ? (
                 <form
                   className="mb-2 ms-8 flex flex-wrap gap-2"
@@ -644,14 +706,17 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
               {mine.length > 0 && (
                 <ul className="mb-1 ms-4 border-s-2 border-rule ps-4" aria-label={`השלבים של ${m.title}`}>
                   {mine.map((t) => (
-                    <li key={t.id} className="flex min-h-11 items-center gap-1">
-                      <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
-                        <input type="checkbox" checked={!!t.done_at} onChange={() => toggle("s", t.id, !t.done_at)} className="size-5 shrink-0 accent-[var(--ink)]" />
-                        <span className={`text-[15px] ${t.done_at ? "text-ink-soft line-through" : ""}`}>{t.title}</span>
-                      </label>
-                      <button type="button" aria-label={`מחיקת השלב ${t.title}`} disabled={pending} onClick={() => run(() => deleteTask(t.id))} className={iconBtn}>
-                        <Icon name="close" className="size-4" />
-                      </button>
+                    <li key={t.id}>
+                      <div className="flex min-h-11 items-center gap-1">
+                        <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                          <input type="checkbox" checked={!!t.done_at} onChange={() => toggle("s", t.id, !t.done_at)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                          <span className={`text-[15px] ${t.done_at ? "text-ink-soft line-through" : ""}`}>{t.title}</span>
+                        </label>
+                        <button type="button" aria-label={`מחיקת השלב ${t.title}`} disabled={pending} onClick={() => run(() => deleteTask(t.id))} className={iconBtn}>
+                          <Icon name="close" className="size-4" />
+                        </button>
+                      </div>
+                      <DoneTime kind="task" id={t.id} iso={t.done_at} />
                     </li>
                   ))}
                 </ul>
