@@ -408,7 +408,7 @@ export function GoalNew({ startOpen = false, templates = [] }: { startOpen?: boo
 
 /* ---------- Tasks and milestones ---------- */
 
-type Row = { id: string; title: string; due: string | null; done: boolean; note: string | null; doneAt: string | null };
+type Row = { id: string; title: string; due: string | null; done: boolean; note: string | null; doneAt: string | null; subs?: Row[] };
 
 const doneDay = new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric", timeZone: "Asia/Jerusalem" });
 const doneClock = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
@@ -471,11 +471,22 @@ function DoneTime({ kind, id, iso, fixed = false }: { kind: "task" | "milestone"
 }
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`;
 
-function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText, doneKind }: { doneKind?: "task" | "milestone"; rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string, due: string | null) => Promise<unknown>; addLabel: string; emptyText: string }) {
+function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, onAddSub, addLabel, emptyText, doneKind }: { doneKind?: "task" | "milestone"; onAddSub?: (parentId: string, title: string) => Promise<unknown>; rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string, due: string | null) => Promise<unknown>; addLabel: string; emptyText: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftDue, setDraftDue] = useState("");
-  const [shown, setDone] = useOptimistic(rows, (cur, ch: { id: string; done: boolean }) => cur.map((r) => (r.id === ch.id ? { ...r, done: ch.done } : r)));
+  const [shown, setDone] = useOptimistic(rows, (cur, ch: { id: string; done: boolean }) =>
+    cur.map((r) => {
+      if (r.id === ch.id) return { ...r, done: ch.done };
+      if (!r.subs?.some((x) => x.id === ch.id)) return r;
+      // a ticked sub-task; its task is done when all of them are
+      const subs = r.subs.map((x) => (x.id === ch.id ? { ...x, done: ch.done } : x));
+      return { ...r, subs, done: subs.every((x) => x.done) };
+    }),
+  );
+  const [splitting, setSplitting] = useState<string | null>(null);
+  const [subTitle, setSubTitle] = useState<Record<string, string>>({});
+  const iconBtn = "grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink";
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
   const { pending, error, run } = useRun();
@@ -495,13 +506,25 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
     <div>
       {shown.length === 0 && <p className="text-sm text-ink-soft">{emptyText}</p>}
       <ul>
-        {shown.map((r) => (
+        {shown.map((r) => {
+          const subs = r.subs ?? [];
+          const doneSubs = subs.filter((x) => x.done).length;
+          return (
           <li key={r.id}>
             <div className="flex min-h-11 items-center gap-1">
-              <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
-                <input type="checkbox" checked={r.done} onChange={() => toggle(r)} className="size-5 shrink-0 accent-[var(--ink)]" />
-                <span className={r.done ? "text-ink-soft line-through" : ""}>{r.title}</span>
-              </label>
+              {subs.length ? (
+                <span className="flex min-h-11 flex-1 items-center gap-3">
+                  <span className={`grid h-6 min-w-9 shrink-0 place-items-center rounded-full px-1.5 text-xs font-semibold tabular-nums ${r.done ? "accent-surface" : "border border-rule-strong"}`} aria-label={`${doneSubs} מתוך ${subs.length} תתי־משימות`} dir="ltr">
+                    {doneSubs}/{subs.length}
+                  </span>
+                  <span className={r.done ? "text-ink-soft line-through" : ""}>{r.title}</span>
+                </span>
+              ) : (
+                <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                  <input type="checkbox" checked={r.done} onChange={() => toggle(r)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                  <span className={r.done ? "text-ink-soft line-through" : ""}>{r.title}</span>
+                </label>
+              )}
               {r.due && !r.done && <span className={`shrink-0 px-1 text-xs ${r.due < today ? "font-semibold text-bad" : "text-ink-soft"}`}>{r.due === today ? "היום" : shortDate(r.due)}</span>}
               <button
                 type="button"
@@ -516,11 +539,11 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
               >
                 <Icon name="pencil" className="size-4" />
               </button>
-              <button type="button" aria-label={`מחיקת ${r.title}`} onClick={() => run(() => onDelete(r.id))} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink">
+              <button type="button" aria-label={`מחיקת ${r.title}${subs.length ? " ותתי־המשימות שלה" : ""}`} onClick={() => run(() => onDelete(r.id))} className={iconBtn}>
                 <Icon name="close" className="size-4" />
               </button>
             </div>
-            {r.done && doneKind && <DoneTime kind={doneKind} id={r.id} iso={r.doneAt} />}
+            {r.done && doneKind && <DoneTime kind={doneKind} id={r.id} iso={r.doneAt} fixed={subs.length > 0} />}
             {editing === r.id ? (
               <form
                 className="mb-2 ms-8 flex flex-wrap gap-2"
@@ -551,8 +574,54 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
             ) : (
               r.note && <p className="mb-2 ms-8 whitespace-pre-line text-sm text-ink-soft">{r.note}</p>
             )}
+            {subs.length > 0 && (
+              <ul className="mb-1 ms-4 border-s-2 border-rule ps-4" aria-label={`תתי־המשימות של ${r.title}`}>
+                {subs.map((x) => (
+                  <li key={x.id}>
+                    <div className="flex min-h-11 items-center gap-1">
+                      <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
+                        <input type="checkbox" checked={x.done} onChange={() => toggle(x)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                        <span className={`text-[15px] ${x.done ? "text-ink-soft line-through" : ""}`}>{x.title}</span>
+                      </label>
+                      <button type="button" aria-label={`מחיקת תת־המשימה ${x.title}`} disabled={pending} onClick={() => run(() => onDelete(x.id))} className={iconBtn}>
+                        <Icon name="close" className="size-4" />
+                      </button>
+                    </div>
+                    {x.done && doneKind && <DoneTime kind={doneKind} id={x.id} iso={x.doneAt} />}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {onAddSub &&
+              (splitting === r.id || subs.length > 0 ? (
+                <form
+                  className="mb-2 ms-4 flex gap-2 ps-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const t = (subTitle[r.id] ?? "").trim();
+                    if (!t) return;
+                    run(
+                      () => onAddSub(r.id, t),
+                      () => setSubTitle((m) => ({ ...m, [r.id]: "" })),
+                    );
+                  }}
+                >
+                  <input value={subTitle[r.id] ?? ""} onChange={(e) => setSubTitle((m) => ({ ...m, [r.id]: e.target.value }))} maxLength={140} autoFocus={splitting === r.id && subs.length === 0} placeholder="תת־משימה חדשה" aria-label={`תת־משימה חדשה ב${r.title}`} className={`${field} min-w-0 flex-1 text-sm`} />
+                  <button disabled={pending || !(subTitle[r.id] ?? "").trim()} className="btn min-h-11">
+                    הוספה
+                  </button>
+                </form>
+              ) : (
+                !r.done && (
+                  <button type="button" onClick={() => setSplitting(r.id)} className="btn-ghost mb-1 ms-5 text-sm">
+                    <Icon name="plus" className="size-3.5" />
+                    תת־משימה
+                  </button>
+                )
+              ))}
           </li>
-        ))}
+          );
+        })}
       </ul>
       <form
         className="mt-2 flex flex-wrap gap-2"
@@ -583,9 +652,16 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
 }
 
 export function TaskList({ goalId, tasks, today }: { goalId: string | null; tasks: Task[]; today: string }) {
-  // open tasks first (in their order), finished ones after
-  const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null, doneAt: t.done_at }));
-  return <CheckList doneKind="task" rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n, d) => setStepNote("task", id, n, d)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
+  // A task can be split into sub-tasks; then it is done when all of them are. Open tasks first (in their order), finished ones after.
+  const row = (t: Task): Row => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null, doneAt: t.done_at });
+  const rows = tasks
+    .filter((t) => !t.parent_id)
+    .map((t) => {
+      const subs = tasks.filter((x) => x.parent_id === t.id).sort((a, b) => a.sort - b.sort).map(row);
+      return { ...row(t), subs, done: subs.length ? subs.every((x) => x.done) : !!t.done_at, sort: t.sort };
+    })
+    .sort((a, b) => Number(a.done) - Number(b.done) || a.sort - b.sort);
+  return <CheckList doneKind="task" onAddSub={(parentId, title) => addTask(goalId, title, null, null, parentId)} rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n, d) => setStepNote("task", id, n, d)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
 }
 
 /**

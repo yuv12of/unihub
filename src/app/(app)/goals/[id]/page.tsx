@@ -94,7 +94,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           <dt className="text-xs text-ink-soft">{gap == null ? "בלי תאריך יעד" : gap >= 0 ? "מעל הקו המתוכנן" : "מתחת לקו המתוכנן"}</dt>
         </div>
         <div className="panel p-3">
-          <dd className="text-2xl font-bold tabular-nums">{showMilestones && milestones.length ? `${msDone}/${milestones.length}` : tasks.filter((t) => !t.done_at).length}</dd>
+          <dd className="text-2xl font-bold tabular-nums">{showMilestones && milestones.length ? `${msDone}/${milestones.length}` : tasks.filter((t) => !t.done_at && !t.parent_id).length}</dd>
           <dt className="text-xs text-ink-soft">{showMilestones && milestones.length ? "אבני דרך" : "משימות פתוחות"}</dt>
         </div>
       </dl>
@@ -132,7 +132,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           <h2 id="tasks-title" className="section-title">
             {byMilestones ? "משימות נוספות" : "משימות"}
           </h2>
-          <p className="mb-2 text-sm text-ink-soft">{g.progress_mode === "tasks" ? "בכל סדר שרוצים. לכל משימה אפשר לתת תאריך יעד." : "בכל סדר שרוצים. לא משפיעות על האחוזים במטרה הזו."}</p>
+          <p className="mb-2 text-sm text-ink-soft">{g.progress_mode === "tasks" ? "בכל סדר שרוצים. לכל משימה אפשר לתת תאריך יעד, ואפשר לפצל אותה לתתי־משימות." : "בכל סדר שרוצים. לא משפיעות על האחוזים במטרה הזו."}</p>
           <TaskList goalId={g.id} tasks={loose} today={today} />
         </section>
       )}
