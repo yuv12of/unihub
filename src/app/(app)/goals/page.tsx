@@ -41,7 +41,9 @@ async function Board() {
   });
   const active = shown.filter((g) => g.status === "active");
   const moved = active.filter((g) => movedSince(g, data, weekStart(today))).length;
-  const loose = data.tasks.filter((t) => !t.goal_id && (!t.done_at || t.done_at.slice(0, 10) >= today));
+  // tasks with no goal: the open ones and today's finished ones, each with all of its sub-tasks
+  const looseTop = data.tasks.filter((t) => !t.goal_id && !t.parent_id && (!t.done_at || t.done_at.slice(0, 10) >= today));
+  const loose = [...looseTop, ...data.tasks.filter((t) => t.parent_id && looseTop.some((p) => p.id === t.parent_id))];
 
   return (
     <div className="mt-5 space-y-8">

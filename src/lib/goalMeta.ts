@@ -65,6 +65,8 @@ export interface Task {
   note?: string | null;
   /** set when the task is a step of a milestone */
   milestone_id?: string | null;
+  /** set when the task is a sub-task of another task (one level only) */
+  parent_id?: string | null;
 }
 export interface GoalLog {
   id: string;
@@ -141,6 +143,24 @@ function milestonesProgress(milestones: Milestone[], tasks: Task[], by: (ts: str
   return milestones.length ? milestones.reduce((n, m) => n + milestoneShare(m, tasks, by), 0) / milestones.length : 0;
 }
 
+/** The sub-tasks a task was split into (tasks that point at it), in order. */
+export function subsOf(t: Task, tasks: Task[]): Task[] {
+  return tasks.filter((x) => x.parent_id === t.id).sort((a, b) => a.sort - b.sort);
+}
+
+/** How far one task is, 0..1, by a given moment: a plain task is 0 or 1; one split into sub-tasks counts by their share. */
+function taskShare(t: Task, tasks: Task[], by: (ts: string) => boolean): number {
+  const subs = subsOf(t, tasks);
+  if (!subs.length) return t.done_at && by(t.done_at) ? 1 : 0;
+  return subs.filter((s) => s.done_at && by(s.done_at)).length / subs.length;
+}
+
+/** Tasks-mode progress: the average over the goal's tasks (sub-tasks count inside their task, not as tasks of their own). */
+function tasksProgress(tasks: Task[], by: (ts: string) => boolean): number {
+  const top = tasks.filter((t) => !t.parent_id);
+  return top.length ? top.reduce((n, t) => n + taskShare(t, tasks, by), 0) / top.length : 0;
+}
+
 /** Number mode: where a value sits between start and target (works for goals that go down, like weight). */
 export function numberProgress(g: Pick<Goal, "start_value" | "target_value">, value: number): number {
   const start = g.start_value ?? 0;
@@ -160,7 +180,7 @@ function latest<K extends "value" | "percent">(logs: GoalLog[], key: K, upTo: st
 export function progressAt(g: Goal, d: GoalData, date: string): number {
   const { tasks, milestones, logs } = partsOf(g, d);
   if (g.status === "done" && g.done_at && day(g.done_at)! <= date) return 1;
-  if (g.progress_mode === "tasks") return tasks.length ? tasks.filter((t) => t.done_at && day(t.done_at)! <= date).length / tasks.length : 0;
+  if (g.progress_mode === "tasks") return tasksProgress(tasks, (ts) => day(ts)! <= date);
   if (g.progress_mode === "milestones") return milestonesProgress(milestones, tasks, (ts) => day(ts)! <= date);
   if (g.progress_mode === "number") {
     const v = latest(logs, "value", date);
@@ -179,7 +199,10 @@ export function currentValue(g: Goal, d: GoalData, date: string): number {
 export function progressText(g: Goal, d: GoalData, today: string): string {
   const { tasks, milestones } = partsOf(g, d);
   const n = (x: number) => x.toLocaleString("he-IL", { maximumFractionDigits: 1 });
-  if (g.progress_mode === "tasks") return tasks.length ? `${tasks.filter((t) => t.done_at).length} מתוך ${tasks.length} משימות` : "עוד אין משימות";
+  if (g.progress_mode === "tasks") {
+    const top = tasks.filter((t) => !t.parent_id);
+    return top.length ? `${top.filter((t) => taskShare(t, tasks, () => true) === 1).length} מתוך ${top.length} משימות` : "עוד אין משימות";
+  }
   if (g.progress_mode === "milestones") return milestones.length ? `${milestones.filter((m) => m.done_at).length} מתוך ${milestones.length} אבני דרך` : "עוד אין אבני דרך";
   if (g.progress_mode === "number") return g.target_value == null ? "לא הוגדר יעד" : `${n(currentValue(g, d, today))} מתוך ${n(g.target_value)}${g.unit ? ` ${g.unit}` : ""}`;
   return `${Math.round(progressAt(g, d, today) * 100)}%`;
@@ -220,8 +243,12 @@ export function nextStep(g: Goal, d: GoalData): { kind: "task" | "milestone"; id
       return s ? { kind: "task", id: s.id, title: s.title, due: s.due ?? cur.due } : { kind: "milestone", id: cur.id, title: cur.title, due: cur.due };
     }
   }
-  const t = tasks.filter((x) => !x.done_at).sort(bySort)[0];
-  if (t) return { kind: "task", id: t.id, title: t.title, due: t.due };
+  // the first open task; if it was split, its first open sub-task
+  const t = tasks.filter((x) => !x.parent_id && taskShare(x, tasks, () => true) < 1).sort(bySort)[0];
+  if (t) {
+    const s = subsOf(t, tasks).find((x) => !x.done_at);
+    return s ? { kind: "task", id: s.id, title: s.title, due: s.due ?? t.due } : { kind: "task", id: t.id, title: t.title, due: t.due };
+  }
   const m = milestones.filter((x) => !x.done_at).sort(bySort)[0];
   return m ? { kind: "milestone", id: m.id, title: m.title, due: m.due } : null;
 }
@@ -370,18 +397,18 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   const { tasks, milestones, logs } = partsOf(g, d);
   const t0 = Math.min(Date.parse(g.created_at), now);
   const events: ChartPoint[] = [];
-  const steps = (rows: { title: string; done_at: string | null }[]) => {
-    // by the moment itself, not by its text: stored times can come back in more than one notation
-    const done = rows.filter((r) => r.done_at).sort((a, b) => Date.parse(a.done_at!) - Date.parse(b.done_at!));
-    done.forEach((r, i) => events.push({ t: Date.parse(r.done_at!), p: (i + 1) / rows.length, label: r.title }));
-  };
   // a log has a date; its clock time is taken from when it was written, if that was the same day
   const logTime = (l: GoalLog) => {
     const noon = Date.parse(l.date + "T12:00:00Z");
     const made = l.created_at ? Date.parse(l.created_at) : NaN;
     return Number.isFinite(made) && Math.abs(made - noon) < 36 * 3_600_000 ? made : noon;
   };
-  if (g.progress_mode === "tasks") steps(tasks);
+  if (g.progress_mode === "tasks") {
+    // every tick moves the line: a plain task, or one sub-task of a task that was split
+    const parents = new Set(tasks.filter((t) => t.parent_id).map((t) => t.parent_id));
+    const ticks = tasks.filter((t) => t.done_at && !parents.has(t.id)).sort((a, b) => Date.parse(a.done_at!) - Date.parse(b.done_at!));
+    for (const r of ticks) events.push({ t: Date.parse(r.done_at!), p: tasksProgress(tasks, (ts) => Date.parse(ts) <= Date.parse(r.done_at!)), label: r.title });
+  }
   else if (g.progress_mode === "milestones") {
     // every tick moves the line: a whole milestone, or one step of a milestone that was split
     const split = new Set(tasks.filter((t) => t.milestone_id).map((t) => t.milestone_id));
@@ -478,7 +505,7 @@ export interface GoalTemplateData {
   why: string | null;
   dueDays: number | null;
   milestones: { title: string; note: string | null; dueDays: number | null; steps: { title: string; note: string | null }[] }[];
-  tasks: { title: string; note: string | null; dueDays: number | null }[];
+  tasks: { title: string; note: string | null; dueDays: number | null; subs: { title: string; note: string | null }[] }[];
 }
 export interface GoalTemplate {
   id: string;
@@ -503,9 +530,9 @@ export function templateFrom(g: Goal, d: GoalData): GoalTemplateData {
     dueDays: offset(g.due),
     milestones: [...milestones].sort(bySort).map((m) => ({ title: m.title, note: m.note ?? null, dueDays: offset(m.due), steps: stepsOf(m, tasks).map((s) => ({ title: s.title, note: s.note ?? null })) })),
     tasks: tasks
-      .filter((t) => !t.milestone_id)
+      .filter((t) => !t.milestone_id && !t.parent_id)
       .sort(bySort)
-      .map((t) => ({ title: t.title, note: t.note ?? null, dueDays: offset(t.due) })),
+      .map((t) => ({ title: t.title, note: t.note ?? null, dueDays: offset(t.due), subs: subsOf(t, tasks).map((s) => ({ title: s.title, note: s.note ?? null })) })),
   };
 }
 
@@ -534,13 +561,14 @@ export function cleanTemplate(raw: unknown): GoalTemplateData | null {
       const t = str(m.title, 140);
       return t ? [{ title: t, note: str(m.note, 500), dueDays: days(m.dueDays), steps: list(m.steps, 30).flatMap((s) => (str(s.title, 140) ? [{ title: str(s.title, 140)!, note: str(s.note, 500) }] : [])) }] : [];
     }),
-    tasks: list(r.tasks, 100).flatMap((t) => (str(t.title, 140) ? [{ title: str(t.title, 140)!, note: str(t.note, 500), dueDays: days(t.dueDays) }] : [])),
+    tasks: list(r.tasks, 100).flatMap((t) => (str(t.title, 140) ? [{ title: str(t.title, 140)!, note: str(t.note, 500), dueDays: days(t.dueDays), subs: list(t.subs, 30).flatMap((s) => (str(s.title, 140) ? [{ title: str(s.title, 140)!, note: str(s.note, 500) }] : [])) }] : [])),
   };
 }
 
 /** "4 אבני דרך, 9 שלבים, 3 משימות" (only the parts that exist). */
 export function templateSummary(t: GoalTemplateData): string {
   const steps = t.milestones.reduce((n, m) => n + m.steps.length, 0);
+  const subs = t.tasks.reduce((n, x) => n + x.subs.length, 0);
   const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
-  return [t.milestones.length && count(t.milestones.length, "אבן דרך אחת", "אבני דרך"), steps && count(steps, "שלב אחד", "שלבים"), t.tasks.length && count(t.tasks.length, "משימה אחת", "משימות")].filter(Boolean).join(", ") || "בלי שלבים";
+  return [t.milestones.length && count(t.milestones.length, "אבן דרך אחת", "אבני דרך"), steps && count(steps, "שלב אחד", "שלבים"), t.tasks.length && count(t.tasks.length, "משימה אחת", "משימות"), subs && count(subs, "תת־משימה אחת", "תתי־משימות")].filter(Boolean).join(", ") || "בלי שלבים";
 }

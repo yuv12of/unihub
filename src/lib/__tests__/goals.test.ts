@@ -243,7 +243,7 @@ test("templates: a goal's shape without its progress, dates as distances from th
   assert.equal(t.dueDays, 10);
   assert.deepEqual(t.milestones.map((m) => [m.title, m.dueDays, m.steps.map((s) => s.title)]), [["צילומים", 3, ["א", "ב"]], ["עריכה", 0, []]]);
   assert.equal(t.milestones[0].note, "הערה");
-  assert.deepEqual(t.tasks, [{ title: "חשבונית", note: null, dueDays: 10 }]);
+  assert.deepEqual(t.tasks, [{ title: "חשבונית", note: null, dueDays: 10, subs: [] }]);
   assert.ok(!JSON.stringify(t).includes("done")); // nothing about progress
   assert.equal(templateSummary(t), "2 אבני דרך, 2 שלבים, משימה אחת");
   // survives being stored as JSON and read back
@@ -309,4 +309,32 @@ test("milestones are a sequence; tasks are not", async () => {
   // tasks goal: simply the first open task, whatever else exists
   const tg = goal();
   assert.equal(nextStep(tg, data(tg, { tasks: [task("t2", null, 2), task("t1", null, 1)] }))?.id, "t1");
+});
+
+test("a task split into sub-tasks counts by them, and its sub-tasks are not tasks of their own", async () => {
+  const { subsOf, timeline, templateFrom, templateSummary, cleanTemplate } = await import("@/lib/goalMeta");
+  const g = goal({ created_at: "2026-11-01T08:00:00Z" });
+  const sub = (id: string, parent: string, done: string | null, sort = 0): Task => ({ ...task(id, null, sort), parent_id: parent, done_at: done });
+  const plain: Task = { ...task("plain", null, 1), done_at: "2026-11-02T09:00:00Z" };
+  const split = task("split", null, 2);
+  const d = data(g, { tasks: [plain, split, sub("s2", "split", null, 2), sub("s1", "split", "2026-11-03T09:00:00Z", 1), sub("s3", "split", "2026-11-06T09:00:00Z", 3), sub("s4", "split", null, 4)] });
+  assert.deepEqual(subsOf(split, d.tasks).map((t) => t.id), ["s1", "s2", "s3", "s4"]);
+  // two tasks: one done, one half done → 75%, not 3 of 6
+  assert.equal(progressAt(g, d, "2026-11-10"), 0.75);
+  assert.equal(progressAt(g, d, "2026-11-04"), 0.625);
+  assert.equal(progressText(g, d, "2026-11-10"), "1 מתוך 2 משימות");
+  // every tick is a point on the chart, at its own value
+  assert.deepEqual(timeline(g, d, Date.parse("2026-11-10T09:00:00Z")).filter((q) => q.label).map((q) => [q.label, q.p]), [["plain", 0.5], ["s1", 0.625], ["s3", 0.75]]);
+  // the next step is the first open sub-task of the first open task
+  assert.equal(nextStep(g, d)?.id, "s2");
+  // a split task's own tick is ignored while it has sub-tasks
+  const ticked = data(g, { tasks: d.tasks.map((t) => (t.id === "split" ? { ...t, done_at: "2026-11-02T10:00:00Z" } : t)) });
+  assert.equal(progressAt(g, ticked, "2026-11-10"), 0.75);
+  // templates keep the sub-tasks inside their task
+  const tpl = templateFrom(g, d);
+  assert.deepEqual(tpl.tasks.map((t) => [t.title, t.subs.map((s) => s.title)]), [["plain", []], ["split", ["s1", "s2", "s3", "s4"]]]);
+  assert.equal(templateSummary(tpl), "2 משימות, 4 תתי־משימות");
+  assert.deepEqual(cleanTemplate(JSON.parse(JSON.stringify(tpl))), tpl);
+  // a template saved before sub-tasks existed still reads
+  assert.deepEqual(cleanTemplate({ title: "x", tasks: [{ title: "t" }] })!.tasks, [{ title: "t", note: null, dueDays: null, subs: [] }]);
 });

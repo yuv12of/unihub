@@ -66,9 +66,11 @@ export async function createGoal(input: GoalInput) {
       const ms = tpl.milestones.map((m, i) => ({ id: crypto.randomUUID(), user_id: uid, goal_id: id, title: m.title, note: m.note, due: when(m.dueDays), sort: i }));
       if (ms.length) must(await sb.from("goal_milestones").insert(ms));
       const rows = [
-        ...tpl.milestones.flatMap((m, i) => m.steps.map((s, j) => ({ user_id: uid, goal_id: id, milestone_id: ms[i].id as string | null, title: s.title, note: s.note, due: null as string | null, sort: i * 100 + j }))),
-        ...tpl.tasks.map((t, i) => ({ user_id: uid, goal_id: id, milestone_id: null as string | null, title: t.title, note: t.note, due: when(t.dueDays), sort: 10_000 + i })),
+        ...tpl.milestones.flatMap((m, i) => m.steps.map((s, j) => ({ user_id: uid, goal_id: id, milestone_id: ms[i].id as string | null, parent_id: null as string | null, title: s.title, note: s.note, due: null as string | null, sort: i * 100 + j }))),
       ];
+      const parents = tpl.tasks.map((t, i) => ({ id: crypto.randomUUID(), user_id: uid, goal_id: id, title: t.title, note: t.note, due: when(t.dueDays), sort: 10_000 + i }));
+      if (parents.length) must(await sb.from("tasks").insert(parents));
+      rows.push(...tpl.tasks.flatMap((t, i) => t.subs.map((s, j) => ({ user_id: uid, goal_id: id, milestone_id: null as string | null, parent_id: parents[i].id as string | null, title: s.title, note: s.note, due: null as string | null, sort: j }))));
       if (rows.length) must(await sb.from("tasks").insert(rows));
       refresh();
       return id;
@@ -170,11 +172,38 @@ async function syncMilestone(sb: Parameters<Parameters<typeof action>[1]>[0]["su
   } else if (m.done_at) must(await sb.from("goal_milestones").update({ done_at: null }).match({ id: milestoneId, user_id: uid }));
 }
 
-/** goalId null = a plain task with no goal. With milestoneId the task is a step of that milestone. */
-export async function addTask(goalId: string | null, title: string, due?: string | null, milestoneId?: string | null) {
+/** A task that was split into sub-tasks is done exactly when all of them are, at the time of the last one. Called after any change to its sub-tasks. */
+async function syncParent(sb: Parameters<Parameters<typeof action>[1]>[0]["supabase"], uid: string, parentId: string | null | undefined) {
+  if (!parentId) return;
+  const [{ data: subs }, { data: p }] = await Promise.all([
+    sb.from("tasks").select("done_at").match({ parent_id: parentId, user_id: uid }),
+    sb.from("tasks").select("done_at, milestone_id").match({ id: parentId, user_id: uid }).maybeSingle(),
+  ]);
+  if (!p || !subs?.length) return; // no sub-tasks left: a plain task again, keep its own tick
+  const all = subs.every((s) => s.done_at);
+  if (all) {
+    const last = subs.map((s) => new Date(s.done_at as string).toISOString()).sort().at(-1)!;
+    if (!p.done_at || new Date(p.done_at as string).toISOString() !== last) must(await sb.from("tasks").update({ done_at: last }).match({ id: parentId, user_id: uid }));
+  } else if (p.done_at) must(await sb.from("tasks").update({ done_at: null }).match({ id: parentId, user_id: uid }));
+}
+
+/**
+ * goalId null = a plain task with no goal. With milestoneId the task is a step of that milestone.
+ * With parentId it is a sub-task of that task (one level: a sub-task can't be split again) and belongs to the same goal.
+ */
+export async function addTask(goalId: string | null, title: string, due?: string | null, milestoneId?: string | null, parentId?: string | null) {
   return action("addTask", async ({ supabase: sb, userId: uid }) => {
     const t = text(title, 140);
     if (!t) throw new Error("מה המשימה?");
+    if (parentId) {
+      const { data: p } = await sb.from("tasks").select("goal_id, parent_id, milestone_id").match({ id: parentId, user_id: uid }).maybeSingle();
+      if (!p) throw new Error("המשימה לא נמצאה");
+      if (p.parent_id || p.milestone_id) throw new Error("אפשר לפצל רק משימה רגילה");
+      must(await sb.from("tasks").insert({ user_id: uid, goal_id: p.goal_id, parent_id: parentId, title: t, due: date(due), sort: Math.floor(Date.now() / 1000) }));
+      await syncParent(sb, uid, parentId); // a new open sub-task reopens a finished task
+      refresh();
+      return;
+    }
     if (goalId) {
       const { data: g } = await sb.from("goals").select("id").match({ id: goalId, user_id: uid }).maybeSingle();
       if (!g) throw new Error("לא נמצא");
@@ -208,20 +237,24 @@ async function assertInOrder(sb: Parameters<Parameters<typeof action>[1]>[0]["su
 
 export async function setTaskDone(id: string, done: boolean) {
   return action("setTaskDone", async ({ supabase: sb, userId: uid }) => {
+    const { data: subs } = await sb.from("tasks").select("id").match({ parent_id: id, user_id: uid }).limit(1);
+    if (subs?.length) throw new Error("משימה עם תתי־משימות מסתיימת כשכולן מסומנות");
     if (done) {
       const { data: cur } = await sb.from("tasks").select("milestone_id").match({ id, user_id: uid }).maybeSingle();
       if (cur?.milestone_id) await assertInOrder(sb, uid, cur.milestone_id as string);
     }
-    const { data: t } = await sb.from("tasks").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }).select("milestone_id").maybeSingle();
+    const { data: t } = await sb.from("tasks").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }).select("milestone_id, parent_id").maybeSingle();
     await syncMilestone(sb, uid, t?.milestone_id as string | null | undefined);
+    await syncParent(sb, uid, t?.parent_id as string | null | undefined);
     refresh();
   });
 }
 
 export async function deleteTask(id: string) {
   return action("deleteTask", async ({ supabase: sb, userId: uid }) => {
-    const { data: t } = await sb.from("tasks").delete().match({ id, user_id: uid }).select("milestone_id").maybeSingle();
+    const { data: t } = await sb.from("tasks").delete().match({ id, user_id: uid }).select("milestone_id, parent_id").maybeSingle();
     await syncMilestone(sb, uid, t?.milestone_id as string | null | undefined);
+    await syncParent(sb, uid, t?.parent_id as string | null | undefined);
     refresh();
   });
 }
@@ -338,7 +371,7 @@ export async function saveGoalTemplate(goalId: string, name: string) {
     const [g, m, t, count] = await Promise.all([
       sb.from("goals").select("id, title, color, area, status, why, description, started_on, due, progress_mode, start_value, target_value, unit, weekly_minutes, routine_id, sort, created_at, done_at").match({ id: goalId, user_id: uid }).maybeSingle(),
       sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort, note").match({ goal_id: goalId, user_id: uid }),
-      sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note, milestone_id").match({ goal_id: goalId, user_id: uid }),
+      sb.from("tasks").select("id, goal_id, title, due, minutes, done_at, sort, created_at, note, milestone_id, parent_id").match({ goal_id: goalId, user_id: uid }),
       sb.from("goal_templates").select("id", { count: "exact", head: true }).eq("user_id", uid),
     ]);
     if (!g.data) throw new Error("לא נמצא");
@@ -370,9 +403,12 @@ export async function setDoneAt(kind: "task" | "milestone", id: string, iso: str
     if (t < Date.now() - 10 * 365 * 86_400_000) throw new Error("התאריך רחוק מדי");
     const when = new Date(Math.floor(t / 60_000) * 60_000).toISOString();
     if (kind === "task") {
-      const { data: row } = await sb.from("tasks").update({ done_at: when }).match({ id, user_id: uid }).not("done_at", "is", null).select("milestone_id").maybeSingle();
+      const { data: subs } = await sb.from("tasks").select("id").match({ parent_id: id, user_id: uid }).limit(1);
+      if (subs?.length) throw new Error("משימה עם תתי־משימות מסתיימת כשהאחרונה שבהן מסתיימת");
+      const { data: row } = await sb.from("tasks").update({ done_at: when }).match({ id, user_id: uid }).not("done_at", "is", null).select("milestone_id, parent_id").maybeSingle();
       if (!row) throw new Error("המשימה לא מסומנת כבוצעה");
       await syncMilestone(sb, uid, row.milestone_id as string | null);
+      await syncParent(sb, uid, row.parent_id as string | null);
     } else {
       const { data: steps } = await sb.from("tasks").select("id").match({ milestone_id: id, user_id: uid }).limit(1);
       if (steps?.length) throw new Error("אבן דרך עם שלבים מסתיימת כשהשלב האחרון שלה מסתיים");
