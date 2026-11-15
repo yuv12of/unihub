@@ -43,3 +43,23 @@ export function range(start: string | null | undefined, end?: string | null): st
 
 /** Any left-to-right run (dates like 23.10–30.10, page spans) isolated the same way. */
 export const ltr = (s: string) => `${LRI}${s}${PDI}`;
+
+const IL_PARTS = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/** A moment as Israel wall-clock time, "YYYY-MM-DDTHH:mm" (the format of a datetime-local input). */
+export function israelLocal(ms: number): string {
+  const p = Object.fromEntries(IL_PARTS.formatToParts(ms).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/** The moment (ms) of an Israel wall-clock time "YYYY-MM-DDTHH:mm"; null if it isn't one. Handles summer time. */
+export function fromIsraelLocal(local: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return null;
+  const asUtc = Date.parse(local + ":00Z");
+  if (!Number.isFinite(asUtc)) return null;
+  const offsetAt = (t: number) => Date.parse(israelLocal(t) + ":00Z") - t;
+  let t = asUtc - offsetAt(asUtc);
+  // near a clock change the first guess can sit on the wrong side of it
+  if (offsetAt(t) !== asUtc - t) t = asUtc - offsetAt(t);
+  return t;
+}

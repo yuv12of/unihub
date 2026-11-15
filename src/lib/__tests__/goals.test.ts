@@ -260,3 +260,28 @@ test("templates: a goal's shape without its progress, dates as distances from th
   assert.deepEqual(messy.tasks, []);
   assert.equal(templateSummary(cleanTemplate({ title: "x" })!), "בלי שלבים");
 });
+
+test("timeline: two completions on the same day sit at their own minutes; a backdated one moves the start", async () => {
+  const { timeline, curveAt } = await import("@/lib/goalMeta");
+  const at = (iso: string) => Date.parse(iso);
+  const g = goal({ created_at: "2026-11-14T05:00:00Z" });
+  const t = (id: string, done: string | null): Task => ({ ...task(id, null), done_at: done });
+  const now = at("2026-11-14T20:00:00Z");
+  // A at 08:00 and B at 20:00 Israel time (06:00 and 18:00 UTC), same calendar day
+  const pts = timeline(g, data(g, { tasks: [t("B", "2026-11-14T18:00:00+00:00"), t("A", "2026-11-14T06:00:00+00:00"), t("C", null), t("D", null)] }), now);
+  const [a, b] = pts.filter((q) => q.label);
+  assert.deepEqual([a.label, a.t, a.p], ["A", at("2026-11-14T06:00:00Z"), 0.25]);
+  assert.deepEqual([b.label, b.t, b.p], ["B", at("2026-11-14T18:00:00Z"), 0.5]);
+  assert.equal(b.t - a.t, 12 * 3_600_000);
+  // halfway between them the line is between the two values, not already at the top
+  const mid = curveAt(pts, at("2026-11-14T12:00:00Z"));
+  assert.ok(mid > 0.25 && mid < 0.5, String(mid));
+  // one minute apart is still two points
+  const close = timeline(g, data(g, { tasks: [t("A", "2026-11-14T06:00:00Z"), t("B", "2026-11-14T06:01:00Z")] }), now).filter((q) => q.label);
+  assert.equal(close[1].t - close[0].t, 60_000);
+  // a completion set to before the goal was created: the line starts just before it
+  const back = timeline(g, data(g, { tasks: [t("A", "2026-11-12T06:00:00Z"), t("B", null)] }), now);
+  assert.equal(back[0].t, at("2026-11-12T06:00:00Z") - 60_000);
+  assert.equal(back[0].p, 0);
+  assert.deepEqual([back[1].t, back[1].p], [at("2026-11-12T06:00:00Z"), 0.5]);
+});

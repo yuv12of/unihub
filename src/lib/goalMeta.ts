@@ -346,7 +346,8 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   const t0 = Math.min(Date.parse(g.created_at), now);
   const events: ChartPoint[] = [];
   const steps = (rows: { title: string; done_at: string | null }[]) => {
-    const done = rows.filter((r) => r.done_at).sort((a, b) => a.done_at!.localeCompare(b.done_at!));
+    // by the moment itself, not by its text: stored times can come back in more than one notation
+    const done = rows.filter((r) => r.done_at).sort((a, b) => Date.parse(a.done_at!) - Date.parse(b.done_at!));
     done.forEach((r, i) => events.push({ t: Date.parse(r.done_at!), p: (i + 1) / rows.length, label: r.title }));
   };
   // a log has a date; its clock time is taken from when it was written, if that was the same day
@@ -359,8 +360,8 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   else if (g.progress_mode === "milestones") {
     // every tick moves the line: a whole milestone, or one step of a milestone that was split
     const split = new Set(tasks.filter((t) => t.milestone_id).map((t) => t.milestone_id));
-    const ticks = [...milestones.filter((m) => !split.has(m.id)), ...tasks.filter((t) => t.milestone_id && milestones.some((m) => m.id === t.milestone_id))].filter((r) => r.done_at).sort((a, b) => a.done_at!.localeCompare(b.done_at!));
-    for (const r of ticks) events.push({ t: Date.parse(r.done_at!), p: milestonesProgress(milestones, tasks, (ts) => ts <= r.done_at!), label: r.title });
+    const ticks = [...milestones.filter((m) => !split.has(m.id)), ...tasks.filter((t) => t.milestone_id && milestones.some((m) => m.id === t.milestone_id))].filter((r) => r.done_at).sort((a, b) => Date.parse(a.done_at!) - Date.parse(b.done_at!));
+    for (const r of ticks) events.push({ t: Date.parse(r.done_at!), p: milestonesProgress(milestones, tasks, (ts) => Date.parse(ts) <= Date.parse(r.done_at!)), label: r.title });
   } else {
     const key = g.progress_mode === "number" ? "value" : "percent";
     for (const l of logs) {
@@ -372,7 +373,9 @@ export function timeline(g: Goal, d: GoalData, now: number): ChartPoint[] {
   }
   if (g.status === "done" && g.done_at) events.push({ t: Date.parse(g.done_at), p: 1, label: "הושלם" });
 
-  const out: ChartPoint[] = [{ t: t0, p: 0 }];
+  // a completion time set to before the goal was written down moves the start back with it
+  const first = events.find((e) => e.t <= now);
+  const out: ChartPoint[] = [{ t: first && first.t <= t0 ? first.t - 60_000 : t0, p: 0 }];
   for (const e of events) {
     if (!(e.t <= now)) continue;
     const prev = out.at(-1)!;
