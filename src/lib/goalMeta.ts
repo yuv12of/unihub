@@ -15,8 +15,8 @@ export const STATUSES: Record<GoalStatus, string> = { idea: "רעיון", active
 export const BOARD: GoalStatus[] = ["active", "idea", "paused", "done"];
 export const AREAS: Record<GoalArea, string> = { work: "עבודה", health: "בריאות", money: "כסף", home: "בית", personal: "אישי", study: "לימודים" };
 export const MODES: Record<ProgressMode, { label: string; desc: string }> = {
-  tasks: { label: "משימות", desc: "ההתקדמות לפי כמה משימות סומנו" },
-  milestones: { label: "אבני דרך", desc: "כמה שלבים גדולים הושלמו" },
+  tasks: { label: "משימות", desc: "רשימה שמסמנים בכל סדר שרוצים" },
+  milestones: { label: "אבני דרך", desc: "שלבים בסדר קבוע, אחד אחרי השני" },
   number: { label: "מספר", desc: "מספר שמתקדם ליעד: ₪, ק״מ, ק״ג, עמודים" },
   manual: { label: "הערכה שלי", desc: "אחוז שמעדכנים ביד" },
 };
@@ -102,6 +102,23 @@ export function partsOf(g: Goal, d: GoalData) {
     milestones: d.milestones.filter((m) => m.goal_id === g.id),
     logs: d.logs.filter((l) => l.goal_id === g.id),
   };
+}
+
+/**
+ * The two list kinds of goal differ in one thing. Tasks can be ticked in any order. Milestones
+ * are a sequence: each one opens when the one before it is finished.
+ */
+export function inOrder(milestones: Milestone[]): Milestone[] {
+  return milestones.map((m, i) => ({ m, i })).sort((a, b) => a.m.sort - b.m.sort || a.i - b.i).map((x) => x.m);
+}
+
+/** In a goal measured by milestones: the earlier milestone that still has to be finished before this one, or null. */
+export function blockedBy(m: Milestone, milestones: Milestone[]): Milestone | null {
+  for (const x of inOrder(milestones)) {
+    if (x.id === m.id) return null;
+    if (!x.done_at) return x;
+  }
+  return null;
 }
 
 /** The steps a milestone was split into (tasks that point at it), in order. */
@@ -195,6 +212,14 @@ export function movedSince(g: Goal, d: GoalData, since: string): boolean {
 export function nextStep(g: Goal, d: GoalData): { kind: "task" | "milestone"; id: string; title: string; due: string | null } | null {
   const { tasks, milestones } = partsOf(g, d);
   const bySort = <T extends { sort: number; due: string | null }>(a: T, b: T) => a.sort - b.sort || (a.due ?? "9").localeCompare(b.due ?? "9");
+  if (g.progress_mode === "milestones") {
+    // milestones go in order: the next step is inside the first one that is still open
+    const cur = inOrder(milestones).find((m) => !m.done_at);
+    if (cur) {
+      const s = stepsOf(cur, tasks).find((x) => !x.done_at);
+      return s ? { kind: "task", id: s.id, title: s.title, due: s.due ?? cur.due } : { kind: "milestone", id: cur.id, title: cur.title, due: cur.due };
+    }
+  }
   const t = tasks.filter((x) => !x.done_at).sort(bySort)[0];
   if (t) return { kind: "task", id: t.id, title: t.title, due: t.due };
   const m = milestones.filter((x) => !x.done_at).sort(bySort)[0];

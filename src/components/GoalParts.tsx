@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
-import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, deleteGoalTemplate, saveGoalTemplate, setDoneAt, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
+import { addGoalNote, addMilestone, addTask, createGoal, deleteGoalNote, deleteGoalTemplate, moveMilestone, saveGoalTemplate, setDoneAt, setStepNote, deleteGoal, deleteMilestone, deleteTask, logGoal, logGoalTime, setGoalWeekly, setMilestoneDone, setTaskDone, updateGoal } from "@/app/act";
 import { FocusTimer } from "@/components/SessionToggle";
 import { duration, fromIsraelLocal, israelLocal } from "@/lib/time";
 import { Icon } from "@/components/Icon";
@@ -471,9 +471,10 @@ function DoneTime({ kind, id, iso, fixed = false }: { kind: "task" | "milestone"
 }
 const shortDate = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}`;
 
-function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText, doneKind }: { doneKind?: "task" | "milestone"; rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string) => Promise<unknown>; addLabel: string; emptyText: string }) {
+function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, emptyText, doneKind }: { doneKind?: "task" | "milestone"; rows: Row[]; today: string; onToggle: (id: string, done: boolean) => Promise<unknown>; onDelete: (id: string) => Promise<unknown>; onAdd: (title: string, due: string | null) => Promise<unknown>; onNote: (id: string, note: string, due: string | null) => Promise<unknown>; addLabel: string; emptyText: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [draftDue, setDraftDue] = useState("");
   const [shown, setDone] = useOptimistic(rows, (cur, ch: { id: string; done: boolean }) => cur.map((r) => (r.id === ch.id ? { ...r, done: ch.done } : r)));
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
@@ -504,11 +505,12 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
               {r.due && !r.done && <span className={`shrink-0 px-1 text-xs ${r.due < today ? "font-semibold text-bad" : "text-ink-soft"}`}>{r.due === today ? "היום" : shortDate(r.due)}</span>}
               <button
                 type="button"
-                aria-label={`${r.note ? "עריכת" : "הוספת"} תיאור ל${r.title}`}
+                aria-label={`עריכת ${r.title}: תאריך יעד ותיאור`}
                 aria-expanded={editing === r.id}
                 onClick={() => {
                   setEditing(editing === r.id ? null : r.id);
                   setDraft(r.note ?? "");
+                  setDraftDue(r.due ?? "");
                 }}
                 className="grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink"
               >
@@ -525,12 +527,23 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
                 onSubmit={(e) => {
                   e.preventDefault();
                   run(
-                    () => onNote(r.id, draft),
+                    () => onNote(r.id, draft, draftDue || null),
                     () => setEditing(null),
                   );
                 }}
               >
-                <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={500} autoFocus placeholder="תיאור: מה כולל, קישור, מה חסר" aria-label={`תיאור ל${r.title}`} className={`${field} min-w-48 flex-1 text-sm`} />
+                <label className="block w-full text-sm">
+                  <span className="text-ink-soft">תאריך יעד</span>
+                  <span className="mt-1 flex items-center gap-2">
+                    <input type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} className={`${field} w-auto`} />
+                    {draftDue && (
+                      <button type="button" onClick={() => setDraftDue("")} className="btn-ghost text-sm">
+                        בלי תאריך
+                      </button>
+                    )}
+                  </span>
+                </label>
+                <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={500} placeholder="תיאור: מה כולל, קישור, מה חסר" aria-label={`תיאור ל${r.title}`} className={`${field} min-w-48 flex-1 text-sm`} />
                 <button disabled={pending} className="btn min-h-11 self-end">
                   שמירה
                 </button>
@@ -556,7 +569,10 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
         }}
       >
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={140} placeholder={addLabel} aria-label={addLabel} className={`${field} min-w-40 flex-1`} />
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label="תאריך (לא חובה)" className={`${field} w-auto`} />
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
+          תאריך יעד
+          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={`${field} w-auto text-ink`} />
+        </label>
         <button disabled={pending || !title.trim()} className="btn min-h-11">
           הוספה
         </button>
@@ -569,14 +585,16 @@ function CheckList({ rows, today, onToggle, onDelete, onAdd, onNote, addLabel, e
 export function TaskList({ goalId, tasks, today }: { goalId: string | null; tasks: Task[]; today: string }) {
   // open tasks first (in their order), finished ones after
   const rows = [...tasks].sort((a, b) => Number(!!a.done_at) - Number(!!b.done_at) || a.sort - b.sort).map((t) => ({ id: t.id, title: t.title, due: t.due, done: !!t.done_at, note: t.note ?? null, doneAt: t.done_at }));
-  return <CheckList doneKind="task" rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n) => setStepNote("task", id, n)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
+  return <CheckList doneKind="task" rows={rows} today={today} onToggle={setTaskDone} onDelete={deleteTask} onNote={(id, n, d) => setStepNote("task", id, n, d)} onAdd={(t, d) => addTask(goalId, t, d)} addLabel="משימה חדשה" emptyText={goalId ? "עוד אין משימות. מה הצעד הראשון?" : "אין משימות פתוחות."} />;
 }
 
 /**
  * Milestones, each of which can be split into steps. A plain milestone has its own checkbox;
  * one with steps shows "2/4" instead and is finished when all its steps are ticked.
+ * `ordered` (a goal measured by milestones): they are a numbered sequence, and a milestone opens
+ * only when the one before it is finished. That is the difference from tasks, which have no order.
  */
-export function MilestoneList({ goalId, milestones, steps, today }: { goalId: string; milestones: Milestone[]; steps: Task[]; today: string }) {
+export function MilestoneList({ goalId, milestones, steps, today, ordered = false }: { goalId: string; milestones: Milestone[]; steps: Task[]; today: string; ordered?: boolean }) {
   const [shown, setDone] = useOptimistic({ milestones, steps }, (cur, ch: { kind: "m" | "s"; id: string; done: boolean }) => {
     const stamp = ch.done ? "now" : null;
     return ch.kind === "m" ? { ...cur, milestones: cur.milestones.map((m) => (m.id === ch.id ? { ...m, done_at: stamp } : m)) } : { ...cur, steps: cur.steps.map((t) => (t.id === ch.id ? { ...t, done_at: stamp } : t)) };
@@ -609,32 +627,46 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
       }
     });
   const iconBtn = "grid size-9 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-bg hover:text-ink";
+  const isDone = (m: Milestone) => {
+    const own = shown.steps.filter((t) => t.milestone_id === m.id);
+    return own.length ? own.every((t) => t.done_at) : !!m.done_at;
+  };
 
   return (
     <div>
-      {shown.milestones.length === 0 && <p className="text-sm text-ink-soft">אבני דרך הן השלבים הגדולים בדרך. כל אחת אפשר לפצל לשלבים קטנים. לא חובה.</p>}
+      {shown.milestones.length === 0 && <p className="text-sm text-ink-soft">{ordered ? "אבני דרך הן השלבים הגדולים, לפי הסדר: כל אחת נפתחת כשזו שלפניה מסתיימת. כל אחת אפשר לפצל לשלבים קטנים." : "אבני דרך הן השלבים הגדולים בדרך. כל אחת אפשר לפצל לשלבים קטנים. לא חובה."}</p>}
       <ul className="divide-y divide-rule">
-        {shown.milestones.map((m) => {
+        {shown.milestones.map((m, index) => {
           const mine = shown.steps.filter((t) => t.milestone_id === m.id).sort((a, b) => a.sort - b.sort);
           const doneSteps = mine.filter((t) => t.done_at).length;
           const done = mine.length ? doneSteps === mine.length : !!m.done_at;
+          // in a sequence, everything before this one has to be finished first
+          const before = ordered && !done ? shown.milestones.slice(0, index).find((x) => !isDone(x)) : undefined;
+          const locked = !!before;
+          const current = ordered && !done && !locked;
           const adding = splitting === m.id || mine.length > 0;
           return (
             <li key={m.id} className="py-1">
               <div className="flex min-h-11 items-center gap-1">
+                {ordered && (
+                  <span className={`w-6 shrink-0 text-center text-sm tabular-nums ${current ? "font-bold" : "text-ink-soft"}`} aria-label={`אבן דרך ${index + 1}`}>
+                    {index + 1}
+                  </span>
+                )}
                 {mine.length ? (
-                  <span className="flex min-h-11 flex-1 items-center gap-3">
+                  <span className={`flex min-h-11 flex-1 items-center gap-3 ${locked ? "opacity-60" : ""}`}>
                     <span className={`grid h-6 min-w-9 shrink-0 place-items-center rounded-full px-1.5 text-xs font-semibold tabular-nums ${done ? "accent-surface" : "border border-rule-strong"}`} aria-label={`${doneSteps} מתוך ${mine.length} שלבים`} dir="ltr">
                       {doneSteps}/{mine.length}
                     </span>
                     <span className={`font-medium ${done ? "text-ink-soft line-through" : ""}`}>{m.title}</span>
                   </span>
                 ) : (
-                  <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
-                    <input type="checkbox" checked={done} onChange={() => toggle("m", m.id, !done)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                  <label className={`flex min-h-11 flex-1 items-center gap-3 ${locked ? "opacity-60" : "cursor-pointer"}`}>
+                    <input type="checkbox" checked={done} disabled={locked} onChange={() => toggle("m", m.id, !done)} className="size-5 shrink-0 accent-[var(--ink)]" />
                     <span className={`font-medium ${done ? "text-ink-soft line-through" : ""}`}>{m.title}</span>
                   </label>
                 )}
+                {current && shown.milestones.length > 1 && <span className="shrink-0 rounded-md border border-ink px-1.5 py-0.5 text-xs font-semibold">עכשיו</span>}
                 {m.due && !done && (
                   <time dateTime={m.due} title={`תאריך יעד ${shortDate(m.due)}`} className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs ${m.due < today ? "bg-highlight font-semibold text-highlight-ink" : days(m.due) <= 7 ? "font-semibold" : "text-ink-soft"}`}>
                     {dueLabel(m.due)}
@@ -671,6 +703,7 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
                 </button>
               </div>
 
+              {locked && <p className="mb-1 ms-8 text-xs text-ink-soft">נפתחת אחרי ״{before!.title}״</p>}
               {done && <DoneTime kind="milestone" id={m.id} iso={m.done_at} fixed={mine.length > 0} />}
               {editing === m.id ? (
                 <form
@@ -683,6 +716,17 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
                     );
                   }}
                 >
+                  {shown.milestones.length > 1 && (
+                    <p className="flex w-full flex-wrap items-center gap-2 text-sm">
+                      <span className="text-ink-soft">מקום בסדר</span>
+                      <button type="button" disabled={pending || index === 0} onClick={() => run(() => moveMilestone(m.id, -1))} className="btn min-h-9 text-sm">
+                        להקדים
+                      </button>
+                      <button type="button" disabled={pending || index === shown.milestones.length - 1} onClick={() => run(() => moveMilestone(m.id, 1))} className="btn min-h-9 text-sm">
+                        לדחות
+                      </button>
+                    </p>
+                  )}
                   <label className="block w-full text-sm">
                     <span className="text-ink-soft">תאריך יעד</span>
                     <span className="mt-1 flex items-center gap-2">
@@ -709,7 +753,7 @@ export function MilestoneList({ goalId, milestones, steps, today }: { goalId: st
                     <li key={t.id}>
                       <div className="flex min-h-11 items-center gap-1">
                         <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-3">
-                          <input type="checkbox" checked={!!t.done_at} onChange={() => toggle("s", t.id, !t.done_at)} className="size-5 shrink-0 accent-[var(--ink)]" />
+                          <input type="checkbox" checked={!!t.done_at} disabled={locked && !t.done_at} onChange={() => toggle("s", t.id, !t.done_at)} className="size-5 shrink-0 accent-[var(--ink)]" />
                           <span className={`text-[15px] ${t.done_at ? "text-ink-soft line-through" : ""}`}>{t.title}</span>
                         </label>
                         <button type="button" aria-label={`מחיקת השלב ${t.title}`} disabled={pending} onClick={() => run(() => deleteTask(t.id))} className={iconBtn}>

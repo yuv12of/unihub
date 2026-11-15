@@ -285,3 +285,28 @@ test("timeline: two completions on the same day sit at their own minutes; a back
   assert.equal(back[0].p, 0);
   assert.deepEqual([back[1].t, back[1].p], [at("2026-11-12T06:00:00Z"), 0.5]);
 });
+
+test("milestones are a sequence; tasks are not", async () => {
+  const { blockedBy, inOrder } = await import("@/lib/goalMeta");
+  const a = ms("a", "2026-11-01", 1);
+  const b = ms("b", null, 2);
+  const c = ms("c", null, 3);
+  const list = [c, a, b]; // stored order doesn't matter, sort does
+  assert.deepEqual(inOrder(list).map((m) => m.id), ["a", "b", "c"]);
+  assert.equal(blockedBy(a, list), null);
+  assert.equal(blockedBy(b, list), null); // a is done, so b is the open one
+  assert.equal(blockedBy(c, list)?.id, "b");
+  assert.equal(blockedBy(c, [a, { ...b, done_at: "2026-11-02T10:00:00Z" }, c]), null);
+  // equal sort values keep the order they came in
+  assert.deepEqual(inOrder([ms("x", null, 5), ms("y", null, 5)]).map((m) => m.id), ["x", "y"]);
+
+  // next step: milestones goal → inside the first open milestone, steps first
+  const g = goal({ progress_mode: "milestones" });
+  const step = (id: string, mid: string, done: string | null, sort: number): Task => ({ ...task(id, done, sort), milestone_id: mid });
+  const d = data(g, { milestones: list, tasks: [step("c1", "c", null, 0), step("b2", "b", null, 2), step("b1", "b", "2026-11-03", 1)] });
+  assert.deepEqual([nextStep(g, d)?.kind, nextStep(g, d)?.id], ["task", "b2"]);
+  assert.deepEqual([nextStep(g, data(g, { milestones: list }))?.kind, nextStep(g, data(g, { milestones: list }))?.id], ["milestone", "b"]);
+  // tasks goal: simply the first open task, whatever else exists
+  const tg = goal();
+  assert.equal(nextStep(tg, data(tg, { tasks: [task("t2", null, 2), task("t1", null, 1)] }))?.id, "t1");
+});

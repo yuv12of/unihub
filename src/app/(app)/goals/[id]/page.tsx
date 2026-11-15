@@ -6,8 +6,11 @@ import { Icon } from "@/components/Icon";
 import { GoalChart } from "@/components/GoalChart";
 import { GoalJournal, GoalLogForm, GoalSettings, GoalTime, MilestoneList, SaveTemplate, TaskList } from "@/components/GoalParts";
 import { weekStart } from "@/lib/routines";
-import { AREAS, STATUSES, colorVar, currentValue, getGoals, nowMs, goalMinutesSince, notesOf, partsOf, plannedNow, progressAt, progressText, projectedFinish, stalledDays, templateFrom, templateSummary, timeline } from "@/lib/goals";
+import { AREAS, STATUSES, colorVar, currentValue, getGoals, nowMs, goalMinutesSince, notesOf, partsOf, plannedNow, progressAt, progressText, projectedFinish, inOrder, stalledDays, templateFrom, templateSummary, timeline } from "@/lib/goals";
 import { daysBetween, formatHebrewDate, relativeDays, todayInIsrael } from "@/lib/semester";
+
+/** How the goal is measured, in a few words, next to its area. */
+const KIND = { tasks: "לפי משימות", milestones: "לפי אבני דרך", number: "לפי מספר", manual: "לפי הערכה" } as const;
 
 export default function GoalPage({ params }: PageProps<"/goals/[id]">) {
   return (
@@ -34,6 +37,10 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
   const day = (iso: string) => formatHebrewDate(iso, { day: "numeric", month: "numeric" });
   const gap = planned == null ? null : Math.round((p - planned) * 100);
   const msDone = milestones.filter((m) => m.done_at).length;
+  const loose = tasks.filter((t) => !t.milestone_id);
+  const byMilestones = g.progress_mode === "milestones";
+  const showMilestones = g.progress_mode !== "tasks" || milestones.length > 0;
+  const showTasks = !byMilestones || loose.length > 0;
 
   return (
     <article className="max-w-3xl space-y-5">
@@ -49,7 +56,7 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
 
       <header>
         <h1 className="font-display text-3xl sm:text-4xl">{g.title}</h1>
-        <p className="mt-1 text-sm text-ink-soft">{[AREAS[g.area], g.due && `יעד ${day(g.due)}`, g.due && g.status !== "done" && relativeDays(daysBetween(today, g.due))].filter(Boolean).join(" · ")}</p>
+        <p className="mt-1 text-sm text-ink-soft">{[AREAS[g.area], KIND[g.progress_mode], g.due && `יעד ${day(g.due)}`, g.due && g.status !== "done" && relativeDays(daysBetween(today, g.due))].filter(Boolean).join(" · ")}</p>
         {g.description && <p className="mt-3 max-w-prose whitespace-pre-line leading-relaxed">{g.description}</p>}
         {g.why && <p className="mt-2 text-sm text-ink-soft">למה: {g.why}</p>}
       </header>
@@ -87,8 +94,8 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
           <dt className="text-xs text-ink-soft">{gap == null ? "בלי תאריך יעד" : gap >= 0 ? "מעל הקו המתוכנן" : "מתחת לקו המתוכנן"}</dt>
         </div>
         <div className="panel p-3">
-          <dd className="text-2xl font-bold tabular-nums">{milestones.length ? `${msDone}/${milestones.length}` : tasks.filter((t) => !t.done_at).length}</dd>
-          <dt className="text-xs text-ink-soft">{milestones.length ? "אבני דרך" : "משימות פתוחות"}</dt>
+          <dd className="text-2xl font-bold tabular-nums">{showMilestones && milestones.length ? `${msDone}/${milestones.length}` : tasks.filter((t) => !t.done_at).length}</dd>
+          <dt className="text-xs text-ink-soft">{showMilestones && milestones.length ? "אבני דרך" : "משימות פתוחות"}</dt>
         </div>
       </dl>
 
@@ -108,19 +115,27 @@ async function Goal({ params }: Pick<PageProps<"/goals/[id]">, "params">) {
         </section>
       )}
 
-      <section className="panel p-4 sm:p-5" aria-labelledby="ms-title">
-        <h2 id="ms-title" className="section-title mb-2">
-          אבני דרך
-        </h2>
-        <MilestoneList goalId={g.id} milestones={milestones} steps={tasks.filter((t) => t.milestone_id)} today={today} />
-      </section>
+      {/* The list sections follow the goal's kind: tasks have no order, milestones are a sequence.
+          The other kind's section appears only if the goal already has such items. */}
+      {showMilestones && (
+        <section className="panel p-4 sm:p-5" aria-labelledby="ms-title">
+          <h2 id="ms-title" className="section-title">
+            אבני דרך
+          </h2>
+          <p className="mb-2 text-sm text-ink-soft">{byMilestones ? "לפי הסדר: כל אחת נפתחת כשזו שלפניה מסתיימת." : "השלבים הגדולים בדרך. לא משפיעות על האחוזים במטרה הזו."}</p>
+          <MilestoneList goalId={g.id} milestones={inOrder(milestones)} steps={tasks.filter((t) => t.milestone_id)} today={today} ordered={byMilestones} />
+        </section>
+      )}
 
-      <section className="panel p-4 sm:p-5" aria-labelledby="tasks-title">
-        <h2 id="tasks-title" className="section-title mb-2">
-          משימות
-        </h2>
-        <TaskList goalId={g.id} tasks={tasks.filter((t) => !t.milestone_id)} today={today} />
-      </section>
+      {showTasks && (
+        <section className="panel p-4 sm:p-5" aria-labelledby="tasks-title">
+          <h2 id="tasks-title" className="section-title">
+            {byMilestones ? "משימות נוספות" : "משימות"}
+          </h2>
+          <p className="mb-2 text-sm text-ink-soft">{g.progress_mode === "tasks" ? "בכל סדר שרוצים. לכל משימה אפשר לתת תאריך יעד." : "בכל סדר שרוצים. לא משפיעות על האחוזים במטרה הזו."}</p>
+          <TaskList goalId={g.id} tasks={loose} today={today} />
+        </section>
+      )}
 
       <section className="panel p-4 sm:p-5" aria-labelledby="time-title">
         <h2 id="time-title" className="section-title mb-2">

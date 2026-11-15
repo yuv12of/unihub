@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { action, must } from "@/app/guard";
-import { AREAS, COLORS, MODES, STATUSES, cleanTemplate, templateFrom, type Goal, type GoalArea, type GoalStatus, type Milestone, type ProgressMode, type Task } from "@/lib/goalMeta";
+import { AREAS, COLORS, MODES, STATUSES, blockedBy, cleanTemplate, templateFrom, type Goal, type GoalArea, type GoalStatus, type Milestone, type ProgressMode, type Task } from "@/lib/goalMeta";
 import { addDays } from "@/lib/semester";
 import { todayInIsrael } from "@/lib/semester";
 
@@ -189,8 +189,29 @@ export async function addTask(goalId: string | null, title: string, due?: string
   });
 }
 
+/**
+ * In a goal measured by milestones the milestones are a sequence: one can't be finished (nor its
+ * steps ticked) while an earlier one is open. Goals of the other kinds have no such rule.
+ */
+async function assertInOrder(sb: Parameters<Parameters<typeof action>[1]>[0]["supabase"], uid: string, milestoneId: string) {
+  const { data: m } = await sb.from("goal_milestones").select("goal_id").match({ id: milestoneId, user_id: uid }).maybeSingle();
+  if (!m) throw new Error("לא נמצא");
+  const [{ data: g }, { data: all }] = await Promise.all([
+    sb.from("goals").select("progress_mode").match({ id: m.goal_id, user_id: uid }).maybeSingle(),
+    sb.from("goal_milestones").select("id, goal_id, title, due, done_at, sort").match({ goal_id: m.goal_id, user_id: uid }).order("sort").order("created_at"),
+  ]);
+  if (g?.progress_mode !== "milestones") return;
+  const list = (all ?? []) as Milestone[];
+  const before = blockedBy(list.find((x) => x.id === milestoneId)!, list);
+  if (before) throw new Error(`קודם מסיימים את ״${before.title}״`);
+}
+
 export async function setTaskDone(id: string, done: boolean) {
   return action("setTaskDone", async ({ supabase: sb, userId: uid }) => {
+    if (done) {
+      const { data: cur } = await sb.from("tasks").select("milestone_id").match({ id, user_id: uid }).maybeSingle();
+      if (cur?.milestone_id) await assertInOrder(sb, uid, cur.milestone_id as string);
+    }
     const { data: t } = await sb.from("tasks").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }).select("milestone_id").maybeSingle();
     await syncMilestone(sb, uid, t?.milestone_id as string | null | undefined);
     refresh();
@@ -220,6 +241,7 @@ export async function setMilestoneDone(id: string, done: boolean) {
   return action("setMilestoneDone", async ({ supabase: sb, userId: uid }) => {
     const { data: steps } = await sb.from("tasks").select("id").match({ milestone_id: id, user_id: uid }).limit(1);
     if (steps?.length) throw new Error("אבן דרך עם שלבים מסתיימת כשכל השלבים מסומנים");
+    if (done) await assertInOrder(sb, uid, id);
     must(await sb.from("goal_milestones").update({ done_at: done ? new Date().toISOString() : null }).match({ id, user_id: uid }));
     refresh();
   });
@@ -357,6 +379,23 @@ export async function setDoneAt(kind: "task" | "milestone", id: string, iso: str
       const { data: row } = await sb.from("goal_milestones").update({ done_at: when }).match({ id, user_id: uid }).not("done_at", "is", null).select("id").maybeSingle();
       if (!row) throw new Error("אבן הדרך לא מסומנת כהושלמה");
     }
+    refresh();
+  });
+}
+
+/** Moves a milestone one place earlier (-1) or later (1) in its goal's order. */
+export async function moveMilestone(id: string, dir: -1 | 1) {
+  return action("moveMilestone", async ({ supabase: sb, userId: uid }) => {
+    const { data: m } = await sb.from("goal_milestones").select("goal_id").match({ id, user_id: uid }).maybeSingle();
+    if (!m) throw new Error("לא נמצא");
+    const { data: all } = await sb.from("goal_milestones").select("id").match({ goal_id: m.goal_id, user_id: uid }).order("sort").order("created_at");
+    const ids = (all ?? []).map((x) => x.id as string);
+    const i = ids.indexOf(id);
+    const j = i + (dir === -1 ? -1 : 1);
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    // renumber the whole (short) list, so equal or far-apart sort values can't leave the move without effect
+    for (const [n, mid] of ids.entries()) must(await sb.from("goal_milestones").update({ sort: n }).match({ id: mid, user_id: uid }));
     refresh();
   });
 }

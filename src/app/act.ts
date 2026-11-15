@@ -193,3 +193,4 @@ export const setStepNote = w(G.setStepNote);
 export const saveGoalTemplate = w(G.saveGoalTemplate);
 export const deleteGoalTemplate = w(G.deleteGoalTemplate);
 export const setDoneAt = w(G.setDoneAt);
+export const moveMilestone = w(G.moveMilestone);

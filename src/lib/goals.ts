@@ -64,7 +64,9 @@ function demoGoals(today: string): GoalData {
       { id: "m2", goal_id: "site", title: "עמוד הבית", due: at(-11), done_at: ts(-12), sort: 1 },
       { id: "m3", goal_id: "site", title: "שלושה פרויקטים בפנים", due: at(9), done_at: null, sort: 2 },
       { id: "m4", goal_id: "site", title: "העלאה לאוויר", due: at(23), done_at: null, sort: 3 },
-      { id: "m5", goal_id: "lang", title: "300 המילים הנפוצות", due: null, done_at: null, sort: 0 },
+      { id: "m5", goal_id: "lang", title: "300 המילים הנפוצות", due: at(-2), done_at: ts(-4), sort: 0 },
+      { id: "m6", goal_id: "lang", title: "הצגה עצמית בעל־פה", due: at(12), done_at: null, sort: 1 },
+      { id: "m7", goal_id: "lang", title: "שיחה של 5 דקות", due: at(40), done_at: null, sort: 2 },
     ],
     tasks: [
       task("t1", "site", "לבחור תבנית", -38, 0), task("t2", "site", "לכתוב טקסט לעמוד הבית", -30, 1), task("t3", "site", "לצלם מסכים לפרויקט הראשון", -19, 2),
